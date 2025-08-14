@@ -1,0 +1,68 @@
+/* src/styles/SectionsPage.css */
+
+.sections-page {
+  max-width: 900px;
+  margin: 30px auto;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+.sections-page h2 {
+  text-align: center;
+  color: #0b3d91;
+  margin-bottom: 30px;
+}
+
+.sections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(120px,1fr));
+  gap: 15px;
+  justify-items: center;
+}
+
+.section-box {
+  background-color: #1976d2;
+  color: white;
+  padding: 25px 10px;
+  width: 120px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: 0 6px 14px rgba(25, 118, 210, 0.6);
+  transition: background-color 0.3s ease;
+}
+
+.section-box:hover,
+.section-box:focus {
+  background-color: #125a9c;
+  outline: none;
+}
+.sections-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.sections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.section-card {
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.section-card:hover {
+  background-color: #f0f0f0;
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
