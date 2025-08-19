@@ -1,3 +1,5 @@
+// src/App.jsx
+
 import React, { useState, lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
@@ -45,7 +47,10 @@ export default function App() {
               {/* صفحة إنشاء حساب جديد */}
               <Route path="/register" element={<Register />} />
 
-              {/* عرض صفوف الطالب */}
+              {/* عرض درجات الطالب بدون تسجيل دخول */}
+              <Route path="/student/:studentId" element={<StudentGradesPublic />} />
+
+              {/* عرض قائمة الفصول الخاصة بدرجة معينة */}
               <Route
                 path="/grades/:gradeId"
                 element={
@@ -55,9 +60,9 @@ export default function App() {
                 }
               />
 
-              {/* عرض درجات فصل معين (هذا المكون هو الأثقل) */}
+              {/* عرض درجات فصل معين */}
               <Route
-                path="/sections/:sectionId"
+                path="/grades/:gradeId/sections/:sectionId"
                 element={
                   <ProtectedRoute>
                     <SectionGrades />
