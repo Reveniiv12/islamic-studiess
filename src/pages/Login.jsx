@@ -10,7 +10,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [schoolName, setSchoolName] = useState("مدرسةالطرف متوسطة ");
+  const [schoolName, setSchoolName] = useState("مدرسة الطرف متوسطة ");
 
   // Load school name from localStorage on component mount
   useEffect(() => {
