@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { FaPlus, FaTrash } from 'react-icons/fa';
 
-const NotesModal = ({ students = [], onClose, onSave }) => {
+// تأكد من استقبال الخاصية الجديدة هنا
+const NotesModal = ({ students = [], onClose, onSave, onConfirmNotesClear }) => {
   const [currentWeek, setCurrentWeek] = useState(1);
   const [noteType, setNoteType] = useState('custom');
   const [customNote, setCustomNote] = useState('');
@@ -23,7 +24,7 @@ const NotesModal = ({ students = [], onClose, onSave }) => {
     const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
     const pastDaysOfYear = (today - firstDayOfYear) / 86400000;
     const currentWeekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-    setCurrentWeek(currentWeekNumber > 16 ? 16 : currentWeekNumber);
+    setCurrentWeek(currentWeekNumber > 20 ? 20 : currentWeekNumber);
   }, []);
 
   const addNote = () => {
@@ -50,7 +51,7 @@ const NotesModal = ({ students = [], onClose, onSave }) => {
 
       const weeklyNotes = Array.isArray(student.grades?.weeklyNotes)
         ? student.grades.weeklyNotes
-        : Array(16).fill().map(() => []);
+        : Array(20).fill().map(() => []);
 
       const updatedWeeklyNotes = [...weeklyNotes];
       if (!Array.isArray(updatedWeeklyNotes[currentWeek - 1])) {
@@ -79,26 +80,26 @@ const NotesModal = ({ students = [], onClose, onSave }) => {
       alert("يرجى اختيار الطلاب أولاً.");
       return;
     }
-    if (!window.confirm("هل أنت متأكد من حذف الملاحظات الأسبوعية للطلاب المحددين؟")) {
-      return;
-    }
+    // استبدال window.confirm بالخاصية onConfirmNotesClear
+    onConfirmNotesClear(() => {
+        // هذا الكود سيتم تنفيذه فقط بعد تأكيد المستخدم
+        const updatedStudents = (students || []).map(student => {
+            if (selectedStudents.includes(student.id)) {
+                return {
+                    ...student,
+                    grades: {
+                        ...student.grades,
+                        weeklyNotes: Array(20).fill().map(() => []),
+                    }
+                };
+            }
+            return student;
+        });
 
-    const updatedStudents = (students || []).map(student => {
-      if (selectedStudents.includes(student.id)) {
-        return {
-          ...student,
-          grades: {
-            ...student.grades,
-            weeklyNotes: Array(16).fill().map(() => []),
-          }
-        };
-      }
-      return student;
+        onSave(updatedStudents);
+        setSelectedStudents([]);
+        setAllStudentsSelected(false);
     });
-
-    onSave(updatedStudents);
-    setSelectedStudents([]);
-    setAllStudentsSelected(false);
   };
 
   const toggleSelectAll = () => {
@@ -142,7 +143,7 @@ const NotesModal = ({ students = [], onClose, onSave }) => {
                   onChange={(e) => setCurrentWeek(Number(e.target.value))}
                   className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {[...Array(16)].map((_, i) => (
+                  {[...Array(20)].map((_, i) => (
                     <option key={i + 1} value={i + 1}>الأسبوع {i + 1}</option>
                   ))}
                 </select>

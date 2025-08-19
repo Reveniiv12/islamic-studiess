@@ -126,7 +126,7 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
                     if (!noteText.trim()) return student;
 
                     const formattedNote = `(${today}): ${noteText.trim()}`;
-                    const updatedWeeklyNotes = [...(student.grades.weeklyNotes || Array(16).fill(null).map(() => []))];
+                    const updatedWeeklyNotes = [...(student.grades.weeklyNotes || Array(20).fill(null).map(() => []))];
                     if (!Array.isArray(updatedWeeklyNotes[weekIndex])) {
                         updatedWeeklyNotes[weekIndex] = [];
                     }
@@ -217,201 +217,205 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
 
                     <div className="flex gap-4 mb-6">
                         <button
-                            onClick={() => { setMode('recitation'); setRecitationType('memorization'); }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${mode === 'recitation' && recitationType === 'memorization' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                            onClick={() => {
+                                setMode('recitation');
+                                setRecitationType('memorization');
+                            }}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                mode === 'recitation' && recitationType === 'memorization'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            }`}
                         >
-                            <FaBookOpen /> حفظ القرآن
+                            <FaBookOpen />
+                            حفظ القرآن
                         </button>
                         <button
-                            onClick={() => { setMode('recitation'); setRecitationType('recitation'); }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${mode === 'recitation' && recitationType === 'recitation' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                            onClick={() => {
+                                setMode('recitation');
+                                setRecitationType('recitation');
+                            }}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                mode === 'recitation' && recitationType === 'recitation'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            }`}
                         >
-                            <FaBookOpen /> تلاوة القرآن
+                            <FaBookOpen />
+                            تلاوة القرآن
                         </button>
                         <button
-                            onClick={() => { setMode('note'); setNoteType('custom'); }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${mode === 'note' && noteType === 'custom' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                            onClick={() => {
+                                setMode('note');
+                                setNoteType('custom');
+                            }}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                mode === 'note' && noteType === 'custom'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            }`}
                         >
-                            <FaStickyNote /> ملاحظة مخصصة
+                            <FaStickyNote />
+                            ملاحظة مخصصة
                         </button>
                         <button
-                            onClick={() => { setMode('note'); setNoteType('template'); }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${mode === 'note' && noteType === 'template' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}
+                            onClick={() => {
+                                setMode('note');
+                                setNoteType('template');
+                            }}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                                mode === 'note' && noteType === 'template'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                            }`}
                         >
-                            <FaStickyNote /> ملاحظة جاهزة
+                            <FaStickyNote />
+                            ملاحظة جاهزة
                         </button>
                     </div>
-                    
+
                     {/* Student Status Display Section */}
                     <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 mb-6">
                         <h4 className="text-lg font-bold mb-4 text-gray-100">حال الطلاب في التسميع الحالي</h4>
-                        <div className="flex items-center gap-4 mb-4">
-                            <label className="text-sm font-medium text-gray-300">نوع التسميع:</label>
-                            <div className="flex gap-4">
-                                <label className="flex items-center text-gray-100">
-                                    <input
-                                        type="radio"
-                                        name="recitationTypeStatus"
-                                        value="memorization"
-                                        checked={recitationType === 'memorization'}
-                                        onChange={() => setRecitationType('memorization')}
-                                        className="accent-blue-500 ml-2"
-                                    />
-                                    حفظ
-                                </label>
-                                <label className="flex items-center text-gray-100">
-                                    <input
-                                        type="radio"
-                                        name="recitationTypeStatus"
-                                        value="recitation"
-                                        checked={recitationType === 'recitation'}
-                                        onChange={() => setRecitationType('recitation')}
-                                        className="accent-blue-500 ml-2"
-                                    />
-                                    تلاوة
-                                </label>
-                            </div>
-                        </div>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                            {students.length > 0 ? (
-                                students.map(student => {
-                                    const status = getRecitationStatus(student, recitationType, curriculum).status;
-                                    const statusText = status === 'not_memorized' ? 'لم يسمع' : status === 'late' ? 'متأخر' : status === 'fully_recited' ? 'تم التسميع' : 'لا يوجد منهج';
-                                    return (
-                                        <div key={student.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-600 bg-gray-800">
-                                            <span className="text-gray-100 font-semibold">{student.name}</span>
-                                            <div className="flex items-center gap-2">
-                                                {getIcon(status)}
-                                                <span className={`text-sm ${status === 'fully_recited' ? 'text-green-400' : status === 'not_memorized' ? 'text-red-400' : status === 'late' ? 'text-yellow-400' : 'text-gray-400'}`}>
-                                                    {statusText}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            ) : (
-                                <p className="text-gray-400 text-center">لا يوجد طلاب في هذا الفصل.</p>
-                            )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <StudentList
+                                title="تم التسميع"
+                                color="green"
+                                students={fullyRecitedStudents}
+                                selectedStudents={selectedStudents}
+                                toggleSelect={handleToggleSelect}
+                                onSelectAll={() => handleSelectAll(fullyRecitedStudents)}
+                            />
+                            <StudentList
+                                title="متأخر"
+                                color="yellow"
+                                students={lateStudents}
+                                selectedStudents={selectedStudents}
+                                toggleSelect={handleToggleSelect}
+                                onSelectAll={() => handleSelectAll(lateStudents)}
+                            />
+                            <StudentList
+                                title="لم يتم التسميع"
+                                color="red"
+                                students={notMemorizedStudents}
+                                selectedStudents={selectedStudents}
+                                toggleSelect={handleToggleSelect}
+                                onSelectAll={() => handleSelectAll(notMemorizedStudents)}
+                            />
+                            <StudentList
+                                title="لا يوجد منهج"
+                                color="gray"
+                                students={noneStudents}
+                                selectedStudents={selectedStudents}
+                                toggleSelect={handleToggleSelect}
+                                onSelectAll={() => handleSelectAll(noneStudents)}
+                            />
                         </div>
                     </div>
 
-                    <div className="mt-6 p-4 border border-gray-700 rounded-lg bg-gray-700">
-                         <h4 className="font-bold mb-2 text-gray-100">إجراء على الطلاب المحددين ({selectedStudents.length})</h4>
-                        
-                        {mode === 'recitation' && (
-                            <div className="flex items-center space-x-4 mb-4">
-                                <label className="text-sm font-medium text-gray-300">درجة التسميع:</label>
+                    {/* Action Section */}
+                    <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+                        <h4 className="text-lg font-bold mb-4 text-gray-100">{mode === 'recitation' ? 'تسجيل درجة' : 'إضافة ملاحظة'}</h4>
+                        {mode === 'recitation' ? (
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-300 mb-2">درجة التسميع (1-10)</label>
                                 <input
                                     type="number"
                                     min="0"
                                     max="10"
                                     value={gradeValue}
                                     onChange={(e) => setGradeValue(Number(e.target.value))}
-                                    className="w-20 p-2 border border-gray-600 rounded text-center bg-gray-800 text-white"
+                                    className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
+                        ) : (
+                            <>
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">نوع الملاحظة</label>
+                                    <div className="flex gap-4">
+                                        <label className="flex items-center text-gray-100">
+                                            <input
+                                                type="radio"
+                                                name="noteType"
+                                                value="custom"
+                                                checked={noteType === 'custom'}
+                                                onChange={() => setNoteType('custom')}
+                                                className="accent-blue-500 ml-2"
+                                            />
+                                            ملاحظة مخصصة
+                                        </label>
+                                        <label className="flex items-center text-gray-100">
+                                            <input
+                                                type="radio"
+                                                name="noteType"
+                                                value="template"
+                                                checked={noteType === 'template'}
+                                                onChange={() => setNoteType('template')}
+                                                className="accent-blue-500 ml-2"
+                                            />
+                                            قالب جاهز
+                                        </label>
+                                    </div>
+                                </div>
+                                {noteType === 'custom' ? (
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-300 mb-2">ملاحظة مخصصة</label>
+                                        <textarea
+                                            value={customNote}
+                                            onChange={(e) => setCustomNote(e.target.value)}
+                                            placeholder="اكتب ملاحظة..."
+                                            rows="4"
+                                            className="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        ></textarea>
+                                    </div>
+                                ) : (
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-300 mb-2">قالب ملاحظة جاهز</label>
+                                        <select
+                                            value={selectedTemplate}
+                                            onChange={(e) => setSelectedTemplate(e.target.value)}
+                                            className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        >
+                                            <option value="">اختر قالباً...</option>
+                                            {noteTemplates.map(t => (
+                                                <option key={t.id} value={t.id}>{t.text}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">الأسبوع</label>
+                                    <select
+                                        value={weekIndex}
+                                        onChange={(e) => setWeekIndex(Number(e.target.value))}
+                                        className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        {Array(20).fill().map((_, i) => (
+                                            <option key={i} value={i}>الأسبوع {i + 1}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
                         )}
-                        
-                        {mode === 'note' && (
-                             <div className="mb-4">
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                                     اختر الأسبوع:
-                                 </label>
-                                 <select
-                                     value={weekIndex}
-                                     onChange={(e) => setWeekIndex(Number(e.target.value))}
-                                     className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white"
-                                 >
-                                     {[...Array(16).keys()].map((_, i) => (
-                                         <option key={i} value={i}>الأسبوع {i + 1}</option>
-                                     ))}
-                                 </select>
-                             </div>
-                        )}
-
-                        {mode === 'note' && noteType === 'custom' && (
-                            <div className="relative">
-                                <button
-                                    onClick={handleSelectAllStudents}
-                                    className="absolute top-2 left-2 px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-500 transition-colors"
-                                >
-                                    تحديد الكل
-                                </button>
-                                <textarea
-                                    value={customNote}
-                                    onChange={(e) => setCustomNote(e.target.value)}
-                                    placeholder="اكتب ملاحظتك هنا..."
-                                    className="w-full p-3 border border-gray-600 rounded h-32 bg-gray-800 text-white placeholder-gray-400"
-                                />
-                            </div>
-                        )}
-                        
-                        {mode === 'note' && noteType === 'template' && (
-                            <div className="relative">
-                                <button
-                                    onClick={handleSelectAllStudents}
-                                    className="absolute top-2 left-2 px-3 py-1 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-500 transition-colors"
-                                >
-                                    تحديد الكل
-                                </button>
-                                <select
-                                    value={selectedTemplate}
-                                    onChange={(e) => setSelectedTemplate(e.target.value)}
-                                    className="w-full p-2 border border-gray-600 rounded bg-gray-800 text-white"
-                                >
-                                    <option value="">اختر ملاحظة جاهزة</option>
-                                    {noteTemplates.map(template => (
-                                        <option key={template.id} value={template.id}>{template.text}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-                            <StudentList 
-                                title="لم يحفظ 🔴" 
-                                color="red" 
-                                students={notMemorizedStudents} 
-                                selectedStudents={selectedStudents} 
-                                toggleSelect={handleToggleSelect} 
-                                onSelectAll={() => handleSelectAll(notMemorizedStudents)} 
-                            />
-                            <StudentList 
-                                title="متأخر 🟡" 
-                                color="yellow" 
-                                students={lateStudents} 
-                                selectedStudents={selectedStudents} 
-                                toggleSelect={handleToggleSelect} 
-                                onSelectAll={() => handleSelectAll(lateStudents)} 
-                            />
-                            <StudentList 
-                                title="مسمع كامل 🟢" 
-                                color="green" 
-                                students={fullyRecitedStudents} 
-                                selectedStudents={selectedStudents} 
-                                toggleSelect={handleToggleSelect} 
-                                onSelectAll={() => handleSelectAll(fullyRecitedStudents)} 
-                            />
-                            <StudentList 
-                                title="لا يوجد جزء ⚪" 
-                                color="gray" 
-                                students={noneStudents} 
-                                selectedStudents={selectedStudents} 
-                                toggleSelect={handleToggleSelect} 
-                                onSelectAll={() => handleSelectAll(noneStudents)} 
-                            />
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                onClick={handleSave}
+                                className={`flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-colors ${isSaveDisabled() ? 'bg-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-500'}`}
+                                disabled={isSaveDisabled()}
+                            >
+                                <FaSave />
+                                حفظ
+                            </button>
                         </div>
                     </div>
                 </div>
 
                 <div className="p-4 bg-gray-700 border-t border-gray-600 flex justify-end gap-2">
                     <button
-                        onClick={handleSave}
-                        className={`flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-colors ${isSaveDisabled() ? 'bg-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-500'}`}
-                        disabled={isSaveDisabled()}
+                        onClick={handleSelectAllStudents}
+                        className={`bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-500 transition-colors font-semibold`}
                     >
-                        <FaSave />
-                        حفظ
+                        {students.length > 0 && students.every(s => selectedStudents.includes(s.id)) ? 'إلغاء تحديد الكل' : 'تحديد جميع الطلاب'}
                     </button>
                     <button
                         onClick={onClose}
@@ -421,38 +425,6 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
                         إلغاء
                     </button>
                 </div>
-            </div>
-        </div>
-    );
-};
-
-const StudentList = ({ title, color, students, selectedStudents, toggleSelect, onSelectAll }) => {
-    const isAllSelected = students.length > 0 && students.every(s => selectedStudents.includes(s.id));
-    return (
-        <div className={`border border-gray-600 rounded-lg p-4 bg-gray-700 overflow-y-auto max-h-[250px]`}>
-            <div className="flex justify-between items-center mb-2">
-                <h4 className={`font-bold text-${color}-400`}>{title}</h4>
-                {students.length > 0 && (
-                    <button
-                        onClick={onSelectAll}
-                        className={`text-sm py-1 px-2 rounded ${isAllSelected ? 'bg-gray-600 text-gray-100' : 'bg-blue-600 text-white'}`}
-                    >
-                        {isAllSelected ? 'إلغاء الكل' : 'تحديد الكل'}
-                    </button>
-                )}
-            </div>
-            <div className="space-y-2">
-                {students.length > 0 ? students.map(student => (
-                    <div key={student.id} className="flex items-center">
-                        <input
-                            type="checkbox"
-                            checked={selectedStudents.includes(student.id)}
-                            onChange={() => toggleSelect(student.id)}
-                            className={`form-checkbox accent-blue-500 text-white`}
-                        />
-                        <span className="mr-2 text-gray-100">{student.name}</span>
-                    </div>
-                )) : <p className="text-sm text-gray-400">لا يوجد طلاب في هذه الفئة.</p>}
             </div>
         </div>
     );

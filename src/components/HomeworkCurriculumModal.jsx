@@ -4,10 +4,37 @@ import { getHijriToday } from '../utils/recitationUtils';
 const HomeworkCurriculumModal = ({ homeworkCurriculum, onClose, onSave }) => {
     const [newPart, setNewPart] = useState({
         name: '',
-        type: 'homework', // 'homework' or 'performanceTask'
+        type: 'homework', // 'homework', 'performanceTask', or 'test'
         dueDate: getHijriToday()
     });
     const [editingPart, setEditingPart] = useState(null);
+
+    // Dynamic options for the name dropdown based on type and max count
+    const getOptionsForType = (type) => {
+        let count = 0;
+        let prefix = '';
+        if (type === 'homework') {
+            count = 10;
+            prefix = 'واجب ';
+        } else if (type === 'performanceTask') {
+            count = 3;
+            prefix = 'مهمة أدائية ';
+        } else if (type === 'test') {
+            count = 2;
+            prefix = 'اختبار ';
+        }
+        
+        const existingNames = homeworkCurriculum.filter(p => p.type === type).map(p => p.name);
+        
+        const options = [];
+        for (let i = 1; i <= count; i++) {
+            const optionName = `${prefix}${i}`;
+            if (!existingNames.includes(optionName) || (editingPart && editingPart.name === optionName)) {
+                options.push(optionName);
+            }
+        }
+        return options;
+    };
 
     const handleAddPart = () => {
         if (newPart.name && newPart.dueDate) {
@@ -43,7 +70,7 @@ const HomeworkCurriculumModal = ({ homeworkCurriculum, onClose, onSave }) => {
             <div className="bg-gray-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-700">
                 <div className="p-6 overflow-y-auto">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-bold text-gray-100">الواجبات والمهام الأدائية</h3>
+                        <h3 className="text-xl font-bold text-gray-100">الواجبات والمهام الأدائية والاختبارات</h3>
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-3xl leading-none font-semibold">&times;</button>
                     </div>
 
@@ -54,22 +81,26 @@ const HomeworkCurriculumModal = ({ homeworkCurriculum, onClose, onSave }) => {
                                 <label className="block text-sm font-medium text-gray-400">نوع المهمة</label>
                                 <select
                                     value={newPart.type}
-                                    onChange={(e) => setNewPart({ ...newPart, type: e.target.value })}
+                                    onChange={(e) => setNewPart({ ...newPart, type: e.target.value, name: '' })}
                                     className="w-full p-2 mt-1 rounded-lg border border-gray-600 bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                                 >
                                     <option value="homework">واجب</option>
                                     <option value="performanceTask">مهمة أدائية</option>
+                                    <option value="test">اختبار</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-400">اسم المهمة</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={newPart.name}
                                     onChange={(e) => setNewPart({ ...newPart, name: e.target.value })}
                                     className="w-full p-2 mt-1 rounded-lg border border-gray-600 bg-gray-900 text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                                    placeholder="مثال: واجب الوحدة الأولى"
-                                />
+                                >
+                                    <option value="">اختر اسماً</option>
+                                    {getOptionsForType(newPart.type).map(option => (
+                                        <option key={option} value={option}>{option}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-400">تاريخ الاستحقاق (هجري)</label>
@@ -99,7 +130,7 @@ const HomeworkCurriculumModal = ({ homeworkCurriculum, onClose, onSave }) => {
                                     <li key={part.id} className="py-2 flex justify-between items-center text-sm">
                                         <div className="flex-1">
                                             <span className="font-medium text-gray-300">{part.name}</span>
-                                            <span className="text-gray-400 mr-2">({part.type === 'homework' ? 'واجب' : 'مهمة أدائية'})</span>
+                                            <span className="text-gray-400 mr-2">({part.type === 'homework' ? 'واجب' : part.type === 'performanceTask' ? 'مهمة أدائية' : 'اختبار'})</span>
                                             <span className="text-gray-500 block">تاريخ الاستحقاق: {part.dueDate}</span>
                                         </div>
                                         <div className="flex gap-2">
@@ -110,7 +141,7 @@ const HomeworkCurriculumModal = ({ homeworkCurriculum, onClose, onSave }) => {
                                 ))}
                             </ul>
                         ) : (
-                            <p className="text-gray-400 text-sm">لا توجد واجبات أو مهام أدائية مضافة.</p>
+                            <p className="text-gray-400 text-sm">لا توجد واجبات أو مهام أدائية أو اختبارات مضافة.</p>
                         )}
                     </div>
                 </div>
