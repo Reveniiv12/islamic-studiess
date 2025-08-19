@@ -1,0 +1,37 @@
+/* src/components/LoadingSpinner.css */
+
+.loading-container {
+  /* لضمان أن شاشة التحميل تملأ الشاشة بالكامل وتتوسط المحتوى */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100%;
+  background-color: #f0f2f5; /* لون خلفية فاتح وجميل */
+  color: #333; /* لون النص */
+}
+
+.loading-spinner {
+  /* تصميم الدائرة المتحركة (Spinner) */
+  width: 50px;
+  height: 50px;
+  border: 5px solid #ccc; /* لون حدود الدائرة */
+  border-top-color: #007bff; /* لون الجزء المتحرك (يمكنك تغييره ليتناسب مع ألوان موقعك) */
+  border-radius: 50%; /* لجعلها دائرية بالكامل */
+  animation: spin 1s linear infinite; /* تطبيق الحركة الدائرية */
+}
+
+.loading-text {
+  /* تنسيق النص "جاري التحميل..." */
+  margin-top: 15px;
+  font-size: 1.2rem;
+  font-family: 'Arial', sans-serif;
+  color: #555;
+}
+
+@keyframes spin {
+  /* تعريف الحركة الدائرية (من 0 درجة إلى 360 درجة) */
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
