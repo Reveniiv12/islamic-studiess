@@ -4,6 +4,7 @@ import React, { useState, lazy, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import LoadingSpinner from "./components/LoadingSpinner"; // ⬅️ تم استيراد مكون التحميل الجديد
 
 // استيراد المكونات الرئيسية (Pages) بشكل كسول باستخدام React.lazy
 const Login = lazy(() => import("./pages/Login"));
@@ -26,10 +27,10 @@ export default function App() {
       <AuthProvider>
         <Router>
           {/*
-            <Suspense> يقوم بإظهار محتوى احتياطي (fallback)
+            <Suspense> يقوم بإظهار المكون `LoadingSpinner` بشكل أنيق
             أثناء تحميل المكونات التي تم استيرادها باستخدام lazy
           */}
-          <Suspense fallback={<div>جاري التحميل...</div>}>
+          <Suspense fallback={<LoadingSpinner />}>
             <Routes>
               {/* الصفحة الرئيسية الجديدة - لوحة تحكم المعلم */}
               <Route
@@ -122,3 +123,4 @@ export default function App() {
     </div>
   );
 }
+
