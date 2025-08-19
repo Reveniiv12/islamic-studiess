@@ -3,8 +3,15 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { gradesData } from "../data/mockData";
 import Navbar from "../components/Navbar";
-import { FaUserGraduate, FaChartBar, FaBars, FaTimes, FaCog, FaRedo, FaDownload, FaTrash, FaFolderOpen } from "react-icons/fa";
-import { getAuth, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { FaUserGraduate } from "react-icons/fa";
+import { FaBars } from "react-icons/fa";
+import { FaTimes } from "react-icons/fa";
+import { FaCog } from "react-icons/fa";
+import { FaRedo } from "react-icons/fa";
+import { FaDownload } from "react-icons/fa";
+import { FaTrash } from "react-icons/fa";
+import { FaFolderOpen } from "react-icons/fa";
+import { FaChartBar } from "react-icons/fa";import { getAuth, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -691,5 +698,6 @@ const TeacherDashboard = () => {
     </div>
   );
 };
+
 
 export default TeacherDashboard;
