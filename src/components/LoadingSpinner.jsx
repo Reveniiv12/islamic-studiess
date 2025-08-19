@@ -1,10 +1,15 @@
-import React from 'react';
+// src/components/LoadingSpinner.jsx
 
-const LoadingSpinner = () => (
-  <div className="flex justify-center items-center h-64">
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-    <span className="ml-3">جاري تحميل البيانات...</span>
-  </div>
-);
+import React from 'react';
+import './LoadingSpinner.css'; // يجب أن يكون هذا الملف موجودًا بنفس المجلد
+
+const LoadingSpinner = () => {
+  return (
+    <div className="loading-container">
+      <div className="loading-spinner"></div>
+      <p className="loading-text">جاري التحميل...</p>
+    </div>
+  );
+};
 
 export default LoadingSpinner;
