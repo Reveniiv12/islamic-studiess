@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import * as XLSX from 'xlsx';
-import { saveAs } from 'file-saver';
 import NotesModal from "../components/NotesModal";
 import StarsModal from "../components/StarsModal";
 import RecitationModal from "../components/RecitationModal";
@@ -15,24 +13,10 @@ import TransferDeleteModal from "../components/TransferDeleteModal";
 import StudentQrCode from "../components/StudentQrCode.jsx";
 import GradesSheet from '../pages/GradesSheet';
 import BriefSheet from '../pages/BriefSheet';
-import QRCode from "qrcode";
 import AbsenceModal from "../components/AbsenceModal.jsx";
 import TroubledStudentsModal from "../components/TroubledStudentsModal.jsx";
 import CustomDialog from "../components/CustomDialog";
-import {
-  Document,
-  Packer,
-  Paragraph,
-  HeadingLevel,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
-  ImageRun,
-  AlignmentType
-} from "docx";
 import { QRCodeSVG } from 'qrcode.react';
-import { toPng } from 'html-to-image';
 import ReactDOM from 'react-dom';
 
 import {
@@ -258,8 +242,8 @@ const SectionGrades = () => {
                 weeklyNotes: ensureArraySize(student.grades?.weeklyNotes, 20),
               };
 
-              const studentWithStars = { 
-                ...student, 
+              const studentWithStars = {
+                ...student,
                 grades: studentGrades,
                 viewKey: student.viewKey || `/student/${student.id}`,
                 acquiredStars: student.acquiredStars !== undefined ? student.acquiredStars : student.stars || 0,
@@ -273,7 +257,7 @@ const SectionGrades = () => {
               }
               return studentWithStars;
             }).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-            
+
             setStudents(parsedStudents);
           } catch {
             setStudents([]);
@@ -402,54 +386,68 @@ const SectionGrades = () => {
     localStorage.setItem(`testMethod_${gradeId}_${sectionId}`, method);
   };
 
-  const exportToExcel = () => {
-    const data = students.map(student => ({
-      'اسم الطالب': student.name,
-      'السجل المدني': student.nationalId,
-      'رقم ولي الأمر': student.parentPhone,
-    }));
+  const exportToExcel = async () => {
+    try {
+      const [{ utils, write }, { saveAs }] = await Promise.all([
+        import('xlsx'),
+        import('file-saver')
+      ]);
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "الطلاب");
+      const data = students.map(student => ({
+        'اسم الطالب': student.name,
+        'السجل المدني': student.nationalId,
+        'رقم ولي الأمر': student.parentPhone,
+      }));
 
-    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([excelBuffer], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    });
-    saveAs(blob, `بيانات_${gradeId}_${sectionId}.xlsx`);
+      const ws = utils.json_to_sheet(data);
+      const wb = utils.book_new();
+      utils.book_append_sheet(wb, ws, "الطلاب");
+
+      const excelBuffer = write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      saveAs(blob, `بيانات_${gradeId}_${sectionId}.xlsx`);
+      handleDialog("نجاح", "تم تصدير الملف بنجاح!", "success");
+    } catch (error) {
+      handleDialog("خطأ", 'حدث خطأ أثناء تصدير الملف: ' + error.message, "error");
+    }
   };
 
-  const handleFileImport = (e) => {
+  const handleFileImport = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
+    try {
+      const [{ read, utils }] = await import('xlsx');
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = read(data, { type: 'array' });
 
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(sheet);
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const jsonData = utils.sheet_to_json(sheet);
 
-        const updatedStudents = jsonData.map(row => ({
-          id: Date.now() + Math.random(),
-          name: row['اسم الطالب'] || '',
-          nationalId: row['السجل المدني'] || '',
-          parentPhone: row['رقم ولي الأمر'] || '',
-          viewKey: `/student-view/${Date.now() + Math.random()}-${Date.now()}`
-        }));
+          const updatedStudents = jsonData.map(row => ({
+            id: Date.now() + Math.random(),
+            name: row['اسم الطالب'] || '',
+            nationalId: row['السجل المدني'] || '',
+            parentPhone: row['رقم ولي الأمر'] || '',
+            viewKey: `/student-view/${Date.now() + Math.random()}-${Date.now()}`
+          }));
 
-        updateStudentsData(updatedStudents);
-        handleDialog("نجاح", "تم استيراد البيانات بنجاح!", "success");
-      } catch (error) {
-        handleDialog("خطأ", 'حدث خطأ أثناء استيراد الملف: ' + error.message, "error");
-      }
-    };
-
-    reader.readAsArrayBuffer(file);
+          updateStudentsData(updatedStudents);
+          handleDialog("نجاح", "تم استيراد البيانات بنجاح!", "success");
+        } catch (error) {
+          handleDialog("خطأ", 'حدث خطأ أثناء استيراد الملف: ' + error.message, "error");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      handleDialog("خطأ", 'حدث خطأ في تحميل مكتبة XLSX: ' + error.message, "error");
+    }
   };
 
   const handleAddStudent = () => {
@@ -525,7 +523,7 @@ const SectionGrades = () => {
       ...student,
       stars: (student.acquiredStars || 0) - (student.consumedStars || 0)
     }));
-      
+
     updateStudentsData(studentsWithCalculatedStars);
     if (selectedStudent) {
       const updatedStudent = studentsWithCalculatedStars.find(s => s.id === selectedStudent.id);
@@ -533,7 +531,7 @@ const SectionGrades = () => {
         setSelectedStudent(updatedStudent);
       }
     }
-    
+
     setShowStarsModal(false);
   };
 
@@ -628,39 +626,14 @@ const SectionGrades = () => {
     handleDialog("نجاح", "تم نسخ الرابط بنجاح!", "success");
   };
 
-  const generateQRImage = async (viewKey) => {
-    const tempDiv = document.createElement('div');
-    tempDiv.style.width = '150px';
-    tempDiv.style.height = '150px';
-    tempDiv.style.position = 'fixed';
-    tempDiv.style.top = '-9999px';
-    document.body.appendChild(tempDiv);
-    
-    const qrCode = (
-      <QRCodeSVG 
-        value={`${window.location.origin}${viewKey}`}
-        size={150}
-        level="H"
-      />
-    );
-    
-    ReactDOM.render(qrCode, tempDiv);
-    
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    const dataUrl = await toPng(tempDiv);
-    
-    ReactDOM.unmountComponentAtNode(tempDiv);
-    document.body.removeChild(tempDiv);
-    
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
-    return new Uint8Array(await blob.arrayBuffer());
-  };
-
   const handleExportQRCodes = async () => {
     try {
       handleDialog("جاري التصدير", "جاري إنشاء ملف الوورد، الرجاء الانتظار...", "info");
+      const [{ Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell, WidthType, ImageRun, AlignmentType }] = await Promise.all([
+        import('docx')
+      ]);
+      const [{ toDataURL }] = await import('qrcode');
+      const [{ saveAs }] = await import('file-saver');
 
       const sections = [];
 
@@ -670,7 +643,7 @@ const SectionGrades = () => {
 
         for (const student of batch) {
           try {
-            const qrDataUrl = await QRCode.toDataURL(`${window.location.origin}${student.viewKey}`, {
+            const qrDataUrl = await toDataURL(`${window.location.origin}${student.viewKey}`, {
               errorCorrectionLevel: 'H',
               type: 'image/png',
               width: 150,
@@ -694,9 +667,9 @@ const SectionGrades = () => {
                     alignment: AlignmentType.CENTER,
                   }),
                   new Paragraph({ text: student.nationalId || "-", alignment: AlignmentType.CENTER }),
-                  new Paragraph({ 
-                    text: `النجوم: ${student.stars || 0}`, 
-                    alignment: AlignmentType.CENTER 
+                  new Paragraph({
+                    text: `النجوم: ${student.stars || 0}`,
+                    alignment: AlignmentType.CENTER
                   }),
                   new Paragraph({ text: `${gradeName} - ${sectionName}`, alignment: AlignmentType.CENTER }),
                 ],
@@ -728,7 +701,7 @@ const SectionGrades = () => {
             new Paragraph({
               text: `كشوفات طلاب ${gradeName} - ${sectionName}`,
               heading: HeadingLevel.HEADING_1,
-              alignment: AlignmentType.RIGHT,
+              alignment: AlignmentType.RIGHT
             }),
             new Paragraph({ text: `المدرسة: ${schoolName}`, alignment: AlignmentType.RIGHT }),
             new Paragraph({ text: `المعلم: ${teacherName}`, alignment: AlignmentType.RIGHT }),
@@ -751,6 +724,24 @@ const SectionGrades = () => {
     }
   };
 
+  const handleDownloadImage = async () => {
+    handleDialog("جاري التنزيل", "الرجاء الانتظار، جاري تحويل ورقة القوائم إلى صورة...", "info");
+    try {
+      const [{ toPng }] = await Promise.all([
+        import('html-to-image')
+      ]);
+      const [{ saveAs }] = await import('file-saver');
+      const node = document.getElementById("grades-sheet-to-image");
+      const dataUrl = await toPng(node);
+      const blob = await fetch(dataUrl).then(res => res.blob());
+      saveAs(blob, 'student-grades-sheet.png');
+      handleDialog("نجاح", "تم تنزيل الصورة بنجاح!", "success");
+    } catch (error) {
+      console.error("Error generating image:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء تنزيل الصورة. الرجاء المحاولة مرة أخرى.", "error");
+    }
+  };
+
   const handleUpdatePrizes = (updatedPrizes) => {
     setPrizes(updatedPrizes);
   };
@@ -759,7 +750,7 @@ const SectionGrades = () => {
     if (newGrade && selectedHomework) {
       const newGradeEntry = createGradeEntry(parseInt(newGrade, 10), sectionTitle, new Date().toISOString().slice(0, 10));
       onAddGrade(selectedHomework, newGradeEntry);
-      
+
       onUpdateHomeworkStatus(selectedHomework, 'تم الحل');
 
       setNewGrade('');
@@ -1520,5 +1511,6 @@ const SectionGrades = () => {
     </div>
   );
 };
+
 
 export default SectionGrades;
