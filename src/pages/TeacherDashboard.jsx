@@ -1,25 +1,44 @@
 // src/pages/TeacherDashboard.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { gradesData } from "../data/mockData";
 import Navbar from "../components/Navbar";
-import { FaUserGraduate } from "react-icons/fa";
-import { FaBars } from "react-icons/fa";
-import { FaTimes } from "react-icons/fa";
-import { FaCog } from "react-icons/fa";
-import { FaRedo } from "react-icons/fa";
-import { FaDownload } from "react-icons/fa";
-import { FaTrash } from "react-icons/fa";
-import { FaFolderOpen } from "react-icons/fa";
-import { FaChartBar } from "react-icons/fa";
-import { getAuth, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
-import { db, collection, doc, setDoc, getDocs, getDoc, deleteDoc, query } from '../firebase';
+import {
+  FaUserGraduate,
+  FaBars,
+  FaTimes,
+  FaCog,
+  FaRedo,
+  FaDownload,
+  FaTrash,
+  FaFolderOpen,
+  FaChartBar,
+  FaStar
+} from "react-icons/fa";
+import {
+  getAuth,
+  onAuthStateChanged,
+  reauthenticateWithCredential,
+  EmailAuthProvider
+} from "firebase/auth";
+import {
+  db,
+  collection,
+  doc,
+  setDoc,
+  getDocs,
+  getDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  where
+} from '../firebase';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
 
   const [totalStudents, setTotalStudents] = useState(0);
   const [averageGrade, setAverageGrade] = useState(0);
+  const [grades, setGrades] = useState([]);
   const [studentsPerGrade, setStudentsPerGrade] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -37,7 +56,6 @@ const TeacherDashboard = () => {
   const [modalError, setModalError] = useState("");
 
   const [user, setUser] = useState(null);
-
   const [backups, setBackups] = useState([]);
   const [selectedBackupKey, setSelectedBackupKey] = useState(null);
 
@@ -66,13 +84,10 @@ const TeacherDashboard = () => {
 
   const fetchDataFromFirestore = async (currentUser) => {
     setLoading(true);
-    let allStudents = [];
-    let allGrades = [];
-    const studentsCountPerGrade = {};
-    const teacherRef = doc(db, "teachers", currentUser.uid);
-
+    
     try {
       // Fetch teacher info
+      const teacherRef = doc(db, "teachers", currentUser.uid);
       const teacherDoc = await getDoc(teacherRef);
       if (teacherDoc.exists()) {
         const data = teacherDoc.data();
@@ -82,31 +97,50 @@ const TeacherDashboard = () => {
         setCurrentSemester(data.currentSemester || "الفصل الدراسي الأول");
       }
 
-      // Fetch student data
-      for (const grade of gradesData) {
-        const studentsInThisGrade = 0;
-        const sections = Array.from({ length: 10 }, (_, i) => i + 1);
-        const gradeStudents = [];
+      // Fetch grades and student data
+      const gradesQuery = query(collection(db, "grades"));
+      const gradesSnapshot = await getDocs(gradesQuery);
+      const gradesData = gradesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setGrades(gradesData);
 
-        for (const section of sections) {
-          const studentsCollectionRef = collection(db, `grades/${grade.id}/sections/${section}/students`);
-          const studentDocs = await getDocs(studentsCollectionRef);
+      let totalStudentsCount = 0;
+      let allGrades = [];
+      const studentsCountPerGrade = {};
+
+      for (const grade of gradesData) {
+        studentsCountPerGrade[grade.id] = 0;
+        
+        // Fetch sections for this grade
+        const sectionsQuery = query(collection(db, `grades/${grade.id}/sections`));
+        const sectionsSnapshot = await getDocs(sectionsQuery);
+        
+        for (const sectionDoc of sectionsSnapshot.docs) {
+          const sectionId = sectionDoc.id;
           
-          studentDocs.forEach(doc => {
-            const studentData = doc.data();
-            gradeStudents.push(studentData);
+          // Fetch students in this section
+          const studentsQuery = query(collection(db, `grades/${grade.id}/sections/${sectionId}/students`));
+          const studentsSnapshot = await getDocs(studentsQuery);
+          
+          studentsCountPerGrade[grade.id] += studentsSnapshot.size;
+          totalStudentsCount += studentsSnapshot.size;
+          
+          // Collect grades for average calculation
+          studentsSnapshot.forEach(studentDoc => {
+            const studentData = studentDoc.data();
             if (studentData.grades && studentData.grades.tests) {
               allGrades.push(...studentData.grades.tests);
             }
           });
         }
-        studentsCountPerGrade[grade.id] = gradeStudents.length;
-        allStudents = [...allStudents, ...gradeStudents];
       }
 
       setStudentsPerGrade(studentsCountPerGrade);
-      setTotalStudents(allStudents.length);
+      setTotalStudents(totalStudentsCount);
 
+      // Calculate average grade
       if (allGrades.length > 0) {
         const sumOfGrades = allGrades.reduce((acc, grade) => acc + (grade || 0), 0);
         const avg = (sumOfGrades / allGrades.length).toFixed(1);
@@ -232,11 +266,17 @@ const TeacherDashboard = () => {
       message: "هل أنت متأكد من حذف كافة بيانات الطلاب؟ هذا الإجراء لا يمكن التراجع عنه.",
       onConfirm: async () => {
         try {
-          for (const grade of gradesData) {
-            const sections = Array.from({ length: 10 }, (_, i) => i + 1);
-            for (const section of sections) {
-              const studentsCollectionRef = collection(db, `grades/${grade.id}/sections/${section}/students`);
-              const studentDocs = await getDocs(studentsCollectionRef);
+          for (const grade of grades) {
+            // Fetch sections for this grade
+            const sectionsQuery = query(collection(db, `grades/${grade.id}/sections`));
+            const sectionsSnapshot = await getDocs(sectionsQuery);
+            
+            for (const sectionDoc of sectionsSnapshot.docs) {
+              const sectionId = sectionDoc.id;
+              
+              // Delete all students in this section
+              const studentsQuery = query(collection(db, `grades/${grade.id}/sections/${sectionId}/students`));
+              const studentDocs = await getDocs(studentsQuery);
               const batch = [];
               studentDocs.forEach(doc => {
                 batch.push(deleteDoc(doc.ref));
@@ -353,10 +393,16 @@ const TeacherDashboard = () => {
 
         const currentBackup = [];
         try {
-          for (const grade of gradesData) {
-            const sections = Array.from({ length: 10 }, (_, i) => i + 1);
-            for (const section of sections) {
-              const studentsCollectionRef = collection(db, `grades/${grade.id}/sections/${section}/students`);
+          for (const grade of grades) {
+            // Fetch sections for this grade
+            const sectionsQuery = query(collection(db, `grades/${grade.id}/sections`));
+            const sectionsSnapshot = await getDocs(sectionsQuery);
+            
+            for (const sectionDoc of sectionsSnapshot.docs) {
+              const sectionId = sectionDoc.id;
+              
+              // Get all students in this section
+              const studentsCollectionRef = collection(db, `grades/${grade.id}/sections/${sectionId}/students`);
               const studentDocs = await getDocs(studentsCollectionRef);
               studentDocs.forEach(doc => {
                 currentBackup.push({ path: doc.ref.path, data: doc.data() });
@@ -500,7 +546,6 @@ const TeacherDashboard = () => {
     navigate("/portfolio");
     setIsMenuOpen(false);
   };
-
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-['Noto_Sans_Arabic',sans-serif]">
@@ -701,8 +746,32 @@ const TeacherDashboard = () => {
           </div>
         </div>
 
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          <div className="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700 text-center">
+            <FaUserGraduate className="text-4xl text-blue-400 mx-auto mb-2" />
+            <p className="text-xl font-semibold text-gray-300">إجمالي الطلاب</p>
+            <p className="text-3xl font-bold text-white mt-1">
+              {loading ? '...' : totalStudents}
+            </p>
+          </div>
+          <div className="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700 text-center">
+            <FaStar className="text-4xl text-yellow-400 mx-auto mb-2" />
+            <p className="text-xl font-semibold text-gray-300">متوسط الدرجات</p>
+            <p className="text-3xl font-bold text-white mt-1">
+              {loading ? '...' : averageGrade}
+            </p>
+          </div>
+          <div className="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700 text-center">
+            <FaChartBar className="text-4xl text-green-400 mx-auto mb-2" />
+            <p className="text-xl font-semibold text-gray-300">الفصل الدراسي</p>
+            <span className="text-3xl font-bold text-white">{currentSemester}</span>
+          </div>
+        </div>
+
+        {/* Grades Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          {gradesData.map((grade) => (
+          {grades.map((grade) => (
             <div
               key={grade.id}
               onClick={() => navigate(`/grades/${grade.id}`)}
@@ -728,6 +797,5 @@ const TeacherDashboard = () => {
     </div>
   );
 };
-
 
 export default TeacherDashboard;
