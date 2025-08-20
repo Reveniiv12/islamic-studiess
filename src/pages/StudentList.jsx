@@ -1,52 +1,76 @@
-import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+// src/pages/StudentList.jsx
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot } from 'firebase/firestore';
+import { FaUserCircle, FaPlus, FaSearch } from 'react-icons/fa';
 
 const StudentList = () => {
-  const { gradeId, classId } = useParams();
-  const [students, setStudents] = useState([]);
-  const [newStudent, setNewStudent] = useState({ 
-    name: '', 
-    id: '', 
-    phone: '', 
-    imageUrl: '' 
-  });
-  
-  // الإضافات الجديدة:
-  const [searchQuery, setSearchQuery] = useState('');
-  const [transferClass, setTransferClass] = useState('');
-  const [activeStudent, setActiveStudent] = useState(null);
+    const { gradeId, sectionId } = useParams();
+    const [students, setStudents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [newStudent, setNewStudent] = useState({
+        name: '',
+        id: '',
+        phone: '',
+        imageUrl: ''
+    });
 
-  const handleAddStudent = async () => {
-    const studentWithNewFields = {
-      ...newStudent,
-      // الحقول الجديدة:
-      stars: 0,
-      recitation: { status: 'not-recited', parts: [] },
-      weeklyNotes: Array(16).fill(''),
-      qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${newStudent.id}`
+    const [searchQuery, setSearchQuery] = useState('');
+
+    useEffect(() => {
+        const studentsRef = collection(db, `grades/${gradeId}/classes/${sectionId}/students`);
+        
+        const unsubscribe = onSnapshot(studentsRef, (querySnapshot) => {
+            const studentsData = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setStudents(studentsData);
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching students: ", error);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [gradeId, sectionId]);
+
+    const handleAddStudent = async () => {
+        if (newStudent.name.trim() === '') {
+            alert('الرجاء إدخال اسم الطالب.');
+            return;
+        }
+
+        const studentWithNewFields = {
+            ...newStudent,
+            stars: 0,
+            recitation: { status: 'not-recited', parts: [] },
+            weeklyNotes: Array(16).fill([]),
+            qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${newStudent.id}`
+        };
+
+        try {
+            await addDoc(
+                collection(db, `grades/${gradeId}/classes/${sectionId}/students`),
+                studentWithNewFields
+            );
+            setNewStudent({ name: '', id: '', phone: '', imageUrl: '' });
+        } catch (e) {
+            console.error("Error adding document: ", e);
+            alert("حدث خطأ أثناء إضافة الطالب. يرجى المحاولة مرة أخرى.");
+        }
     };
-    
-    const docRef = await addDoc(
-      collection(db, `grades/${gradeId}/classes/${classId}/students`),
-      studentWithNewFields
+
+    const filteredStudents = students.filter(student =>
+        student.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
-    setStudents([...students, { id: docRef.id, ...studentWithNewFields }]);
-    setNewStudent({ name: '', id: '', phone: '', imageUrl: '' });
-  };
 
-  // دالة نقل الطالب الجديدة:
-  const handleTransfer = async () => {
-    if (!activeStudent || !transferClass) return;
-    
-    // كود النقل هنا ...
-    console.log(`نقل الطالب ${activeStudent} إلى الفصل ${transferClass}`);
-    setActiveStudent(null);
-    setTransferClass('');
-  };
+    if (loading) {
+        return <div className="p-8 text-center text-blue-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">جاري تحميل الطلاب...</div>;
+    }
 
-  return (
+    return (
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4">طلاب المرحلة: {gradeId} - الفصل: {classId}</h2>
 
@@ -171,5 +195,6 @@ const StudentList = () => {
     </div>
   );
 };
+
 
 export default StudentList;
