@@ -19,6 +19,22 @@ import CustomDialog from "../components/CustomDialog";
 import { QRCodeSVG } from 'qrcode.react';
 import ReactDOM from 'react-dom';
 
+// استيراد Firebase
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc,
+  query,
+  where,
+  onSnapshot,
+  writeBatch
+} from "firebase/firestore";
+import { db } from "../firebase"; // تأكد من أن هذا المسار صحيح
+
 import {
   FaFileExcel,
   FaDownload,
@@ -100,9 +116,6 @@ const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
 const SectionGrades = () => {
   const { gradeId, sectionId } = useParams();
   const navigate = useNavigate();
-  const storageKey = `grades_${gradeId}_${sectionId}`;
-  const curriculumStorageKey = `curriculum_${gradeId}_${sectionId}`;
-  const homeworkCurriculumStorageKey = `homework_curriculum_${gradeId}_${sectionId}`;
   const gradesSectionRef = useRef(null);
 
   const [students, setStudents] = useState([]);
@@ -174,105 +187,170 @@ const SectionGrades = () => {
     setShowDialog(false);
   };
 
-  const fetchDataFromLocalStorage = () => {
+  // دالة لجلب البيانات من Firebase Firestore
+  const fetchDataFromFirebase = async () => {
     setIsRefreshing(true);
-
-    setTimeout(() => {
-      if (gradeId && sectionId) {
-        const savedData = localStorage.getItem(storageKey);
-        const savedCurriculum = localStorage.getItem(curriculumStorageKey);
-        const savedHomeworkCurriculum = localStorage.getItem(homeworkCurriculumStorageKey);
-        const savedTestMethod = localStorage.getItem(`testMethod_${gradeId}_${sectionId}`);
-        const savedTeacherName = localStorage.getItem("teacherName") || "المعلم الافتراضي";
-        const savedSchoolName = localStorage.getItem("schoolName") || "مدرسة متوسطة الطرف";
-        const savedSemester = localStorage.getItem("currentSemester") || "الفصل الدراسي الأول";
-
-        setTeacherName(savedTeacherName);
-        setSchoolName(savedSchoolName);
-        setCurrentSemester(savedSemester);
-
-        let homeworkCurr = [];
-        if (savedHomeworkCurriculum) {
-          try {
-            const parsedHomework = JSON.parse(savedHomeworkCurriculum);
-            if (Array.isArray(parsedHomework)) {
-              homeworkCurr = parsedHomework;
-            }
-          } catch {
-            homeworkCurr = [];
-          }
-        }
-        setHomeworkCurriculum(homeworkCurr);
-
-        let curriculumData = [];
-        if (savedCurriculum) {
-          try {
-            const parsedCurriculum = JSON.parse(savedCurriculum);
-            if (Array.isArray(parsedCurriculum)) {
-              curriculumData = parsedCurriculum;
-            }
-          } catch {
-            curriculumData = [];
-          }
-        }
-        setCurriculum(curriculumData);
-
-        if (savedData) {
-          try {
-            const parsedStudents = JSON.parse(savedData).map(student => {
-              const ensureArraySize = (array, size) => {
-                const newArray = Array(size).fill(null);
-                if (array && Array.isArray(array)) {
-                  for (let i = 0; i < Math.min(array.length, size); i++) {
-                    newArray[i] = array[i];
-                  }
-                }
-                return newArray;
-              };
-
-              const studentGrades = {
-                ...student.grades,
-                tests: ensureArraySize(student.grades?.tests, 2),
-                homework: ensureArraySize(student.grades?.homework, 10),
-                performanceTasks: ensureArraySize(student.grades?.performanceTasks, 5),
-                participation: ensureArraySize(student.grades?.participation, 10),
-                quranRecitation: ensureArraySize(student.grades?.quranRecitation, 5),
-                quranMemorization: ensureArraySize(student.grades?.quranMemorization, 5),
-                oralTest: ensureArraySize(student.grades?.oralTest, 5),
-                weeklyNotes: ensureArraySize(student.grades?.weeklyNotes, 20),
-              };
-
-              const studentWithStars = {
-                ...student,
-                grades: studentGrades,
-                viewKey: student.viewKey || `/student/${student.id}`,
-                acquiredStars: student.acquiredStars !== undefined ? student.acquiredStars : student.stars || 0,
-                consumedStars: student.consumedStars || 0,
-                stars: (student.acquiredStars !== undefined ? student.acquiredStars : student.stars || 0) - (student.consumedStars || 0),
-                absences: student.absences || [] // Initialize new absences array
-              };
-
-              if (!studentWithStars.viewKey) {
-                studentWithStars.viewKey = `/student-view/${student.id}-${Date.now()}`;
-              }
-              return studentWithStars;
-            }).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-
-            setStudents(parsedStudents);
-          } catch {
-            setStudents([]);
-          }
-        } else {
-          setStudents([]);
-        }
-
-        if (savedTestMethod) {
-          setTestCalculationMethod(savedTestMethod);
-        }
+    
+    try {
+      // جلب بيانات الطلاب
+      const studentsQuery = query(
+        collection(db, "grades", gradeId, "sections", sectionId, "students")
+      );
+      const studentsSnapshot = await getDocs(studentsQuery);
+      const studentsData = studentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // جلب بيانات المنهج
+      const curriculumDocRef = doc(db, "grades", gradeId, "sections", sectionId, "curriculum");
+      const curriculumDoc = await getDoc(curriculumDocRef);
+      let curriculumData = [];
+      let homeworkCurr = [];
+      
+      if (curriculumDoc.exists()) {
+        const data = curriculumDoc.data();
+        curriculumData = data.recitation || [];
+        homeworkCurr = data.homework || [];
       }
+      
+      // جلب بيانات الإعدادات
+      const settingsDocRef = doc(db, "settings", "general");
+      const settingsDoc = await getDoc(settingsDocRef);
+      let savedTeacherName = "المعلم الافتراضي";
+      let savedSchoolName = "مدرسة متوسطة الطرف";
+      let savedSemester = "الفصل الدراسي الأول";
+      let savedTestMethod = 'average';
+      
+      if (settingsDoc.exists()) {
+        const data = settingsDoc.data();
+        savedTeacherName = data.teacherName || savedTeacherName;
+        savedSchoolName = data.schoolName || savedSchoolName;
+        savedSemester = data.currentSemester || savedSemester;
+        savedTestMethod = data.testMethod || savedTestMethod;
+      }
+      
+      // تحديث الحالة
+      setTeacherName(savedTeacherName);
+      setSchoolName(savedSchoolName);
+      setCurrentSemester(savedSemester);
+      setHomeworkCurriculum(homeworkCurr);
+      setCurriculum(curriculumData);
+      setTestCalculationMethod(savedTestMethod);
+      
+      // معالجة بيانات الطلاب
+      const parsedStudents = studentsData.map(student => {
+        const ensureArraySize = (array, size) => {
+          const newArray = Array(size).fill(null);
+          if (array && Array.isArray(array)) {
+            for (let i = 0; i < Math.min(array.length, size); i++) {
+              newArray[i] = array[i];
+            }
+          }
+          return newArray;
+        };
 
+        const studentGrades = {
+          ...student.grades,
+          tests: ensureArraySize(student.grades?.tests, 2),
+          homework: ensureArraySize(student.grades?.homework, 10),
+          performanceTasks: ensureArraySize(student.grades?.performanceTasks, 5),
+          participation: ensureArraySize(student.grades?.participation, 10),
+          quranRecitation: ensureArraySize(student.grades?.quranRecitation, 5),
+          quranMemorization: ensureArraySize(student.grades?.quranMemorization, 5),
+          oralTest: ensureArraySize(student.grades?.oralTest, 5),
+          weeklyNotes: ensureArraySize(student.grades?.weeklyNotes, 20),
+        };
+
+        const studentWithStars = {
+          ...student,
+          grades: studentGrades,
+          viewKey: student.viewKey || `/student/${student.id}`,
+          acquiredStars: student.acquiredStars !== undefined ? student.acquiredStars : student.stars || 0,
+          consumedStars: student.consumedStars || 0,
+          stars: (student.acquiredStars !== undefined ? student.acquiredStars : student.stars || 0) - (student.consumedStars || 0),
+          absences: student.absences || [] // Initialize new absences array
+        };
+
+        if (!studentWithStars.viewKey) {
+          studentWithStars.viewKey = `/student-view/${student.id}-${Date.now()}`;
+        }
+        return studentWithStars;
+      }).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+
+      setStudents(parsedStudents);
+      
+    } catch (error) {
+      console.error("Error fetching data from Firebase:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء جلب البيانات من قاعدة البيانات", "error");
+    } finally {
       setIsRefreshing(false);
-    }, 1000);
+    }
+  };
+
+  // دالة لحفظ بيانات الطلاب في Firebase
+  const updateStudentsData = async (updatedStudents) => {
+    try {
+      const batch = writeBatch(db);
+      const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+      
+      // تحديث كل طالب في الدفعة
+      sortedStudents.forEach(student => {
+        const studentRef = doc(db, "grades", gradeId, "sections", sectionId, "students", student.id);
+        batch.set(studentRef, student);
+      });
+      
+      await batch.commit();
+      setStudents(sortedStudents);
+    } catch (error) {
+      console.error("Error updating students data:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات في قاعدة البيانات", "error");
+    }
+  };
+
+  // دالة لحفظ بيانات المنهج في Firebase
+  const updateCurriculumData = async (updatedCurriculum) => {
+    try {
+      const curriculumRef = doc(db, "grades", gradeId, "sections", sectionId, "curriculum");
+      await setDoc(curriculumRef, { 
+        recitation: updatedCurriculum,
+        homework: homeworkCurriculum 
+      }, { merge: true });
+      
+      setCurriculum(updatedCurriculum);
+    } catch (error) {
+      console.error("Error updating curriculum:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء حفظ المنهج في قاعدة البيانات", "error");
+    }
+  };
+
+  // دالة لحفظ بيانات واجبات المنهج في Firebase
+  const updateHomeworkCurriculumData = async (updatedCurriculum) => {
+    try {
+      const curriculumRef = doc(db, "grades", gradeId, "sections", sectionId, "curriculum");
+      await setDoc(curriculumRef, { 
+        recitation: curriculum,
+        homework: updatedCurriculum 
+      }, { merge: true });
+      
+      setHomeworkCurriculum(updatedCurriculum);
+    } catch (error) {
+      console.error("Error updating homework curriculum:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء حفظ واجبات المنهج في قاعدة البيانات", "error");
+    }
+  };
+
+  // دالة لحفظ طريقة حساب الاختبارات في Firebase
+  const handleTestCalculationMethodChange = async (method) => {
+    try {
+      const settingsRef = doc(db, "settings", "general");
+      await setDoc(settingsRef, { testMethod: method }, { merge: true });
+      
+      setTestCalculationMethod(method);
+    } catch (error) {
+      console.error("Error saving test method:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء حفظ طريقة حساب الاختبارات", "error");
+    }
   };
 
   const handleDeleteNote = (studentId, weekIndex, noteIndex) => {
@@ -280,33 +358,39 @@ const SectionGrades = () => {
       "تأكيد الحذف",
       "هل أنت متأكد من حذف هذه الملاحظة؟",
       "confirm",
-      () => {
-        const updatedStudents = students.map(s => {
-          if (s.id === studentId) {
-            const updatedNotes = [...(s.grades.weeklyNotes || [])];
-            if (updatedNotes[weekIndex]) {
-              updatedNotes[weekIndex] = updatedNotes[weekIndex].filter((_, i) => i !== noteIndex);
-            }
-            return {
-              ...s,
-              grades: {
-                ...s.grades,
-                weeklyNotes: updatedNotes
+      async () => {
+        try {
+          const updatedStudents = students.map(s => {
+            if (s.id === studentId) {
+              const updatedNotes = [...(s.grades.weeklyNotes || [])];
+              if (updatedNotes[weekIndex]) {
+                updatedNotes[weekIndex] = updatedNotes[weekIndex].filter((_, i) => i !== noteIndex);
               }
-            };
-          }
-          return s;
-        });
-        updateStudentsData(updatedStudents);
-        setSelectedStudent(updatedStudents.find(s => s.id === studentId));
-        handleDialog("نجاح", "تم حذف الملاحظة بنجاح", "success");
+              return {
+                ...s,
+                grades: {
+                  ...s.grades,
+                  weeklyNotes: updatedNotes
+                }
+              };
+            }
+            return s;
+          });
+          
+          await updateStudentsData(updatedStudents);
+          setSelectedStudent(updatedStudents.find(s => s.id === studentId));
+          handleDialog("نجاح", "تم حذف الملاحظة بنجاح", "success");
+        } catch (error) {
+          console.error("Error deleting note:", error);
+          handleDialog("خطأ", "حدث خطأ أثناء حذف الملاحظة", "error");
+        }
       }
     );
   };
 
   useEffect(() => {
-    fetchDataFromLocalStorage();
-  }, [gradeId, sectionId, storageKey, curriculumStorageKey]);
+    fetchDataFromFirebase();
+  }, [gradeId, sectionId]);
 
   useEffect(() => {
     if (selectedStudent && gradesSectionRef.current) {
@@ -365,27 +449,6 @@ const SectionGrades = () => {
     }
   };
 
-  const updateStudentsData = (updatedStudents) => {
-    const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-    setStudents(sortedStudents);
-    localStorage.setItem(storageKey, JSON.stringify(sortedStudents));
-  };
-
-  const updateCurriculumData = (updatedCurriculum) => {
-    setCurriculum(updatedCurriculum);
-    localStorage.setItem(curriculumStorageKey, JSON.stringify(updatedCurriculum));
-  };
-
-  const updateHomeworkCurriculumData = (updatedCurriculum) => {
-    setHomeworkCurriculum(updatedCurriculum);
-    localStorage.setItem(homeworkCurriculumStorageKey, JSON.stringify(updatedCurriculum));
-  };
-
-  const handleTestCalculationMethodChange = (method) => {
-    setTestCalculationMethod(method);
-    localStorage.setItem(`testMethod_${gradeId}_${sectionId}`, method);
-  };
-
   const exportToExcel = async () => {
     try {
       const [{ utils, write }, { saveAs }] = await Promise.all([
@@ -431,7 +494,7 @@ const SectionGrades = () => {
           const jsonData = utils.sheet_to_json(sheet);
 
           const updatedStudents = jsonData.map(row => ({
-            id: Date.now() + Math.random(),
+            id: Date.now() + Math.random().toString(36).substr(2, 9),
             name: row['اسم الطالب'] || '',
             nationalId: row['السجل المدني'] || '',
             parentPhone: row['رقم ولي الأمر'] || '',
@@ -450,40 +513,53 @@ const SectionGrades = () => {
     }
   };
 
-  const handleAddStudent = () => {
+  const handleAddStudent = async () => {
     if (!newStudent.name || !newStudent.nationalId) {
       handleDialog("خطأ", "يرجى إدخال الاسم والسجل المدني", "error");
       return;
     }
-    const newId = Date.now();
-    const studentToAdd = {
-      id: newId,
-      ...newStudent,
-      photo: newStudent.photo || '/images/1.webp',
-      stars: 0,
-      acquiredStars: 0,
-      consumedStars: 0,
-      recitationHistory: [],
-      viewKey: `/student-view/${newId}-${Date.now()}`,
-      grades: {
-        tests: Array(2).fill(null),
-        homework: Array(10).fill(null),
-        performanceTasks: Array(5).fill(null),
-        participation: Array(10).fill(null),
-        quranRecitation: Array(5).fill(null),
-        quranMemorization: Array(5).fill(null),
-        oralTest: Array(5).fill(null),
-        weeklyNotes: Array(20).fill(null),
-      },
-      absences: [], // Initialize absences array for new student
-    };
-    updateStudentsData([...students, studentToAdd]);
-    setShowAddForm(false);
-    setNewStudent({ name: "", nationalId: "", phone: "", parentPhone: "", photo: "" });
-    handleDialog("نجاح", "تم إضافة الطالب بنجاح!", "success");
+    
+    try {
+      const newId = Date.now() + Math.random().toString(36).substr(2, 9);
+      const studentToAdd = {
+        id: newId,
+        ...newStudent,
+        photo: newStudent.photo || '/images/1.webp',
+        stars: 0,
+        acquiredStars: 0,
+        consumedStars: 0,
+        recitationHistory: [],
+        viewKey: `/student-view/${newId}-${Date.now()}`,
+        grades: {
+          tests: Array(2).fill(null),
+          homework: Array(10).fill(null),
+          performanceTasks: Array(5).fill(null),
+          participation: Array(10).fill(null),
+          quranRecitation: Array(5).fill(null),
+          quranMemorization: Array(5).fill(null),
+          oralTest: Array(5).fill(null),
+          weeklyNotes: Array(20).fill(null),
+        },
+        absences: [], // Initialize absences array for new student
+      };
+      
+      // إضافة الطالب إلى Firebase
+      const studentRef = doc(db, "grades", gradeId, "sections", sectionId, "students", newId);
+      await setDoc(studentRef, studentToAdd);
+      
+      setShowAddForm(false);
+      setNewStudent({ name: "", nationalId: "", phone: "", parentPhone: "", photo: "" });
+      handleDialog("نجاح", "تم إضافة الطالب بنجاح!", "success");
+      
+      // تحديث قائمة الطلاب
+      fetchDataFromFirebase();
+    } catch (error) {
+      console.error("Error adding student:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء إضافة الطالب", "error");
+    }
   };
 
-  const updateStudentGrade = (studentId, category, index, value) => {
+  const updateStudentGrade = async (studentId, category, index, value) => {
     const numValue = value === '' ? null : Number(value);
     let maxLimit = 0;
     let errorMessage = '';
@@ -501,57 +577,84 @@ const SectionGrades = () => {
       handleDialog("خطأ", errorMessage, "error");
       return;
     }
-    const updatedStudents = students.map((student) => {
-      if (student.id === studentId) {
-        const updatedGrades = { ...student.grades };
-        if (Array.isArray(updatedGrades[category])) {
-          updatedGrades[category][index] = numValue;
-        } else {
-          updatedGrades[category] = numValue;
+    
+    try {
+      const updatedStudents = students.map((student) => {
+        if (student.id === studentId) {
+          const updatedGrades = { ...student.grades };
+          if (Array.isArray(updatedGrades[category])) {
+            updatedGrades[category][index] = numValue;
+          } else {
+            updatedGrades[category] = numValue;
+          }
+          return { ...student, grades: updatedGrades };
         }
-        return { ...student, grades: updatedGrades };
-      }
-      return student;
-    });
-    updateStudentsData(updatedStudents);
-    const updatedSelectedStudent = updatedStudents.find(s => s.id === studentId);
-    if (updatedSelectedStudent) { setSelectedStudent(updatedSelectedStudent); }
-  };
-
-  const updateStudentStars = (updatedStudents) => {
-    const studentsWithCalculatedStars = updatedStudents.map(student => ({
-      ...student,
-      stars: (student.acquiredStars || 0) - (student.consumedStars || 0)
-    }));
-
-    updateStudentsData(studentsWithCalculatedStars);
-    if (selectedStudent) {
-      const updatedStudent = studentsWithCalculatedStars.find(s => s.id === selectedStudent.id);
-      if (updatedStudent) {
-        setSelectedStudent(updatedStudent);
-      }
+        return student;
+      });
+      
+      await updateStudentsData(updatedStudents);
+      const updatedSelectedStudent = updatedStudents.find(s => s.id === studentId);
+      if (updatedSelectedStudent) { setSelectedStudent(updatedSelectedStudent); }
+    } catch (error) {
+      console.error("Error updating grade:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء تحديث الدرجة", "error");
     }
-
-    setShowStarsModal(false);
   };
 
-  const updateRecitationData = (updatedStudents) => {
-    updateStudentsData(updatedStudents);
-    const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent?.id);
-    if (updatedSelectedStudent) { setSelectedStudent(updatedSelectedStudent); }
+  const updateStudentStars = async (updatedStudents) => {
+    try {
+      const studentsWithCalculatedStars = updatedStudents.map(student => ({
+        ...student,
+        stars: (student.acquiredStars || 0) - (student.consumedStars || 0)
+      }));
+
+      await updateStudentsData(studentsWithCalculatedStars);
+      if (selectedStudent) {
+        const updatedStudent = studentsWithCalculatedStars.find(s => s.id === selectedStudent.id);
+        if (updatedStudent) {
+          setSelectedStudent(updatedStudent);
+        }
+      }
+
+      setShowStarsModal(false);
+    } catch (error) {
+      console.error("Error updating stars:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء تحديث النجوم", "error");
+    }
   };
 
-  const updateNotesData = (updatedStudents) => {
-    updateStudentsData(updatedStudents);
-    const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent?.id);
-    if (updatedSelectedStudent) { setSelectedStudent(updatedSelectedStudent); }
+  const updateRecitationData = async (updatedStudents) => {
+    try {
+      await updateStudentsData(updatedStudents);
+      const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent?.id);
+      if (updatedSelectedStudent) { setSelectedStudent(updatedSelectedStudent); }
+    } catch (error) {
+      console.error("Error updating recitation:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء تحديث بيانات التسميع", "error");
+    }
   };
 
-  const updateAbsenceData = (updatedStudents) => {
-    updateStudentsData(updatedStudents);
-    const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent?.id);
-    if (updatedSelectedStudent) {
-      setSelectedStudent(updatedSelectedStudent);
+  const updateNotesData = async (updatedStudents) => {
+    try {
+      await updateStudentsData(updatedStudents);
+      const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent?.id);
+      if (updatedSelectedStudent) { setSelectedStudent(updatedSelectedStudent); }
+    } catch (error) {
+      console.error("Error updating notes:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء تحديث الملاحظات", "error");
+    }
+  };
+
+  const updateAbsenceData = async (updatedStudents) => {
+    try {
+      await updateStudentsData(updatedStudents);
+      const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent?.id);
+      if (updatedSelectedStudent) {
+        setSelectedStudent(updatedSelectedStudent);
+      }
+    } catch (error) {
+      console.error("Error updating absence:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء تحديث بيانات الغياب", "error");
     }
   };
 
@@ -581,27 +684,34 @@ const SectionGrades = () => {
     return Array.from(troubled);
   };
 
-  const handleEditStudent = () => {
+  const handleEditStudent = async () => {
     if (!editingStudent.name || !editingStudent.nationalId) {
       handleDialog("خطأ", "يرجى إدخال الاسم والسجل المدني", "error");
       return;
     }
-    const updatedStudents = students.map(student =>
-      student.id === editingStudent.id ? {
-        ...editingStudent,
-        stars: (editingStudent.acquiredStars || 0) - (editingStudent.consumedStars || 0)
-      } : student
-    );
-    updateStudentsData(updatedStudents);
-    setShowEditForm(false);
-    setEditingStudent(null);
-    if (selectedStudent && selectedStudent.id === editingStudent.id) {
-      setSelectedStudent({
-        ...editingStudent,
-        stars: (editingStudent.acquiredStars || 0) - (editingStudent.consumedStars || 0)
-      });
+    
+    try {
+      const updatedStudents = students.map(student =>
+        student.id === editingStudent.id ? {
+          ...editingStudent,
+          stars: (editingStudent.acquiredStars || 0) - (editingStudent.consumedStars || 0)
+        } : student
+      );
+      
+      await updateStudentsData(updatedStudents);
+      setShowEditForm(false);
+      setEditingStudent(null);
+      if (selectedStudent && selectedStudent.id === editingStudent.id) {
+        setSelectedStudent({
+          ...editingStudent,
+          stars: (editingStudent.acquiredStars || 0) - (editingStudent.consumedStars || 0)
+        });
+      }
+      handleDialog("نجاح", "تم تعديل بيانات الطالب بنجاح!", "success");
+    } catch (error) {
+      console.error("Error editing student:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء تعديل بيانات الطالب", "error");
     }
-    handleDialog("نجاح", "تم تعديل بيانات الطالب بنجاح!", "success");
   };
 
   const filteredStudents = students
@@ -1514,3 +1624,4 @@ const SectionGrades = () => {
 
 
 export default SectionGrades;
+
