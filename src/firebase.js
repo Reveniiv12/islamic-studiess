@@ -1,6 +1,5 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getDatabase, ref, set, push, update, onValue } from "firebase/database";
 import { getFirestore, collection, doc, updateDoc, setDoc, deleteDoc } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -10,7 +9,6 @@ const firebaseConfig = {
   storageBucket: "student-portal-ce9ed.appspot.com",
   messagingSenderId: "71643352040",
   appId: "1:71643352040:web:442d3ac558edda827f325d",
-  databaseURL: "https://student-portal-ce9ed-default-rtdb.firebaseio.com" // لازم إذا تستخدم Realtime DB
 };
 
 const app = initializeApp(firebaseConfig);
@@ -21,47 +19,53 @@ const auth = getAuth(app);
 // Firestore
 const db = getFirestore(app);
 
-// Realtime Database
-const database = getDatabase(app);
-
 // الدوال الجديدة المضافة
 const updateStars = async (studentRef, stars) => {
   await updateDoc(studentRef, { stars });
 };
 
-const updateRecitation = async (studentRef, status) => {
-  await updateDoc(studentRef, { 
-    recitation: { 
-      status,
-      lastUpdated: new Date() 
-    } 
-  });
+const updateRecitation = async (studentRef, recitation) => {
+  await updateDoc(studentRef, { recitation });
 };
 
-const saveWeeklyNote = async (studentRef, weekNumber, note) => {
-  await updateDoc(studentRef, {
-    [`weeklyNotes.${weekNumber}`]: note
-  });
+const updateStudentNotes = async (studentRef, weekIndex, note) => {
+  const docSnap = await getDoc(studentRef);
+  if (docSnap.exists()) {
+    const studentData = docSnap.data();
+    const currentNotes = studentData.weeklyNotes || [];
+    currentNotes[weekIndex] = currentNotes[weekIndex] || [];
+    currentNotes[weekIndex].push(note);
+    await updateDoc(studentRef, { weeklyNotes: currentNotes });
+  }
 };
 
-const transferStudent = async (fromRef, toRef, studentData) => {
-  await setDoc(toRef, studentData);
-  await deleteDoc(fromRef);
+const addHomework = async (studentRef, homeworkStatus, weekIndex) => {
+  const docSnap = await getDoc(studentRef);
+  if (docSnap.exists()) {
+    const studentData = docSnap.data();
+    const currentHomework = studentData.homework || [];
+    currentHomework[weekIndex] = homeworkStatus;
+    await updateDoc(studentRef, { homework: currentHomework });
+  }
 };
 
-export { 
-  auth, 
-  db, 
-  collection, 
-  doc, 
-  updateDoc,
-  ref,
-  set,
-  push,
-  update,
-  onValue,
+const addCurriculum = async (gradeId, sectionId, parts) => {
+  const docRef = doc(db, `grades/${gradeId}/classes/${sectionId}/curriculum`, "recitation");
+  await setDoc(docRef, { parts });
+};
+
+const addHomeworkCurriculum = async (gradeId, sectionId, parts) => {
+  const docRef = doc(db, `grades/${gradeId}/classes/${sectionId}/curriculum`, "homework");
+  await setDoc(docRef, { parts });
+};
+
+export {
+  auth,
+  db,
   updateStars,
   updateRecitation,
-  saveWeeklyNote,
-  transferStudent
+  updateStudentNotes,
+  addHomework,
+  addCurriculum,
+  addHomeworkCurriculum
 };
