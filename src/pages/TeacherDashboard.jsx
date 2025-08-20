@@ -11,16 +11,18 @@ import { FaRedo } from "react-icons/fa";
 import { FaDownload } from "react-icons/fa";
 import { FaTrash } from "react-icons/fa";
 import { FaFolderOpen } from "react-icons/fa";
-import { FaChartBar } from "react-icons/fa";import { getAuth, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { FaChartBar } from "react-icons/fa";
+import { getAuth, onAuthStateChanged, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { db, collection, doc, setDoc, getDocs, getDoc, deleteDoc, query } from '../firebase';
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
-  
+
   const [totalStudents, setTotalStudents] = useState(0);
   const [averageGrade, setAverageGrade] = useState(0);
   const [studentsPerGrade, setStudentsPerGrade] = useState({});
   const [loading, setLoading] = useState(true);
-  
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [teacherName, setTeacherName] = useState("");
   const [teacherPhoto, setTeacherPhoto] = useState("");
@@ -33,20 +35,19 @@ const TeacherDashboard = () => {
   const [password, setPassword] = useState("");
   const [modalMessage, setModalMessage] = useState("");
   const [modalError, setModalError] = useState("");
-  
+
   const [user, setUser] = useState(null);
-  
+
   const [backups, setBackups] = useState([]);
   const [selectedBackupKey, setSelectedBackupKey] = useState(null);
-  const BACKUP_LIST_KEY = "grades_backup_list";
-  
+
   const [customDialog, setCustomDialog] = useState({
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
-    onCancel: () => {},
-    onClose: () => {},
+    onConfirm: () => { },
+    onCancel: () => { },
+    onClose: () => { },
     inputs: {},
   });
 
@@ -56,37 +57,52 @@ const TeacherDashboard = () => {
       setUser(currentUser);
       if (!currentUser) {
         navigate("/");
+      } else {
+        fetchDataFromFirestore(currentUser);
       }
     });
     return () => unsubscribe();
   }, [navigate]);
 
-  useEffect(() => {
-    const fetchAndCalculateData = () => {
-      let allStudents = [];
-      let allGrades = [];
-      const studentsCountPerGrade = {};
+  const fetchDataFromFirestore = async (currentUser) => {
+    setLoading(true);
+    let allStudents = [];
+    let allGrades = [];
+    const studentsCountPerGrade = {};
+    const teacherRef = doc(db, "teachers", currentUser.uid);
 
-      gradesData.forEach(grade => {
-        let studentsInThisGrade = 0;
+    try {
+      // Fetch teacher info
+      const teacherDoc = await getDoc(teacherRef);
+      if (teacherDoc.exists()) {
+        const data = teacherDoc.data();
+        setTeacherName(data.teacherName || "المعلم/ة: محمد السعدي");
+        setTeacherPhoto(data.teacherPhoto || "/images/default_teacher.png");
+        setSchoolName(data.schoolName || "مدرسة متوسطة الطرف");
+        setCurrentSemester(data.currentSemester || "الفصل الدراسي الأول");
+      }
+
+      // Fetch student data
+      for (const grade of gradesData) {
+        const studentsInThisGrade = 0;
         const sections = Array.from({ length: 10 }, (_, i) => i + 1);
-        sections.forEach(section => {
-          const storageKey = `grades_${grade.id}_${section}`;
-          const savedData = localStorage.getItem(storageKey);
-          if (savedData) {
-            const studentsInSection = JSON.parse(savedData);
-            allStudents = [...allStudents, ...studentsInSection];
-            studentsInThisGrade += studentsInSection.length;
-            
-            studentsInSection.forEach(student => {
-              if (student.grades && student.grades.tests) {
-                allGrades.push(...student.grades.tests);
-              }
-            });
-          }
-        });
-        studentsCountPerGrade[grade.id] = studentsInThisGrade;
-      });
+        const gradeStudents = [];
+
+        for (const section of sections) {
+          const studentsCollectionRef = collection(db, `grades/${grade.id}/sections/${section}/students`);
+          const studentDocs = await getDocs(studentsCollectionRef);
+          
+          studentDocs.forEach(doc => {
+            const studentData = doc.data();
+            gradeStudents.push(studentData);
+            if (studentData.grades && studentData.grades.tests) {
+              allGrades.push(...studentData.grades.tests);
+            }
+          });
+        }
+        studentsCountPerGrade[grade.id] = gradeStudents.length;
+        allStudents = [...allStudents, ...gradeStudents];
+      }
 
       setStudentsPerGrade(studentsCountPerGrade);
       setTotalStudents(allStudents.length);
@@ -99,58 +115,48 @@ const TeacherDashboard = () => {
         setAverageGrade(0);
       }
 
+      // Fetch backups
+      const backupsCollectionRef = collection(db, `teachers/${currentUser.uid}/backups`);
+      const backupDocs = await getDocs(backupsCollectionRef);
+      const fetchedBackups = backupDocs.docs.map(doc => ({ ...doc.data(), key: doc.id }));
+      const sortedBackups = fetchedBackups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      setBackups(sortedBackups);
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
       setLoading(false);
-    };
-
-    const loadTeacherInfo = () => {
-      setTeacherName(localStorage.getItem("teacherName") || "المعلم/ة: محمد السعدي");
-      setTeacherPhoto(localStorage.getItem("teacherPhoto") || "/images/default_teacher.png");
-      setSchoolName(localStorage.getItem("schoolName") || "مدرسة متوسطة الطرف");
-      setCurrentSemester(localStorage.getItem("currentSemester") || "الفصل الدراسي الأول");
-    };
-    
-    const loadBackups = () => {
-      const backupListString = localStorage.getItem(BACKUP_LIST_KEY);
-      if (backupListString) {
-        const sortedBackups = JSON.parse(backupListString).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setBackups(sortedBackups);
-      }
-    };
-
-    fetchAndCalculateData();
-    loadTeacherInfo();
-    loadBackups();
-  }, []);
+    }
+  };
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
   };
-  
-  const handleUpdateTeacherInfo = () => {
-    setCustomDialog({
-      isOpen: true,
-      title: "تعديل بيانات المعلم",
-      message: "يرجى إدخال البيانات الجديدة:",
-      inputs: {
-        teacherName: { label: "اسم المعلم", value: teacherName },
-        schoolName: { label: "اسم المدرسة", value: schoolName },
-        currentSemester: { label: "الفصل الدراسي", value: currentSemester },
-        teacherPhoto: { label: "رابط الصورة", value: teacherPhoto },
-      },
-      onConfirm: (inputs) => {
-        localStorage.setItem("teacherName", inputs.teacherName);
-        localStorage.setItem("schoolName", inputs.schoolName);
-        localStorage.setItem("currentSemester", inputs.currentSemester);
-        localStorage.setItem("teacherPhoto", inputs.teacherPhoto);
-        setTeacherName(inputs.teacherName);
-        setSchoolName(inputs.schoolName);
-        setCurrentSemester(inputs.currentSemester);
-        setTeacherPhoto(inputs.teacherPhoto);
-        setCustomDialog({ ...customDialog, isOpen: false });
-      },
-      onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
-      onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
-    });
+
+  const handleUpdateTeacherInfo = async (inputs) => {
+    if (!user) {
+      setModalError("يجب أن تكون مسجلاً للدخول لتعديل البيانات.");
+      return;
+    }
+
+    try {
+      const teacherRef = doc(db, "teachers", user.uid);
+      await setDoc(teacherRef, {
+        teacherName: inputs.teacherName,
+        schoolName: inputs.schoolName,
+        currentSemester: inputs.currentSemester,
+        teacherPhoto: inputs.teacherPhoto,
+      }, { merge: true });
+
+      setTeacherName(inputs.teacherName);
+      setSchoolName(inputs.schoolName);
+      setCurrentSemester(inputs.currentSemester);
+      setTeacherPhoto(inputs.teacherPhoto);
+      setCustomDialog({ ...customDialog, isOpen: false });
+    } catch (error) {
+      console.error("Error updating teacher info:", error);
+      setModalError("فشل في تحديث البيانات. يرجى المحاولة مرة أخرى.");
+    }
   };
 
   const handleResetData = () => {
@@ -181,7 +187,7 @@ const TeacherDashboard = () => {
       setModalError("يجب أن تكون مسجلاً للدخول لإجراء هذه العملية.");
       return;
     }
-    
+
     if (email !== user.email) {
       setModalError("البريد الإلكتروني غير صحيح. يرجى إدخال بريدك الإلكتروني الحالي.");
       return;
@@ -190,7 +196,7 @@ const TeacherDashboard = () => {
     try {
       const credential = EmailAuthProvider.credential(email, password);
       await reauthenticateWithCredential(user, credential);
-      
+
       // Prompt for backup before reset
       setIsResetModalOpen(false);
       setCustomDialog({
@@ -200,13 +206,11 @@ const TeacherDashboard = () => {
         onConfirm: () => {
           handleBackupData(() => {
             setCustomDialog({ ...customDialog, isOpen: false });
-            // Then show the final reset confirmation
             showResetConfirmation();
           });
         },
         onCancel: () => {
           setCustomDialog({ ...customDialog, isOpen: false });
-          // If no backup is desired, go straight to reset confirmation
           showResetConfirmation();
         },
         onClose: () => setCustomDialog({ ...customDialog, isOpen: false })
@@ -226,18 +230,29 @@ const TeacherDashboard = () => {
       isOpen: true,
       title: "تأكيد الحذف النهائي",
       message: "هل أنت متأكد من حذف كافة بيانات الطلاب؟ هذا الإجراء لا يمكن التراجع عنه.",
-      onConfirm: () => {
-        gradesData.forEach(grade => {
-          const sections = Array.from({ length: 10 }, (_, i) => i + 1);
-          sections.forEach(section => {
-            localStorage.removeItem(`grades_${grade.id}_${section}`);
-          });
-        });
-        setModalMessage("تم حذف بيانات الطلاب بنجاح.");
-        setTimeout(() => {
-          setCustomDialog({ ...customDialog, isOpen: false });
-          window.location.reload();
-        }, 2000);
+      onConfirm: async () => {
+        try {
+          for (const grade of gradesData) {
+            const sections = Array.from({ length: 10 }, (_, i) => i + 1);
+            for (const section of sections) {
+              const studentsCollectionRef = collection(db, `grades/${grade.id}/sections/${section}/students`);
+              const studentDocs = await getDocs(studentsCollectionRef);
+              const batch = [];
+              studentDocs.forEach(doc => {
+                batch.push(deleteDoc(doc.ref));
+              });
+              await Promise.all(batch);
+            }
+          }
+          setModalMessage("تم حذف بيانات الطلاب بنجاح.");
+          setTimeout(() => {
+            setCustomDialog({ ...customDialog, isOpen: false });
+            window.location.reload();
+          }, 2000);
+        } catch (error) {
+          console.error("Error deleting students:", error);
+          setModalError("فشل في حذف البيانات. يرجى المحاولة مرة أخرى.");
+        }
       },
       onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
       onClose: () => setCustomDialog({ ...customDialog, isOpen: false })
@@ -253,7 +268,7 @@ const TeacherDashboard = () => {
       setModalError("يجب أن تكون مسجلاً للدخول لإجراء هذه العملية.");
       return;
     }
-    
+
     if (email !== user.email) {
       setModalError("البريد الإلكتروني غير صحيح. يرجى إدخال بريدك الإلكتروني الحالي.");
       return;
@@ -267,32 +282,41 @@ const TeacherDashboard = () => {
     try {
       const credential = EmailAuthProvider.credential(email, password);
       await reauthenticateWithCredential(user, credential);
-      
-      // إخفاء نافذة المصادقة وإظهار نافذة التأكيد
+
       setIsRestoreModalOpen(false);
 
-      const backupData = localStorage.getItem(selectedBackupKey);
-      if (backupData) {
+      const backupRef = doc(db, `teachers/${user.uid}/backups`, selectedBackupKey);
+      const backupDoc = await getDoc(backupRef);
+
+      if (backupDoc.exists()) {
         setCustomDialog({
           isOpen: true,
           title: "تأكيد الاسترداد",
           message: "هل أنت متأكد من استعادة البيانات؟ هذا الإجراء سيحل محل البيانات الحالية.",
-          onConfirm: () => {
-            const parsedBackup = JSON.parse(backupData);
-            gradesData.forEach(grade => {
-              const sections = Array.from({ length: 10 }, (_, i) => i + 1);
-              sections.forEach(section => {
-                localStorage.removeItem(`grades_${grade.id}_${section}`);
-              });
-            });
-            parsedBackup.forEach(item => {
-              localStorage.setItem(item.key, item.value);
-            });
-            setModalMessage("تم استعادة بيانات الطلاب بنجاح.");
-            setTimeout(() => {
-              setCustomDialog({ ...customDialog, isOpen: false });
-              window.location.reload();
-            }, 2000);
+          onConfirm: async () => {
+            try {
+              const parsedBackup = backupDoc.data().data;
+              const batch = [];
+              for (const item of parsedBackup) {
+                const parts = item.path.split('/');
+                if (parts.length === 6 && parts[4] === "students") {
+                    const studentId = parts[5];
+                    const gradeId = parts[1];
+                    const sectionId = parts[3];
+                    const studentRef = doc(db, `grades/${gradeId}/sections/${sectionId}/students`, studentId);
+                    batch.push(setDoc(studentRef, item.data, { merge: false }));
+                }
+              }
+              await Promise.all(batch);
+              setModalMessage("تم استعادة بيانات الطلاب بنجاح.");
+              setTimeout(() => {
+                setCustomDialog({ ...customDialog, isOpen: false });
+                window.location.reload();
+              }, 2000);
+            } catch (error) {
+              console.error("Error restoring data:", error);
+              setModalError("فشل في استعادة البيانات. يرجى المحاولة مرة أخرى.");
+            }
           },
           onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
           onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
@@ -310,7 +334,7 @@ const TeacherDashboard = () => {
     }
   };
 
-  const handleBackupData = (callback = () => {}) => {
+  const handleBackupData = async (callback = () => { }) => {
     if (!user) {
       setModalError("يجب أن تكون مسجلاً للدخول لحفظ نسخة احتياطية.");
       return;
@@ -323,90 +347,96 @@ const TeacherDashboard = () => {
       inputs: {
         backupTitle: { label: "عنوان النسخة الاحتياطية", value: "" },
       },
-      onConfirm: (inputs) => {
+      onConfirm: async (inputs) => {
         const title = inputs.backupTitle || "نسخة احتياطية بدون عنوان";
         const currentTimestamp = new Date().toISOString();
-        const backupKey = `grades_backup_${Date.now()}`;
-        
+
         const currentBackup = [];
-        gradesData.forEach(grade => {
-          const sections = Array.from({ length: 10 }, (_, i) => i + 1);
-          sections.forEach(section => {
-            const storageKey = `grades_${grade.id}_${section}`;
-            const data = localStorage.getItem(storageKey);
-            if (data) {
-              currentBackup.push({ key: storageKey, value: data });
+        try {
+          for (const grade of gradesData) {
+            const sections = Array.from({ length: 10 }, (_, i) => i + 1);
+            for (const section of sections) {
+              const studentsCollectionRef = collection(db, `grades/${grade.id}/sections/${section}/students`);
+              const studentDocs = await getDocs(studentsCollectionRef);
+              studentDocs.forEach(doc => {
+                currentBackup.push({ path: doc.ref.path, data: doc.data() });
+              });
             }
-          });
-        });
-    
-        if (currentBackup.length > 0) {
-          localStorage.setItem(backupKey, JSON.stringify(currentBackup));
-          const newBackup = { timestamp: currentTimestamp, key: backupKey, title: title };
-          const updatedBackups = [...backups, newBackup];
-          localStorage.setItem(BACKUP_LIST_KEY, JSON.stringify(updatedBackups));
-          setBackups(updatedBackups);
-          
-          setCustomDialog({
-            isOpen: true,
-            title: "تم بنجاح",
-            message: "تم حفظ نسخة احتياطية من بيانات الطلاب بنجاح.",
-            onConfirm: () => {
-              setCustomDialog({ ...customDialog, isOpen: false });
-              callback();
-            },
-            onClose: () => {
-              setCustomDialog({ ...customDialog, isOpen: false });
-              callback();
-            },
-          });
-        } else {
-          setCustomDialog({
-            isOpen: true,
-            title: "لا يمكن الحفظ",
-            message: "لا توجد بيانات طلاب لحفظها.",
-            onConfirm: () => setCustomDialog({ ...customDialog, isOpen: false }),
-            onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
-          });
+          }
+
+          if (currentBackup.length > 0) {
+            const backupDocRef = doc(collection(db, `teachers/${user.uid}/backups`));
+            await setDoc(backupDocRef, {
+              title: title,
+              timestamp: currentTimestamp,
+              data: currentBackup
+            });
+
+            const newBackup = { timestamp: currentTimestamp, key: backupDocRef.id, title: title };
+            setBackups(prevBackups => [...prevBackups, newBackup].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+
+            setCustomDialog({
+              isOpen: true,
+              title: "تم بنجاح",
+              message: "تم حفظ نسخة احتياطية من بيانات الطلاب بنجاح.",
+              onConfirm: () => {
+                setCustomDialog({ ...customDialog, isOpen: false });
+                callback();
+              },
+              onClose: () => {
+                setCustomDialog({ ...customDialog, isOpen: false });
+                callback();
+              },
+            });
+          } else {
+            setCustomDialog({
+              isOpen: true,
+              title: "لا يمكن الحفظ",
+              message: "لا توجد بيانات طلاب لحفظها.",
+              onConfirm: () => setCustomDialog({ ...customDialog, isOpen: false }),
+              onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
+            });
+          }
+        } catch (error) {
+          console.error("Error backing up data:", error);
+          setModalError("فشل في حفظ النسخة الاحتياطية. يرجى المحاولة مرة أخرى.");
         }
       },
       onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
       onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
     });
   };
-  
-  const handleDeleteBackup = (backupKey) => {
-    // Close the restore modal first
+
+  const handleDeleteBackup = async (backupKey) => {
     setIsRestoreModalOpen(false);
 
-    // Then open the custom confirmation dialog
     setCustomDialog({
       isOpen: true,
       title: "تأكيد الحذف",
       message: "هل أنت متأكد من حذف هذه النسخة الاحتياطية؟",
-      onConfirm: () => {
-        localStorage.removeItem(backupKey);
-        const updatedBackups = backups.filter(backup => backup.key !== backupKey);
-        const sortedBackups = updatedBackups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        localStorage.setItem(BACKUP_LIST_KEY, JSON.stringify(updatedBackups));
-        setBackups(updatedBackups);
-        setCustomDialog({ ...customDialog, isOpen: false });
-        // Re-open the restore modal if needed
-        setTimeout(() => setIsRestoreModalOpen(true), 300);
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, `teachers/${user.uid}/backups`, backupKey));
+          const updatedBackups = backups.filter(backup => backup.key !== backupKey);
+          setBackups(updatedBackups);
+          setCustomDialog({ ...customDialog, isOpen: false });
+          setTimeout(() => setIsRestoreModalOpen(true), 300);
+        } catch (error) {
+          console.error("Error deleting backup:", error);
+          setModalError("فشل في حذف النسخة الاحتياطية. يرجى المحاولة مرة أخرى.");
+        }
       },
       onCancel: () => {
         setCustomDialog({ ...customDialog, isOpen: false });
-        // Re-open the restore modal
         setTimeout(() => setIsRestoreModalOpen(true), 300);
       },
       onClose: () => {
         setCustomDialog({ ...customDialog, isOpen: false });
-        // Re-open the restore modal
         setTimeout(() => setIsRestoreModalOpen(true), 300);
       },
     });
   };
-  
+
   // A generic custom dialog component
   const CustomDialog = ({ isOpen, title, message, inputs, onConfirm, onCancel, onClose }) => {
     const [inputValues, setInputValues] = useState(inputs ? Object.fromEntries(Object.keys(inputs).map(key => [key, inputs[key].value])) : {});
@@ -423,7 +453,7 @@ const TeacherDashboard = () => {
         <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
           <h3 className="text-xl font-bold text-blue-400 mb-4">{title}</h3>
           <p className="text-gray-300 mb-6">{message}</p>
-          
+
           {inputs && (
             <div className="space-y-4 mb-6 text-right">
               {Object.keys(inputs).map(key => (
@@ -465,7 +495,7 @@ const TeacherDashboard = () => {
       </div>
     );
   };
-  
+
   const handleNavigateToPortfolio = () => {
     navigate("/portfolio");
     setIsMenuOpen(false);
@@ -477,8 +507,8 @@ const TeacherDashboard = () => {
       <Navbar />
       <CustomDialog {...customDialog} />
 
-      <button 
-        onClick={toggleMenu} 
+      <button
+        onClick={toggleMenu}
         className="fixed top-4 left-4 z-50 p-3 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors duration-300"
         aria-label="القائمة الجانبية"
       >
@@ -486,9 +516,9 @@ const TeacherDashboard = () => {
       </button>
 
       {/* Sidebar */}
-      <div 
+      <div
         className={`fixed inset-y-0 right-0 z-40 w-64 bg-gray-800 shadow-xl transform transition-transform duration-300 ease-in-out
-                   ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                       ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="p-6">
           <div className="flex justify-between items-center mb-8">
@@ -497,17 +527,17 @@ const TeacherDashboard = () => {
               <FaTimes className="h-6 w-6" />
             </button>
           </div>
-          
+
           <div className="text-center mb-8">
             <img src={teacherPhoto} alt="صورة المعلم" className="h-24 w-24 rounded-full mx-auto mb-4 object-cover border-4 border-blue-500" />
             <h4 className="text-lg font-bold text-white mb-1">{teacherName}</h4>
             <p className="text-sm text-gray-400">{schoolName}</p>
             <p className="text-sm text-gray-400">{currentSemester}</p>
-            <button onClick={handleUpdateTeacherInfo} className="mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center gap-2 mx-auto">
+            <button onClick={() => handleUpdateTeacherInfo({ teacherName, schoolName, currentSemester, teacherPhoto })} className="mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center gap-2 mx-auto">
               <FaCog /> تعديل البيانات
             </button>
           </div>
-          
+
           <div className="space-y-4">
             <button onClick={handleNavigateToPortfolio} className="w-full py-3 bg-blue-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-blue-700 transition">
               <FaFolderOpen /> ملف الإنجاز
@@ -524,10 +554,10 @@ const TeacherDashboard = () => {
           </div>
         </div>
       </div>
-      
+
       {isMenuOpen && (
-        <div 
-          onClick={toggleMenu} 
+        <div
+          onClick={toggleMenu}
           className="fixed inset-0 bg-black opacity-50 z-30"
         ></div>
       )}
@@ -601,10 +631,10 @@ const TeacherDashboard = () => {
               {backups.length > 0 ? (
                 <ul className="text-right space-y-2 mb-6 max-h-60 overflow-y-auto">
                   {backups.map((backup) => (
-                    <li 
+                    <li
                       key={backup.key}
                       className={`flex justify-between items-center p-3 rounded-lg cursor-pointer transition-colors duration-200
-                                 ${selectedBackupKey === backup.key ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+                                       ${selectedBackupKey === backup.key ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
                       onClick={() => setSelectedBackupKey(backup.key)}
                     >
                       <div className="flex flex-col items-start">
@@ -615,7 +645,7 @@ const TeacherDashboard = () => {
                           })}
                         </span>
                       </div>
-                      <button 
+                      <button
                         onClick={(e) => { e.stopPropagation(); handleDeleteBackup(backup.key); }}
                         className="text-red-400 hover:text-red-200"
                       >
@@ -627,7 +657,7 @@ const TeacherDashboard = () => {
               ) : (
                 <p className="text-gray-400 mb-6">لا توجد نسخ احتياطية متاحة.</p>
               )}
-  
+
               <div className="flex justify-between items-center mt-6">
                 <button
                   type="button"
@@ -652,9 +682,9 @@ const TeacherDashboard = () => {
       <div className={`p-4 md:p-8 max-w-7xl mx-auto transition-all duration-300 ${isMenuOpen ? 'md:mr-64' : ''}`}>
         <div className="text-center mb-16">
           <div className="flex justify-center items-center gap-4 mb-4">
-            <img 
-              src="/images/moe_logo_white.png" 
-              alt="شعار وزارة التعليم" 
+            <img
+              src="/images/moe_logo_white.png"
+              alt="شعار وزارة التعليم"
               className="h-24 md:h-32"
             />
           </div>
@@ -662,7 +692,7 @@ const TeacherDashboard = () => {
           <p className="mt-2 text-md md:text-xl text-gray-300">لوحة تحكم المعلم لإدارة الفصول</p>
           <div className="mt-4 text-center">
             <div className="inline-flex items-center gap-4 p-2 bg-gray-800 rounded-full border border-gray-700">
-              <img src={teacherPhoto} alt="صورة المعلم" className="h-10 w-10 rounded-full object-cover"/>
+              <img src={teacherPhoto} alt="صورة المعلم" className="h-10 w-10 rounded-full object-cover" />
               <div>
                 <span className="block text-sm font-semibold text-white">{teacherName}</span>
                 <span className="block text-xs text-gray-400">{currentSemester}</span>
@@ -677,7 +707,7 @@ const TeacherDashboard = () => {
               key={grade.id}
               onClick={() => navigate(`/grades/${grade.id}`)}
               className="relative rounded-3xl shadow-lg overflow-hidden transform transition-all duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer
-                         bg-gray-800 border border-gray-700 hover:border-blue-500"
+                          bg-gray-800 border border-gray-700 hover:border-blue-500"
             >
               <div className="p-8 text-center flex flex-col items-center">
                 <div className="flex items-center justify-center h-20 w-20 rounded-full bg-gray-700 text-blue-400 mx-auto mb-6">
