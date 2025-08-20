@@ -35,7 +35,83 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase"; // تأكد من أن هذا المسار صحيح
 
-// ... (بقية الاستيرادات)
+import {
+  FaFileExcel,
+  FaDownload,
+  FaUpload,
+  FaQuran,
+  FaMicrophone,
+  FaStar,
+  FaStickyNote,
+  FaUserPlus,
+  FaTable,
+  FaPencilAlt,
+  FaTasks,
+  FaBookOpen,
+  FaCommentDots,
+  FaAward,
+  FaUserCircle,
+  FaCheckCircle,
+  FaTimesCircle,
+  FaClock,
+  FaQuestionCircle,
+  FaArrowLeft,
+  FaHome,
+  FaSyncAlt,
+  FaSearch,
+  FaArrowUp,
+  FaCamera,
+  FaQrcode,
+  FaCopy,
+  FaExternalLinkAlt,
+  FaFileWord,
+  FaUserMinus,
+  FaCoins,
+  FaRegStar,
+  FaCalendarTimes,
+  FaExclamationTriangle,
+  FaTimes
+} from "react-icons/fa";
+
+import {
+  getGradeNameById,
+  getSectionNameById,
+  calculateAverage,
+  calculateBest,
+  calculateCategoryScore,
+  calculateSum,
+  calculateTotalScore,
+  getStatusInfo,
+  getStatusColor,
+  getTaskStatus,
+  taskStatusUtils,
+  determinePerformanceLevel
+} from "../utils/gradeUtils";
+
+import { getRecitationStatus } from "../utils/recitationUtils";
+
+const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
+  const sizes = {
+    sm: 'text-sm',
+    md: 'text-base',
+    lg: 'text-lg',
+    xl: 'text-xl'
+  };
+
+  return (
+    <div className="flex gap-1 items-center">
+      <span className={`${sizes[size]} font-bold mr-2 text-${color}-400`}>{count}</span>
+      <div className="flex gap-0.5">
+        {Array.from({ length: max }).map((_, index) => (
+          <FaStar
+            key={index}
+            className={`${sizes[size]} ${index < count ? `text-${color}-400` : 'text-gray-600'}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const SectionGrades = () => {
   const { gradeId, sectionId } = useParams();
@@ -1548,5 +1624,6 @@ const handleAddStudent = async () => {
 
 
 export default SectionGrades;
+
 
 
