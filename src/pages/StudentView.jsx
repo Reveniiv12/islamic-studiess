@@ -1,24 +1,22 @@
+// src/pages/StudentView.jsx
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import {
   FaQuran,
-  FaMicrophone,
   FaStar,
   FaTasks,
   FaPencilAlt,
   FaBookOpen,
-  FaCommentDots,
-  FaAward,
+  FaStickyNote,
   FaUserCircle,
-  FaStickyNote
 } from "react-icons/fa";
 import {
   calculateTotalScore,
   calculateCategoryScore,
   getStatusInfo,
-  getStatusColor
+  getStatusColor,
 } from "../utils/gradeUtils";
 
 const StarRating = ({ count }) => {
@@ -32,7 +30,7 @@ const StarRating = ({ count }) => {
 };
 
 function StudentView() {
-  const { id } = useParams();
+  const { gradeId, sectionId, studentId } = useParams();
   const [studentData, setStudentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -40,49 +38,50 @@ function StudentView() {
   const [curriculum, setCurriculum] = useState([]);
 
   useEffect(() => {
-    const fetchStudent = async () => {
-      try {
-        // جلب بيانات الطالب
-        const studentDoc = await getDoc(doc(db, "students", id));
-        
-        if (studentDoc.exists()) {
-          const student = {
-            id: studentDoc.id,
-            ...studentDoc.data()
-          };
-          
-          // جلب المنهج الدراسي إذا كان مطلوبًا
-          const curriculumData = JSON.parse(localStorage.getItem(`curriculum_${student.gradeId}_${student.sectionId}`)) || [];
-          setCurriculum(curriculumData);
-          
-          setStudentData(student);
-        } else {
-          setError("لم يتم العثور على الطالب.");
-        }
-      } catch (err) {
-        console.error(err);
-        setError("حدث خطأ أثناء تحميل البيانات.");
-      } finally {
-        setLoading(false);
+    if (!studentId || !gradeId || !sectionId) {
+      setError("معرّف الطالب أو الصف أو الفصل مفقود.");
+      setLoading(false);
+      return;
+    }
+
+    const docRef = doc(db, `grades/${gradeId}/classes/${sectionId}/students`, studentId);
+
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setStudentData({ id: docSnap.id, ...docSnap.data() });
+        setError(null);
+      } else {
+        setError("لم يتم العثور على الطالب.");
       }
-    };
+      setLoading(false);
+    }, (err) => {
+      console.error("Error fetching student data: ", err);
+      setError("فشل في جلب بيانات الطالب.");
+      setLoading(false);
+    });
 
-    fetchStudent();
-  }, [id]);
+    return () => unsubscribe();
+  }, [gradeId, sectionId, studentId]);
 
-  if (loading) return (
-    <div className="flex justify-center items-center h-screen">
-      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
-    </div>
-  );
+  if (loading) {
+    return <div className="p-8 text-center text-blue-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">جاري تحميل بيانات الطالب...</div>;
+  }
 
-  if (error) return (
-    <div className="text-center p-8 text-red-500">
-      {error}
-    </div>
-  );
+  if (error) {
+    return (
+      <div className="p-8 text-center text-red-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">
+        <p className="text-xl">{error}</p>
+      </div>
+    );
+  }
 
-  if (!studentData) return null;
+  if (!studentData) {
+    return (
+      <div className="p-8 text-center text-gray-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">
+        <p className="text-xl">لا توجد بيانات متاحة لهذا الطالب.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 bg-gray-100 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right" dir="rtl">
@@ -286,5 +285,6 @@ function StudentView() {
     </div>
   );
 }
+
 
 export default StudentView;
