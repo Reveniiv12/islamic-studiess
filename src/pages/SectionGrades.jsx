@@ -1688,7 +1688,7 @@ const handleExportQRCodes = async () => {
             <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
               <FaPencilAlt className="text-3xl text-purple-400" /> المهام الأدائية
               <span className="text-purple-400 font-bold mr-2 text-2xl">
-                {calculateCategoryScore(selectedStudent.grades, 'performanceTasks', 'best')} / 10
+                {calculateCategoryScore(selectedStudent.grades, 'performanceTasks', 'best')} / 5
               </span>
             </h4>
             <div className="flex items-center gap-2 mb-2">
