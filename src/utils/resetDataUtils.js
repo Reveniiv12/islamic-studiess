@@ -34,11 +34,11 @@ export const resetStudentData = async (students, teacherId, handleDialog, refres
           oral_test: Array(5).fill(null),
           weekly_notes: Array(20).fill(null),
         },
-        stars: 0,
-        acquired_stars: 0,
-        consumed_stars: 0,
-        recitation_history: [],
-        absences: []
+        // stars: 0,
+        // acquired_stars: 0,
+        // consumed_stars: 0,
+        // recitation_history: [],
+        // absences: []
       };
 
       return { ...baseStudent, ...resetData };
