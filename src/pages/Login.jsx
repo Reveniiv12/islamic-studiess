@@ -1,9 +1,7 @@
 // src/pages/Login.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword, onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { useNavigate, Link } from "react-router-dom";
+import { supabase } from "../supabaseClient";
 import { FaUserCircle } from "react-icons/fa";
 
 const Login = () => {
@@ -14,25 +12,35 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [schoolName, setSchoolName] = useState("المدرسة");
 
-  // Load school name from Firestore on component mount
+  // جلب اسم المدرسة من Supabase عند تحميل الصفحة
   useEffect(() => {
-    const schoolRef = doc(db, "settings", "schoolInfo");
-    const unsubscribe = onSnapshot(schoolRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setSchoolName(docSnap.data().name);
+    const fetchSchoolName = async () => {
+      // نفترض وجود جدول 'settings' مع عمود 'name' ومعرف فريد لـ 'schoolInfo'
+      const { data, error } = await supabase
+        .from("settings")
+        .select("name")
+        .eq("id", "schoolInfo") 
+        .single();
+      
+      if (error) {
+        console.error("Error fetching school name:", error.message);
+      } else if (data) {
+        setSchoolName(data.name);
       }
-    });
-    return () => unsubscribe();
+    };
+
+    fetchSchoolName();
   }, []);
 
-  // Check auth state on component mount
+  // التحقق من حالة المصادقة عند تحميل الصفحة
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
         navigate("/");
       }
     });
-    return () => unsubscribe();
+
+    return () => subscription.unsubscribe();
   }, [navigate]);
 
   const handleLogin = async (e) => {
@@ -46,30 +54,20 @@ const Login = () => {
     setError("");
     setLoading(true);
 
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // navigation is handled by the onAuthStateChanged listener
-    } catch (err) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+
+    if (error) {
       let errorMessage = "خطأ في تسجيل الدخول: البريد الإلكتروني أو كلمة المرور غير صحيحة";
-      switch (err.code) {
-        case "auth/invalid-email":
-          errorMessage = "صيغة البريد الإلكتروني غير صحيحة.";
-          break;
-        case "auth/user-not-found":
-        case "auth/wrong-password":
-          errorMessage = "البريد الإلكتروني أو كلمة المرور غير صحيحة.";
-          break;
-        case "auth/invalid-credential":
-          errorMessage = "البيانات المدخلة غير صحيحة، يرجى التحقق منها.";
-          break;
-        default:
-          errorMessage = "فشلت عملية تسجيل الدخول. الرجاء المحاولة مرة أخرى.";
-          break;
+      if (error.message === "Invalid login credentials") {
+        errorMessage = "البيانات المدخلة غير صحيحة، يرجى التحقق منها.";
       }
       setError(errorMessage);
-    } finally {
-      setLoading(false);
     }
+
+    setLoading(false);
   };
 
   return (
@@ -83,10 +81,9 @@ const Login = () => {
           <p className="text-gray-400 text-center mt-2">{schoolName}</p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleLogin}>
+          {/* حقول الإدخال والأزرار... */}
           <div>
-            <label htmlFor="email" className="sr-only">
-              البريد الإلكتروني
-            </label>
+            <label htmlFor="email" className="sr-only">البريد الإلكتروني</label>
             <input
               id="email"
               name="email"
@@ -100,9 +97,7 @@ const Login = () => {
             />
           </div>
           <div>
-            <label htmlFor="password" className="sr-only">
-              كلمة المرور
-            </label>
+            <label htmlFor="password" className="sr-only">كلمة المرور</label>
             <input
               id="password"
               name="password"
@@ -142,6 +137,12 @@ const Login = () => {
             </button>
           </div>
         </form>
+        {/* رابط صفحة إنشاء الحساب */}
+        <div className="mt-4 text-center">
+            <p className="text-gray-400">
+                {' '}
+            </p>
+        </div>
       </div>
     </div>
   );

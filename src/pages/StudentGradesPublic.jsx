@@ -1,8 +1,7 @@
 // src/pages/StudentGradesPublic.jsx
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase } from "../supabaseClient"; // تم تعديل هذا السطر
 
 const StudentGradesPublic = () => {
   const { studentId } = useParams();
@@ -13,16 +12,21 @@ const StudentGradesPublic = () => {
   useEffect(() => {
     const fetchGrades = async () => {
       try {
-        const docRef = doc(db, "students", studentId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setGrades({
-            id: docSnap.id,
-            ...docSnap.data(),
-            grades: docSnap.data().grades || {}
-          });
-        } else {
+        const { data, error } = await supabase
+          .from("students")
+          .select("id, name, grades")
+          .eq("id", studentId)
+          .single();
+
+        if (error || !data) {
+          console.error("Error fetching student data:", error);
           setError("لم يتم العثور على بيانات الطالب");
+        } else {
+          setGrades({
+            id: data.id,
+            name: data.name,
+            grades: data.grades || {}
+          });
         }
       } catch (error) {
         console.error("Error fetching grades:", error);
@@ -37,38 +41,40 @@ const StudentGradesPublic = () => {
 
   if (loading) return (
     <div className="flex justify-center items-center h-screen">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-primary"></div>
     </div>
   );
 
   if (error) return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md mt-10 text-center">
-      <div className="text-red-500 mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      </div>
-      <h3 className="text-lg font-medium text-gray-900 mb-2">حدث خطأ</h3>
-      <p className="text-gray-600">{error}</p>
+    <div className="p-8 text-center text-red-400 font-['Noto_Sans_Arabic',sans-serif]">
+      <p className="text-xl">{error}</p>
     </div>
   );
-
-  if (!grades) return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md mt-10 text-center">
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      <h3 className="mt-4 text-lg font-medium text-gray-900">لا توجد بيانات</h3>
-      <p className="mt-1 text-gray-600">لم يتم تسجيل أي درجات بعد</p>
-    </div>
-  );
+  
+  // دالة مساعدة لترجمة الفئات
+  const getCategoryName = (key) => {
+    switch (key) {
+      case 'monthlyTest':
+        return 'الاختبار الشهري';
+      case 'finalTest':
+        return 'الاختبار النهائي';
+      case 'homework':
+        return 'الواجبات';
+      case 'participation':
+        return 'المشاركة';
+      case 'attendance':
+        return 'الحضور';
+      default:
+        return key;
+    }
+  };
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
-        <div className="p-6 bg-primary text-white">
-          <h1 className="text-2xl font-bold">درجات الطالب</h1>
-          {grades.name && <p className="mt-1">{grades.name}</p>}
+    <div className="bg-white min-h-screen font-['Noto_Sans_Arabic',sans-serif] p-8">
+      <div className="max-w-4xl mx-auto rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-primary text-white p-6 text-center">
+          <h1 className="text-3xl font-bold">درجات الطالب</h1>
+          {grades && <p className="mt-1">{grades.name}</p>}
         </div>
         
         <div className="p-6">
@@ -79,12 +85,7 @@ const StudentGradesPublic = () => {
               {Object.entries(grades.grades).map(([key, value]) => (
                 <div key={key} className="bg-gray-50 rounded-lg p-4">
                   <h3 className="font-medium text-gray-900 capitalize">
-                    {key === 'monthlyTest' && 'الاختبار الشهري'}
-                    {key === 'finalTest' && 'الاختبار النهائي'}
-                    {key === 'homework' && 'الواجبات'}
-                    {key === 'participation' && 'المشاركة'}
-                    {key === 'attendance' && 'الحضور'}
-                    {!['monthlyTest', 'finalTest', 'homework', 'participation', 'attendance'].includes(key) && key}
+                    {getCategoryName(key)}
                   </h3>
                   <div className="mt-2 flex items-center">
                     <span className="text-3xl font-bold text-primary">{value}</span>

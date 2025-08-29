@@ -1,44 +1,16 @@
 // src/pages/TeacherDashboard.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { gradesData } from "../data/mockData";
 import Navbar from "../components/Navbar";
-import {
-  FaUserGraduate,
-  FaBars,
-  FaTimes,
-  FaCog,
-  FaRedo,
-  FaDownload,
-  FaTrash,
-  FaFolderOpen,
-  FaChartBar,
-  FaStar
-} from "react-icons/fa";
-import {
-  getAuth,
-  onAuthStateChanged,
-  reauthenticateWithCredential,
-  EmailAuthProvider
-} from "firebase/auth";
-import {
-  db,
-  collection,
-  doc,
-  setDoc,
-  getDocs,
-  getDoc,
-  deleteDoc,
-  onSnapshot,
-  query,
-  where
-} from '../firebase';
+import { FaUserGraduate, FaBars, FaTimes, FaCog, FaRedo, FaDownload, FaTrash, FaFolderOpen, FaChartBar } from "react-icons/fa";
+import { supabase } from "../supabaseClient";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
 
   const [totalStudents, setTotalStudents] = useState(0);
   const [averageGrade, setAverageGrade] = useState(0);
-  const [grades, setGrades] = useState([]);
   const [studentsPerGrade, setStudentsPerGrade] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -56,141 +28,211 @@ const TeacherDashboard = () => {
   const [modalError, setModalError] = useState("");
 
   const [user, setUser] = useState(null);
+  const [teacherId, setTeacherId] = useState(null);
+
   const [backups, setBackups] = useState([]);
   const [selectedBackupKey, setSelectedBackupKey] = useState(null);
+  const BACKUP_LIST_KEY = "grades_backup_list";
 
   const [customDialog, setCustomDialog] = useState({
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => { },
-    onCancel: () => { },
-    onClose: () => { },
+    onConfirm: () => {},
+    onCancel: () => {},
+    onClose: () => {},
     inputs: {},
   });
 
   useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (!currentUser) {
-        navigate("/");
-      } else {
-        fetchDataFromFirestore(currentUser);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        const currentUser = session?.user || null;
+        setUser(currentUser);
+        if (currentUser) {
+          setTeacherId(currentUser.id);
+        } else {
+          navigate("/");
+        }
       }
-    });
-    return () => unsubscribe();
+    );
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
-  const fetchDataFromFirestore = async (currentUser) => {
-    setLoading(true);
-    
-    try {
-      // Fetch teacher info
-      const teacherRef = doc(db, "teachers", currentUser.uid);
-      const teacherDoc = await getDoc(teacherRef);
-      if (teacherDoc.exists()) {
-        const data = teacherDoc.data();
-        setTeacherName(data.teacherName || "المعلم/ة: محمد السعدي");
-        setTeacherPhoto(data.teacherPhoto || "/images/default_teacher.png");
-        setSchoolName(data.schoolName || "مدرسة متوسطة الطرف");
-        setCurrentSemester(data.currentSemester || "الفصل الدراسي الأول");
+  useEffect(() => {
+    const fetchAndCalculateData = async () => {
+      setLoading(true);
+      if (!teacherId) {
+        setLoading(false);
+        return;
       }
 
-      // Fetch grades and student data
-      const gradesQuery = query(collection(db, "grades"));
-      const gradesSnapshot = await getDocs(gradesQuery);
-      const gradesData = gradesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setGrades(gradesData);
+      try {
+        const { data: studentsData, error: studentsError } = await supabase
+          .from('students')
+          .select('id, grade_level, section')
+          .eq('teacher_id', teacherId);
 
-      let totalStudentsCount = 0;
-      let allGrades = [];
-      const studentsCountPerGrade = {};
+        if (studentsError) {
+          throw studentsError;
+        }
 
-      for (const grade of gradesData) {
-        studentsCountPerGrade[grade.id] = 0;
-        
-        // Fetch sections for this grade
-        const sectionsQuery = query(collection(db, `grades/${grade.id}/sections`));
-        const sectionsSnapshot = await getDocs(sectionsQuery);
-        
-        for (const sectionDoc of sectionsSnapshot.docs) {
-          const sectionId = sectionDoc.id;
-          
-          // Fetch students in this section
-          const studentsQuery = query(collection(db, `grades/${grade.id}/sections/${sectionId}/students`));
-          const studentsSnapshot = await getDocs(studentsQuery);
-          
-          studentsCountPerGrade[grade.id] += studentsSnapshot.size;
-          totalStudentsCount += studentsSnapshot.size;
-          
-          // Collect grades for average calculation
-          studentsSnapshot.forEach(studentDoc => {
-            const studentData = studentDoc.data();
-            if (studentData.grades && studentData.grades.tests) {
-              allGrades.push(...studentData.grades.tests);
+        const studentsCountPerGrade = {};
+        gradesData.forEach(grade => {
+          studentsCountPerGrade[grade.id] = 0;
+        });
+
+        if (studentsData) {
+          setTotalStudents(studentsData.length);
+          studentsData.forEach(student => {
+            if (student.grade_level) {
+              studentsCountPerGrade[student.grade_level] = (studentsCountPerGrade[student.grade_level] || 0) + 1;
             }
           });
         }
+        setStudentsPerGrade(studentsCountPerGrade);
+
+        const { data: studentsGradesData, error: gradesError } = await supabase
+          .from('students')
+          .select('grades')
+          .eq('teacher_id', teacherId);
+
+        if (gradesError) {
+          throw gradesError;
+        }
+
+        let allGrades = [];
+        if (studentsGradesData) {
+          studentsGradesData.forEach(studentRecord => {
+            if (studentRecord.grades && studentRecord.grades.tests) {
+              allGrades.push(...Object.values(studentRecord.grades.tests));
+            }
+          });
+        }
+
+        if (allGrades.length > 0) {
+          const sumOfGrades = allGrades.reduce((acc, grade) => acc + (grade || 0), 0);
+          const avg = (sumOfGrades / allGrades.length).toFixed(1);
+          setAverageGrade(avg);
+        } else {
+          setAverageGrade(0);
+        }
+
+      } catch (err) {
+        console.error("Failed to fetch dashboard data:", err);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      setStudentsPerGrade(studentsCountPerGrade);
-      setTotalStudents(totalStudentsCount);
+    const fetchSettings = async () => {
+      if (!teacherId) return;
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('teacher_name, school_name, current_semester, teacher_photo')
+          .eq('id', 'general')
+          .single();
 
-      // Calculate average grade
-      if (allGrades.length > 0) {
-        const sumOfGrades = allGrades.reduce((acc, grade) => acc + (grade || 0), 0);
-        const avg = (sumOfGrades / allGrades.length).toFixed(1);
-        setAverageGrade(avg);
-      } else {
-        setAverageGrade(0);
+        if (error && error.code !== 'PGRST205' && error.code !== 'PGRST116') {
+          throw error;
+        }
+
+        if (data) {
+          setTeacherName(data.teacher_name || "اسم المعلم");
+          setSchoolName(data.school_name || "اسم المدرسة");
+          setCurrentSemester(data.current_semester || "الفصل الدراسي");
+          setTeacherPhoto(data.teacher_photo || "/images/default_teacher.png");
+        } else {
+          const { data: newSettings, error: insertError } = await supabase
+            .from('settings')
+            .insert([{ id: 'general' }])
+            .single();
+          if (insertError) {
+            console.error("Error creating default settings:", insertError);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch settings from Supabase", err);
+        setTeacherName("اسم المعلم");
+        setSchoolName("اسم المدرسة");
+        setCurrentSemester("الفصل الدراسي");
+        setTeacherPhoto("/images/default_teacher.png");
       }
+    };
 
-      // Fetch backups
-      const backupsCollectionRef = collection(db, `teachers/${currentUser.uid}/backups`);
-      const backupDocs = await getDocs(backupsCollectionRef);
-      const fetchedBackups = backupDocs.docs.map(doc => ({ ...doc.data(), key: doc.id }));
-      const sortedBackups = fetchedBackups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      setBackups(sortedBackups);
+    const loadBackups = async () => {
+      if (!teacherId) {
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('backups')
+          .select('id, created_at, title')
+          .eq('teacher_id', teacherId)
+          .order('created_at', { ascending: false });
 
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      setLoading(false);
+        if (error) throw error;
+        setBackups(data || []);
+      } catch (err) {
+        console.error("Failed to load backups:", err);
+        setBackups([]);
+      }
+    };
+
+    if (teacherId) {
+      fetchAndCalculateData();
+      fetchSettings();
+      loadBackups();
     }
-  };
+  }, [teacherId]);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  const handleUpdateTeacherInfo = async (inputs) => {
-    if (!user) {
-      setModalError("يجب أن تكون مسجلاً للدخول لتعديل البيانات.");
-      return;
-    }
+  const handleUpdateTeacherInfo = () => {
+    setCustomDialog({
+      isOpen: true,
+      title: "تعديل بيانات المعلم",
+      message: "يرجى إدخال البيانات الجديدة:",
+      inputs: {
+        teacherName: { label: "اسم المعلم", value: teacherName },
+        schoolName: { label: "اسم المدرسة", value: schoolName },
+        currentSemester: { label: "الفصل الدراسي", value: currentSemester },
+        teacherPhoto: { label: "رابط الصورة", value: teacherPhoto },
+      },
+      onConfirm: async (inputs) => {
+        try {
+          const { error } = await supabase
+            .from('settings')
+            .update({
+              teacher_name: inputs.teacherName,
+              school_name: inputs.schoolName,
+              current_semester: inputs.currentSemester,
+              teacher_photo: inputs.teacherPhoto,
+            })
+            .eq('id', 'general');
 
-    try {
-      const teacherRef = doc(db, "teachers", user.uid);
-      await setDoc(teacherRef, {
-        teacherName: inputs.teacherName,
-        schoolName: inputs.schoolName,
-        currentSemester: inputs.currentSemester,
-        teacherPhoto: inputs.teacherPhoto,
-      }, { merge: true });
+          if (error) {
+            throw error;
+          }
 
-      setTeacherName(inputs.teacherName);
-      setSchoolName(inputs.schoolName);
-      setCurrentSemester(inputs.currentSemester);
-      setTeacherPhoto(inputs.teacherPhoto);
-      setCustomDialog({ ...customDialog, isOpen: false });
-    } catch (error) {
-      console.error("Error updating teacher info:", error);
-      setModalError("فشل في تحديث البيانات. يرجى المحاولة مرة أخرى.");
-    }
+          setTeacherName(inputs.teacherName);
+          setSchoolName(inputs.schoolName);
+          setCurrentSemester(inputs.currentSemester);
+          setTeacherPhoto(inputs.teacherPhoto);
+          setCustomDialog({ ...customDialog, isOpen: false });
+        } catch (err) {
+          console.error("Error updating settings:", err);
+          setModalError("فشل تحديث البيانات. يرجى المحاولة مرة أخرى.");
+        }
+      },
+      onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
+      onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
+    });
   };
 
   const handleResetData = () => {
@@ -217,21 +259,26 @@ const TeacherDashboard = () => {
     setModalError("");
     setModalMessage("");
 
-    if (!user) {
+    if (!user || !teacherId) {
       setModalError("يجب أن تكون مسجلاً للدخول لإجراء هذه العملية.");
       return;
     }
 
-    if (email !== user.email) {
-      setModalError("البريد الإلكتروني غير صحيح. يرجى إدخال بريدك الإلكتروني الحالي.");
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
+
+    if (error) {
+      let errorMessage = "فشل المصادقة: البريد الإلكتروني أو كلمة المرور غير صحيحة.";
+      if (error.message.includes("Invalid login credentials")) {
+        errorMessage = "البريد الإلكتروني أو كلمة المرور التي أدخلتها غير صحيحة.";
+      }
+      setModalError(errorMessage);
       return;
     }
 
-    try {
-      const credential = EmailAuthProvider.credential(email, password);
-      await reauthenticateWithCredential(user, credential);
-
-      // Prompt for backup before reset
+    if (data.user && data.user.id === user.id) {
       setIsResetModalOpen(false);
       setCustomDialog({
         isOpen: true,
@@ -249,13 +296,8 @@ const TeacherDashboard = () => {
         },
         onClose: () => setCustomDialog({ ...customDialog, isOpen: false })
       });
-    } catch (err) {
-      let errorMessage = "فشل المصادقة: البريد الإلكتروني أو كلمة المرور غير صحيحة.";
-      if (err.code === "auth/wrong-password") {
-        errorMessage = "كلمة المرور التي أدخلتها غير صحيحة.";
-      }
-      setModalError(errorMessage);
-      console.error("Re-authentication error:", err);
+    } else {
+      setModalError("البريد الإلكتروني الذي أدخلته لا يتطابق مع المستخدم الحالي.");
     }
   };
 
@@ -266,32 +308,29 @@ const TeacherDashboard = () => {
       message: "هل أنت متأكد من حذف كافة بيانات الطلاب؟ هذا الإجراء لا يمكن التراجع عنه.",
       onConfirm: async () => {
         try {
-          for (const grade of grades) {
-            // Fetch sections for this grade
-            const sectionsQuery = query(collection(db, `grades/${grade.id}/sections`));
-            const sectionsSnapshot = await getDocs(sectionsQuery);
-            
-            for (const sectionDoc of sectionsSnapshot.docs) {
-              const sectionId = sectionDoc.id;
-              
-              // Delete all students in this section
-              const studentsQuery = query(collection(db, `grades/${grade.id}/sections/${sectionId}/students`));
-              const studentDocs = await getDocs(studentsQuery);
-              const batch = [];
-              studentDocs.forEach(doc => {
-                batch.push(deleteDoc(doc.ref));
-              });
-              await Promise.all(batch);
-            }
+          const { error: deleteGradesError } = await supabase
+            .from('grades')
+            .delete()
+            .eq('teacher_id', teacherId);
+
+          const { error: deleteStudentsError } = await supabase
+            .from('students')
+            .delete()
+            .eq('teacher_id', teacherId);
+
+          if (deleteGradesError || deleteStudentsError) {
+            throw new Error("فشل حذف البيانات");
           }
+
           setModalMessage("تم حذف بيانات الطلاب بنجاح.");
           setTimeout(() => {
             setCustomDialog({ ...customDialog, isOpen: false });
             window.location.reload();
           }, 2000);
-        } catch (error) {
-          console.error("Error deleting students:", error);
-          setModalError("فشل في حذف البيانات. يرجى المحاولة مرة أخرى.");
+        } catch (err) {
+          setCustomDialog({ ...customDialog, isOpen: false });
+          setModalError("فشل حذف البيانات. يرجى المحاولة مرة أخرى.");
+          console.error("Error deleting data:", err);
         }
       },
       onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
@@ -304,13 +343,8 @@ const TeacherDashboard = () => {
     setModalError("");
     setModalMessage("");
 
-    if (!user) {
+    if (!user || !teacherId) {
       setModalError("يجب أن تكون مسجلاً للدخول لإجراء هذه العملية.");
-      return;
-    }
-
-    if (email !== user.email) {
-      setModalError("البريد الإلكتروني غير صحيح. يرجى إدخال بريدك الإلكتروني الحالي.");
       return;
     }
 
@@ -319,63 +353,76 @@ const TeacherDashboard = () => {
       return;
     }
 
-    try {
-      const credential = EmailAuthProvider.credential(email, password);
-      await reauthenticateWithCredential(user, credential);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    });
 
+    if (error) {
+      let errorMessage = "فشل المصادقة: البريد الإلكتروني أو كلمة المرور غير صحيحة.";
+      if (error.message.includes("Invalid login credentials")) {
+        errorMessage = "البريد الإلكتروني أو كلمة المرور التي أدخلتها غير صحيحة.";
+      }
+      setModalError(errorMessage);
+      return;
+    }
+
+    if (data.user && data.user.id === user.id) {
       setIsRestoreModalOpen(false);
+      try {
+        const { data: backupData, error: fetchError } = await supabase
+          .from('backups')
+          .select('data')
+          .eq('id', selectedBackupKey)
+          .eq('teacher_id', teacherId)
+          .single();
 
-      const backupRef = doc(db, `teachers/${user.uid}/backups`, selectedBackupKey);
-      const backupDoc = await getDoc(backupRef);
+        if (fetchError || !backupData || !backupData.data) {
+          throw new Error("النسخة الاحتياطية المختارة غير موجودة أو فارغة.");
+        }
 
-      if (backupDoc.exists()) {
         setCustomDialog({
           isOpen: true,
           title: "تأكيد الاسترداد",
           message: "هل أنت متأكد من استعادة البيانات؟ هذا الإجراء سيحل محل البيانات الحالية.",
           onConfirm: async () => {
-            try {
-              const parsedBackup = backupDoc.data().data;
-              const batch = [];
-              for (const item of parsedBackup) {
-                const parts = item.path.split('/');
-                if (parts.length === 6 && parts[4] === "students") {
-                    const studentId = parts[5];
-                    const gradeId = parts[1];
-                    const sectionId = parts[3];
-                    const studentRef = doc(db, `grades/${gradeId}/sections/${sectionId}/students`, studentId);
-                    batch.push(setDoc(studentRef, item.data, { merge: false }));
-                }
-              }
-              await Promise.all(batch);
-              setModalMessage("تم استعادة بيانات الطلاب بنجاح.");
-              setTimeout(() => {
-                setCustomDialog({ ...customDialog, isOpen: false });
-                window.location.reload();
-              }, 2000);
-            } catch (error) {
-              console.error("Error restoring data:", error);
-              setModalError("فشل في استعادة البيانات. يرجى المحاولة مرة أخرى.");
+            const parsedBackup = backupData.data;
+
+            await supabase.from('students').delete().eq('teacher_id', teacherId);
+            await supabase.from('grades').delete().eq('teacher_id', teacherId);
+
+            const { error: studentsInsertError } = await supabase
+              .from('students')
+              .insert(parsedBackup.students);
+            
+            const { error: gradesInsertError } = await supabase
+              .from('grades')
+              .insert(parsedBackup.grades);
+
+            if (studentsInsertError || gradesInsertError) {
+              throw new Error("فشل استعادة البيانات.");
             }
+
+            setModalMessage("تم استعادة بيانات الطلاب بنجاح.");
+            setTimeout(() => {
+              setCustomDialog({ ...customDialog, isOpen: false });
+              window.location.reload();
+            }, 2000);
           },
           onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
           onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
         });
-      } else {
-        setModalError("النسخة الاحتياطية المختارة غير موجودة.");
+      } catch (err) {
+        setModalError("حدث خطأ أثناء استعادة البيانات.");
+        console.error("Restore error:", err);
       }
-    } catch (err) {
-      let errorMessage = "فشل المصادقة: البريد الإلكتروني أو كلمة المرور غير صحيحة.";
-      if (err.code === "auth/wrong-password") {
-        errorMessage = "كلمة المرور التي أدخلتها غير صحيحة.";
-      }
-      setModalError(errorMessage);
-      console.error("Re-authentication error:", err);
+    } else {
+      setModalError("البريد الإلكتروني الذي أدخلته لا يتطابق مع المستخدم الحالي.");
     }
   };
 
-  const handleBackupData = async (callback = () => { }) => {
-    if (!user) {
+  const handleBackupData = async (callback = () => {}) => {
+    if (!user || !teacherId) {
       setModalError("يجب أن تكون مسجلاً للدخول لحفظ نسخة احتياطية.");
       return;
     }
@@ -388,53 +435,23 @@ const TeacherDashboard = () => {
         backupTitle: { label: "عنوان النسخة الاحتياطية", value: "" },
       },
       onConfirm: async (inputs) => {
-        const title = inputs.backupTitle || "نسخة احتياطية بدون عنوان";
-        const currentTimestamp = new Date().toISOString();
-
-        const currentBackup = [];
         try {
-          for (const grade of grades) {
-            // Fetch sections for this grade
-            const sectionsQuery = query(collection(db, `grades/${grade.id}/sections`));
-            const sectionsSnapshot = await getDocs(sectionsQuery);
-            
-            for (const sectionDoc of sectionsSnapshot.docs) {
-              const sectionId = sectionDoc.id;
-              
-              // Get all students in this section
-              const studentsCollectionRef = collection(db, `grades/${grade.id}/sections/${sectionId}/students`);
-              const studentDocs = await getDocs(studentsCollectionRef);
-              studentDocs.forEach(doc => {
-                currentBackup.push({ path: doc.ref.path, data: doc.data() });
-              });
-            }
+          const title = inputs.backupTitle || `نسخة احتياطية بتاريخ: ${new Date().toLocaleString('ar-EG')}`;
+          const { data: studentsData, error: studentsError } = await supabase
+            .from('students')
+            .select('*')
+            .eq('teacher_id', teacherId);
+          
+          const { data: gradesData, error: gradesError } = await supabase
+            .from('grades')
+            .select('*')
+            .eq('teacher_id', teacherId);
+
+          if (studentsError || gradesError) {
+            throw new Error("فشل جلب البيانات لحفظ النسخة الاحتياطية.");
           }
 
-          if (currentBackup.length > 0) {
-            const backupDocRef = doc(collection(db, `teachers/${user.uid}/backups`));
-            await setDoc(backupDocRef, {
-              title: title,
-              timestamp: currentTimestamp,
-              data: currentBackup
-            });
-
-            const newBackup = { timestamp: currentTimestamp, key: backupDocRef.id, title: title };
-            setBackups(prevBackups => [...prevBackups, newBackup].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
-
-            setCustomDialog({
-              isOpen: true,
-              title: "تم بنجاح",
-              message: "تم حفظ نسخة احتياطية من بيانات الطلاب بنجاح.",
-              onConfirm: () => {
-                setCustomDialog({ ...customDialog, isOpen: false });
-                callback();
-              },
-              onClose: () => {
-                setCustomDialog({ ...customDialog, isOpen: false });
-                callback();
-              },
-            });
-          } else {
+          if (studentsData.length === 0) {
             setCustomDialog({
               isOpen: true,
               title: "لا يمكن الحفظ",
@@ -442,10 +459,39 @@ const TeacherDashboard = () => {
               onConfirm: () => setCustomDialog({ ...customDialog, isOpen: false }),
               onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
             });
+            return;
           }
-        } catch (error) {
-          console.error("Error backing up data:", error);
-          setModalError("فشل في حفظ النسخة الاحتياطية. يرجى المحاولة مرة أخرى.");
+
+          const backupData = {
+            students: studentsData,
+            grades: gradesData,
+          };
+
+          const { error: insertError } = await supabase
+            .from('backups')
+            .insert([{ teacher_id: teacherId, title: title, data: backupData }]);
+
+          if (insertError) {
+            throw insertError;
+          }
+
+          setCustomDialog({
+            isOpen: true,
+            title: "تم بنجاح",
+            message: "تم حفظ نسخة احتياطية من بيانات الطلاب بنجاح.",
+            onConfirm: () => {
+              setCustomDialog({ ...customDialog, isOpen: false });
+              callback();
+            },
+            onClose: () => {
+              setCustomDialog({ ...customDialog, isOpen: false });
+              callback();
+            },
+          });
+
+        } catch (err) {
+          console.error("Error creating backup:", err);
+          setModalError("فشل حفظ النسخة الاحتياطية.");
         }
       },
       onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
@@ -453,7 +499,7 @@ const TeacherDashboard = () => {
     });
   };
 
-  const handleDeleteBackup = async (backupKey) => {
+  const handleDeleteBackup = (backupId) => {
     setIsRestoreModalOpen(false);
 
     setCustomDialog({
@@ -462,14 +508,25 @@ const TeacherDashboard = () => {
       message: "هل أنت متأكد من حذف هذه النسخة الاحتياطية؟",
       onConfirm: async () => {
         try {
-          await deleteDoc(doc(db, `teachers/${user.uid}/backups`, backupKey));
-          const updatedBackups = backups.filter(backup => backup.key !== backupKey);
+          const { error } = await supabase
+            .from('backups')
+            .delete()
+            .eq('id', backupId)
+            .eq('teacher_id', teacherId);
+
+          if (error) {
+            throw error;
+          }
+
+          const updatedBackups = backups.filter(backup => backup.id !== backupId);
           setBackups(updatedBackups);
           setCustomDialog({ ...customDialog, isOpen: false });
           setTimeout(() => setIsRestoreModalOpen(true), 300);
-        } catch (error) {
-          console.error("Error deleting backup:", error);
-          setModalError("فشل في حذف النسخة الاحتياطية. يرجى المحاولة مرة أخرى.");
+        } catch (err) {
+          console.error("Error deleting backup:", err);
+          setModalError("فشل حذف النسخة الاحتياطية.");
+          setCustomDialog({ ...customDialog, isOpen: false });
+          setTimeout(() => setIsRestoreModalOpen(true), 300);
         }
       },
       onCancel: () => {
@@ -483,7 +540,6 @@ const TeacherDashboard = () => {
     });
   };
 
-  // A generic custom dialog component
   const CustomDialog = ({ isOpen, title, message, inputs, onConfirm, onCancel, onClose }) => {
     const [inputValues, setInputValues] = useState(inputs ? Object.fromEntries(Object.keys(inputs).map(key => [key, inputs[key].value])) : {});
 
@@ -547,6 +603,7 @@ const TeacherDashboard = () => {
     setIsMenuOpen(false);
   };
 
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-['Noto_Sans_Arabic',sans-serif]">
       <Navbar />
@@ -560,10 +617,9 @@ const TeacherDashboard = () => {
         <FaBars className="h-6 w-6" />
       </button>
 
-      {/* Sidebar */}
       <div
         className={`fixed inset-y-0 right-0 z-40 w-64 bg-gray-800 shadow-xl transform transition-transform duration-300 ease-in-out
-                       ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                   ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="p-6">
           <div className="flex justify-between items-center mb-8">
@@ -578,7 +634,7 @@ const TeacherDashboard = () => {
             <h4 className="text-lg font-bold text-white mb-1">{teacherName}</h4>
             <p className="text-sm text-gray-400">{schoolName}</p>
             <p className="text-sm text-gray-400">{currentSemester}</p>
-            <button onClick={() => handleUpdateTeacherInfo({ teacherName, schoolName, currentSemester, teacherPhoto })} className="mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center gap-2 mx-auto">
+            <button onClick={handleUpdateTeacherInfo} className="mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center gap-2 mx-auto">
               <FaCog /> تعديل البيانات
             </button>
           </div>
@@ -607,7 +663,6 @@ const TeacherDashboard = () => {
         ></div>
       )}
 
-      {/* Reset Modal */}
       {isResetModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
           <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
@@ -650,7 +705,6 @@ const TeacherDashboard = () => {
         </div>
       )}
 
-      {/* Restore Modal */}
       {isRestoreModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
           <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
@@ -677,21 +731,21 @@ const TeacherDashboard = () => {
                 <ul className="text-right space-y-2 mb-6 max-h-60 overflow-y-auto">
                   {backups.map((backup) => (
                     <li
-                      key={backup.key}
+                      key={backup.id}
                       className={`flex justify-between items-center p-3 rounded-lg cursor-pointer transition-colors duration-200
-                                       ${selectedBackupKey === backup.key ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
-                      onClick={() => setSelectedBackupKey(backup.key)}
+                                 ${selectedBackupKey === backup.id ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
+                      onClick={() => setSelectedBackupKey(backup.id)}
                     >
                       <div className="flex flex-col items-start">
                         <span className="font-semibold">{backup.title}</span>
                         <span className="text-sm text-gray-400">
-                          بتاريخ: {new Date(backup.timestamp).toLocaleString("ar-EG", {
+                          بتاريخ: {new Date(backup.created_at).toLocaleString("ar-EG", {
                             year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
                           })}
                         </span>
                       </div>
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteBackup(backup.key); }}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteBackup(backup.id); }}
                         className="text-red-400 hover:text-red-200"
                       >
                         <FaTrash />
@@ -737,7 +791,7 @@ const TeacherDashboard = () => {
           <p className="mt-2 text-md md:text-xl text-gray-300">لوحة تحكم المعلم لإدارة الفصول</p>
           <div className="mt-4 text-center">
             <div className="inline-flex items-center gap-4 p-2 bg-gray-800 rounded-full border border-gray-700">
-              <img src={teacherPhoto} alt="صورة المعلم" className="h-10 w-10 rounded-full object-cover" />
+              <img src={teacherPhoto} alt="صورة المعلم" className="h-10 w-10 rounded-full object-cover"/>
               <div>
                 <span className="block text-sm font-semibold text-white">{teacherName}</span>
                 <span className="block text-xs text-gray-400">{currentSemester}</span>
@@ -746,37 +800,13 @@ const TeacherDashboard = () => {
           </div>
         </div>
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-          <div className="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700 text-center">
-            <FaUserGraduate className="text-4xl text-blue-400 mx-auto mb-2" />
-            <p className="text-xl font-semibold text-gray-300">إجمالي الطلاب</p>
-            <p className="text-3xl font-bold text-white mt-1">
-              {loading ? '...' : totalStudents}
-            </p>
-          </div>
-          <div className="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700 text-center">
-            <FaStar className="text-4xl text-yellow-400 mx-auto mb-2" />
-            <p className="text-xl font-semibold text-gray-300">متوسط الدرجات</p>
-            <p className="text-3xl font-bold text-white mt-1">
-              {loading ? '...' : averageGrade}
-            </p>
-          </div>
-          <div className="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700 text-center">
-            <FaChartBar className="text-4xl text-green-400 mx-auto mb-2" />
-            <p className="text-xl font-semibold text-gray-300">الفصل الدراسي</p>
-            <span className="text-3xl font-bold text-white">{currentSemester}</span>
-          </div>
-        </div>
-
-        {/* Grades Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          {grades.map((grade) => (
+          {gradesData.map((grade) => (
             <div
               key={grade.id}
               onClick={() => navigate(`/grades/${grade.id}`)}
               className="relative rounded-3xl shadow-lg overflow-hidden transform transition-all duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer
-                          bg-gray-800 border border-gray-700 hover:border-blue-500"
+                         bg-gray-800 border border-gray-700 hover:border-blue-500"
             >
               <div className="p-8 text-center flex flex-col items-center">
                 <div className="flex items-center justify-center h-20 w-20 rounded-full bg-gray-700 text-blue-400 mx-auto mb-6">
@@ -797,5 +827,6 @@ const TeacherDashboard = () => {
     </div>
   );
 };
+
 
 export default TeacherDashboard;

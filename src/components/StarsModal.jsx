@@ -257,7 +257,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
                     </div>
                     <div className="flex flex-col items-end">
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-300">الكلية:</span>
+                        <span className="text-gray-300">الحالية:</span>
                         <span className="text-yellow-400 font-bold">{student.stars || 0}</span>
                         <FaStar className="text-yellow-400 text-xs" />
                       </div>

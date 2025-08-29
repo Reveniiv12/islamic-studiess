@@ -6,15 +6,19 @@ import {
     FaTimesCircle,
     FaArrowLeft,
 } from "react-icons/fa";
+
+// استيراد Supabase
+import { supabase } from "../supabaseClient";
+// استيراد البيانات الوهمية من الملف
 import { gradesData } from "../data/mockData";
 
-const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, handleDialog, gradeId, sectionId }) => {
+const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, handleDialog, gradeId, sectionId, teacherId }) => {
     const [selectedStudents, setSelectedStudents] = useState([]);
     const [transferSearchQuery, setTransferSearchQuery] = useState("");
     const [showTransferOptions, setShowTransferOptions] = useState(false);
     const [selectedTransferSection, setSelectedTransferSection] = useState(null);
 
-    // Get the current grade sections
+    // Get the current grade sections from the mock data
     const currentGrade = gradesData.find(g => g.id === gradeId);
     const currentSections = currentGrade?.sections || [];
 
@@ -36,10 +40,6 @@ const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, hand
         return gradesData.find(g => g.id === id)?.name || "غير معروف";
     };
 
-    const getSectionNameById = (section) => {
-        return `فصل ${section}` || "غير معروف";
-    };
-
     const handleDeleteStudents = () => {
         if (selectedStudents.length === 0) {
             handleDialog("تنبيه", "الرجاء تحديد الطلاب المراد حذفهم.", "warning");
@@ -55,14 +55,27 @@ const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, hand
                 "تأكيد الحذف",
                 `هل أنت متأكد أنك تريد حذف الطلاب التالية أسماؤهم: ${studentNames}؟`,
                 "confirm",
-                () => {
-                    const updatedStudents = students.filter(s => !selectedStudents.includes(s.id));
-                    updateStudentsData(updatedStudents);
-                    setSelectedStudents([]);
-                    handleDialog("نجاح", "تم حذف الطلاب بنجاح.", "success");
+                async () => {
+                    try {
+                        const { error } = await supabase
+                            .from('students')
+                            .delete()
+                            .in('id', selectedStudents)
+                            .eq('teacher_id', teacherId); // فلترة الحذف حسب معرف المعلم
+
+                        if (error) throw error;
+                        
+                        const updatedStudents = students.filter(s => !selectedStudents.includes(s.id));
+                        updateStudentsData(updatedStudents);
+                        setSelectedStudents([]);
+                        handleDialog("نجاح", "تم حذف الطلاب بنجاح.", "success");
+                    } catch (error) {
+                        console.error("Error deleting students:", error);
+                        handleDialog("خطأ", "حدث خطأ أثناء حذف الطلاب.", "error");
+                    }
                 }
             );
-        }, 300);
+        }, 100);
     };
 
     const handleTransferStudents = () => {
@@ -70,36 +83,68 @@ const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, hand
             handleDialog("تنبيه", "الرجاء تحديد الطلاب والفصل المراد النقل إليه.", "warning");
             return;
         }
+        if (!teacherId) {
+            handleDialog("خطأ", "معرف المعلم غير متوفر. لا يمكن إكمال العملية.", "error");
+            return;
+        }
 
         const studentNames = students.filter(s => selectedStudents.includes(s.id)).map(s => s.name).join(', ');
-        const targetGradeName = getGradeNameById(gradeId);
-        const targetSectionName = getSectionNameById(selectedTransferSection);
+        const targetSectionName = `فصل ${selectedTransferSection}`;
 
         onClose();
 
         setTimeout(() => {
             handleDialog(
                 "تأكيد النقل",
-                `هل أنت متأكد أنك تريد نقل الطلاب التالية أسماؤهم: ${studentNames} إلى ${targetGradeName} - ${targetSectionName}؟`,
+                `هل أنت متأكد أنك تريد نقل الطلاب التالية أسماؤهم: ${studentNames} إلى ${targetSectionName}؟`,
                 "confirm",
-                () => {
-                    const targetStorageKey = `grades_${gradeId}_${selectedTransferSection}`;
-                    const targetStudents = JSON.parse(localStorage.getItem(targetStorageKey) || "[]");
-                    const studentsToMove = students.filter(s => selectedStudents.includes(s.id));
-                    const studentsToKeep = students.filter(s => !selectedStudents.includes(s.id));
+                async () => {
+                    try {
+                        // التحقق من تعارض السجل المدني في الفصل المستهدف
+                        const studentsToTransfer = students.filter(s => selectedStudents.includes(s.id));
+                        const nationalIdsToTransfer = studentsToTransfer.map(s => s.nationalId);
 
-                    const updatedTargetStudents = [...targetStudents, ...studentsToMove];
-                    localStorage.setItem(targetStorageKey, JSON.stringify(updatedTargetStudents));
+                        const { data: existingStudents, error: conflictError } = await supabase
+                            .from('students')
+                            .select('name, national_id')
+                            .eq('grade_level', gradeId) // استخدام grade_level
+                            .eq('section', selectedTransferSection) // استخدام section
+                            .eq('teacher_id', teacherId) // فلترة الاستعلام حسب معرف المعلم
+                            .in('national_id', nationalIdsToTransfer);
 
-                    updateStudentsData(studentsToKeep);
+                        if (conflictError) throw conflictError;
 
-                    setSelectedStudents([]);
-                    setShowTransferOptions(false);
-                    setSelectedTransferSection(null);
-                    handleDialog("نجاح", "تم نقل الطلاب بنجاح.", "success");
+                        if (existingStudents && existingStudents.length > 0) {
+                            const conflictingNames = existingStudents.map(s => s.name).join(', ');
+                            handleDialog("خطأ في النقل", `لا يمكن نقل الطلاب بسبب وجود سجلات مدنية متطابقة مع الطلاب التالية أسماؤهم في الفصل المستهدف: ${conflictingNames}.`, "error");
+                            return;
+                        }
+
+                        // تنفيذ النقل
+                        const { error: transferError } = await supabase
+                            .from('students')
+                            .update({ 
+                                grade_level: gradeId, // استخدام grade_level
+                                section: selectedTransferSection // استخدام section
+                            })
+                            .in('id', selectedStudents)
+                            .eq('teacher_id', teacherId); // فلترة التحديث حسب معرف المعلم
+
+                        if (transferError) throw transferError;
+                        
+                        const updatedStudents = students.filter(s => !selectedStudents.includes(s.id));
+                        updateStudentsData(updatedStudents);
+                        setSelectedStudents([]);
+                        setShowTransferOptions(false);
+                        setSelectedTransferSection(null);
+                        handleDialog("نجاح", "تم نقل الطلاب بنجاح.", "success");
+                    } catch (error) {
+                        console.error("Error transferring students:", error);
+                        handleDialog("خطأ", "حدث خطأ أثناء نقل الطلاب.", "error");
+                    }
                 }
             );
-        }, 300);
+        }, 100);
     };
 
     const toggleStudentSelection = (studentId) => {
@@ -160,19 +205,16 @@ const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, hand
                 {showTransferOptions && (
                     <div className="mt-6 p-4 rounded-xl bg-gray-700 border border-gray-600">
                         <h4 className="text-lg font-bold mb-3 text-white">اختر الفصل المراد النقل إليه:</h4>
-                        <div className="flex flex-col gap-4">
-                            <div className="flex flex-wrap gap-2">
-                                {/* Only show sections for the current grade */}
-                                {currentSections.map(section => (
-                                    <button
-                                        key={section}
-                                        onClick={() => setSelectedTransferSection(section)}
-                                        className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${selectedTransferSection === section ? "bg-blue-600 text-white" : "bg-gray-600 text-gray-300 hover:bg-gray-500"}`}
-                                    >
-                                        فصل {section}
-                                    </button>
-                                ))}
-                            </div>
+                        <div className="flex flex-wrap gap-2">
+                            {currentSections.map(section => (
+                                <button
+                                    key={section}
+                                    onClick={() => setSelectedTransferSection(section)}
+                                    className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${selectedTransferSection === section ? "bg-blue-600 text-white" : "bg-gray-600 text-gray-300 hover:bg-gray-500"}`}
+                                >
+                                    فصل {section}
+                                </button>
+                            ))}
                         </div>
                         <button
                             onClick={handleTransferStudents}

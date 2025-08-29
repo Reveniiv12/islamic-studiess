@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db } from "../firebase";
-import { collection, addDoc, getDocs } from "firebase/firestore";
+import { supabase } from "../supabaseClient"; // تم تعديل هذا السطر
 import QRCode from "react-qr-code";
+import { v4 as uuidv4 } from "uuid"; // تم إضافة هذا السطر لمفتاح العرض
 
 export default function ClassStudents() {
   const { gradeId, classId } = useParams();
@@ -14,15 +14,22 @@ export default function ClassStudents() {
     nationalId: "",
     phone: "",
     imageUrl: "",
-    viewKey: "" // لإضافة المفتاح الخاص بالعرض
+    viewKey: ""
   });
 
   useEffect(() => {
     async function fetchStudents() {
-      const snapshot = await getDocs(
-        collection(db, `grades/${gradeId}/classes/${classId}/students`)
-      );
-      const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      // قراءة البيانات من جدول واحد مع ربطها بالـ gradeId و classId
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .eq('grade_id', gradeId) // استخدام .eq للبحث
+        .eq('class_id', classId);
+
+      if (error) {
+        console.error("خطأ في جلب بيانات الطلاب:", error);
+        return;
+      }
       setStudents(data);
     }
     fetchStudents();
@@ -30,10 +37,33 @@ export default function ClassStudents() {
 
   const handleAddStudent = async () => {
     if (!newStudent.name || !newStudent.nationalId) return;
-    await addDoc(
-      collection(db, `grades/${gradeId}/classes/${classId}/students`),
-      newStudent
-    );
+    
+    // إنشاء مفتاح العرض لكل طالب
+    const viewKey = uuidv4();
+
+    // إضافة البيانات إلى جدول الطلاب
+    const { data, error } = await supabase
+      .from('students')
+      .insert([
+        {
+          name: newStudent.name,
+          national_id: newStudent.nationalId, // ملاحظة: يفضل snake_case
+          phone: newStudent.phone,
+          image_url: newStudent.imageUrl,
+          view_key: viewKey,
+          grade_id: gradeId, // ربط الطالب بالصف والمرحلة
+          class_id: classId,
+          grades: {} // إذا كان grades كائنًا
+        }
+      ]);
+
+    if (error) {
+      console.error("خطأ في إضافة الطالب:", error);
+      return;
+    }
+    
+    // تحديث قائمة الطلاب بعد الإضافة
+    setStudents(prevStudents => [...prevStudents, data[0]]);
     setNewStudent({
       name: "",
       nationalId: "",
@@ -41,76 +71,16 @@ export default function ClassStudents() {
       imageUrl: "",
       viewKey: ""
     });
-    window.location.reload();
   };
 
   const goToStudent = (studentId) => {
-    navigate(`/grade/${gradeId}/class/${classId}/student/${studentId}`);
+    navigate(`/grades/${gradeId}/sections/${classId}/students/${studentId}`);
   };
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-bold mb-4">
-        طلاب الفصل {classId} - الصف {gradeId}
-      </h2>
-
-      {/* نموذج إضافة طالب */}
-      <div className="mb-6 space-y-2">
-        <input
-          type="text"
-          placeholder="اسم الطالب"
-          value={newStudent.name}
-          onChange={(e) =>
-            setNewStudent({ ...newStudent, name: e.target.value })
-          }
-          className="border p-2 w-full"
-        />
-        <input
-          type="text"
-          placeholder="السجل المدني"
-          value={newStudent.nationalId}
-          onChange={(e) =>
-            setNewStudent({ ...newStudent, nationalId: e.target.value })
-          }
-          className="border p-2 w-full"
-        />
-        <input
-          type="text"
-          placeholder="رقم للتواصل"
-          value={newStudent.phone}
-          onChange={(e) =>
-            setNewStudent({ ...newStudent, phone: e.target.value })
-          }
-          className="border p-2 w-full"
-        />
-        <input
-          type="text"
-          placeholder="رابط الصورة الشخصية (اختياري)"
-          value={newStudent.imageUrl}
-          onChange={(e) =>
-            setNewStudent({ ...newStudent, imageUrl: e.target.value })
-          }
-          className="border p-2 w-full"
-        />
-        <input
-          type="text"
-          placeholder="مفتاح العرض viewKey (اختياري)"
-          value={newStudent.viewKey}
-          onChange={(e) =>
-            setNewStudent({ ...newStudent, viewKey: e.target.value })
-          }
-          className="border p-2 w-full"
-        />
-        <button
-          onClick={handleAddStudent}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          + إضافة طالب
-        </button>
-      </div>
-
-      {/* عرض الطلاب */}
-      <div className="grid grid-cols-2 gap-4">
+      <h1 className="text-2xl font-bold mb-4">طلاب الفصل</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {students.map((student) => (
           <div
             key={student.id}
@@ -118,10 +88,10 @@ export default function ClassStudents() {
             onClick={() => goToStudent(student.id)}
           >
             {/* مربع QR Code إذا كان موجود */}
-            {student.viewKey ? (
+            {student.view_key ? ( // تم تغيير viewKey إلى view_key
               <div className="w-12 h-12 bg-white p-1 rounded-lg flex-shrink-0">
                 <QRCode
-                  value={`${window.location.origin}/student-view/${student.viewKey}`}
+                  value={`${window.location.origin}/student-grades/${student.view_key}`} // تم تغيير viewKey إلى view_key
                   size={40}
                 />
               </div>
@@ -133,13 +103,13 @@ export default function ClassStudents() {
             <div>
               <p className="font-semibold">{student.name}</p>
               <p className="text-sm text-gray-500">
-                السجل المدني: {student.nationalId}
+                السجل المدني: {student.national_id} {/* تم تغيير nationalId إلى national_id */}
               </p>
 
               {/* رابط صفحة الطالب إذا كان فيه viewKey */}
-              {student.viewKey && (
+              {student.view_key && ( // تم تغيير viewKey إلى view_key
                 <a
-                  href={`${window.location.origin}/student-view/${student.viewKey}`}
+                  href={`${window.location.origin}/student-grades/${student.view_key}`} // تم تغيير viewKey إلى view_key
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline text-sm"
@@ -152,6 +122,9 @@ export default function ClassStudents() {
           </div>
         ))}
       </div>
+      
+      {/* هنا يمكنك إضافة فورم إضافة طالب جديد باستخدام handleAddStudent */}
+      {/* <button onClick={handleAddStudent}>إضافة طالب جديد</button> */}
     </div>
   );
 }

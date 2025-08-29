@@ -1,5 +1,4 @@
-// src/SectionGrades.jsx
-
+// src/pages/SectionGrades.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import NotesModal from "../components/NotesModal";
@@ -11,29 +10,19 @@ import HomeworkCurriculumModal from "../components/HomeworkCurriculumModal.jsx";
 import GradesModal from "../components/GradesModal";
 import TransferDeleteModal from "../components/TransferDeleteModal";
 import StudentQrCode from "../components/StudentQrCode.jsx";
-import GradesSheet from '../pages/GradesSheet';
-import BriefSheet from '../pages/BriefSheet';
+import GradesSheet from './GradesSheet';
+import BriefSheet from './BriefSheet';
 import AbsenceModal from "../components/AbsenceModal.jsx";
+import BookAbsenceModal from "../components/BookAbsenceModal.jsx";
 import TroubledStudentsModal from "../components/TroubledStudentsModal.jsx";
 import CustomDialog from "../components/CustomDialog";
+import VerificationModal from "../components/VerificationModal.jsx";
 import { QRCodeSVG } from 'qrcode.react';
-import ReactDOM from 'react-dom';
+import { getHijriToday } from '../utils/recitationUtils';
 
-// استيراد Firebase
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc,
-  query,
-  where,
-  onSnapshot,
-  writeBatch
-} from "firebase/firestore";
-import { db } from "../firebase"; // تأكد من أن هذا المسار صحيح
+// استيراد Supabase من الملف الموجود
+import { supabase } from "../supabaseClient";
+import { gradesData } from "../data/mockData";
 
 import {
   FaFileExcel,
@@ -89,6 +78,7 @@ import {
 } from "../utils/gradeUtils";
 
 import { getRecitationStatus } from "../utils/recitationUtils";
+import { resetStudentData } from '../utils/resetDataUtils';
 
 const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
   const sizes = {
@@ -157,7 +147,9 @@ const SectionGrades = () => {
   const [editingStudent, setEditingStudent] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
   const [showAbsenceModal, setShowAbsenceModal] = useState(false);
+  const [showBookAbsenceModal, setShowBookAbsenceModal] = useState(false);
   const [showTroubledStudentsModal, setShowTroubledStudentsModal] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const filePhotoInputRef = useRef(null);
@@ -168,6 +160,13 @@ const SectionGrades = () => {
   const [dialogMessage, setDialogMessage] = useState("");
   const [dialogType, setDialogType] = useState("info");
   const [dialogAction, setDialogAction] = useState(null);
+
+  const [facingMode, setFacingMode] = useState('user');
+  const [qrCodesPerPage, setQrCodesPerPage] = useState(9);
+  
+  const [user, setUser] = useState(null);
+  const [teacherId, setTeacherId] = useState(null);
+
 
   const gradeName = getGradeNameById(gradeId);
   const sectionName = getSectionNameById(sectionId);
@@ -187,59 +186,71 @@ const SectionGrades = () => {
     setShowDialog(false);
   };
 
-  // دالة لجلب البيانات من Firebase Firestore
-  const fetchDataFromFirebase = async () => {
+  // دالة لجلب البيانات من Supabase
+  const fetchDataFromSupabase = async () => {
     setIsRefreshing(true);
-    
+
     try {
-      // جلب بيانات الطلاب
-      const studentsQuery = query(
-        collection(db, "grades", gradeId, "sections", sectionId, "students")
-      );
-      const studentsSnapshot = await getDocs(studentsQuery);
-      const studentsData = studentsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      // جلب بيانات المنهج
-      const curriculumDocRef = doc(db, "grades", gradeId, "sections", sectionId, "curriculum");
-      const curriculumDoc = await getDoc(curriculumDocRef);
-      let curriculumData = [];
-      let homeworkCurr = [];
-      
-      if (curriculumDoc.exists()) {
-        const data = curriculumDoc.data();
-        curriculumData = data.recitation || [];
-        homeworkCurr = data.homework || [];
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate("/");
+        setIsRefreshing(false);
+        return;
       }
-      
-      // جلب بيانات الإعدادات
-      const settingsDocRef = doc(db, "settings", "general");
-      const settingsDoc = await getDoc(settingsDocRef);
+      setTeacherId(user.id);
+
+      const { data: studentsData, error: studentsError } = await supabase
+        .from('students')
+        .select('*, absences(*), book_absences(*)')
+        .eq('grade_level', gradeId)
+        .eq('section', sectionId)
+        .eq('teacher_id', user.id)
+        .order('name');
+
+      if (studentsError) throw studentsError;
+
+      const { data: curriculumData, error: curriculumError } = await supabase
+        .from('curriculum')
+        .select('*')
+        .eq('grade_id', gradeId)
+        .eq('section_id', sectionId)
+        .eq('teacher_id', user.id)
+        .single();
+
+      let curriculumRecitation = [];
+      let homeworkCurr = [];
+
+      if (curriculumData) {
+        curriculumRecitation = curriculumData.recitation || [];
+        homeworkCurr = curriculumData.homework || [];
+      }
+
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('id', 'general')
+        .single();
+
       let savedTeacherName = "المعلم الافتراضي";
       let savedSchoolName = "مدرسة متوسطة الطرف";
       let savedSemester = "الفصل الدراسي الأول";
       let savedTestMethod = 'average';
-      
-      if (settingsDoc.exists()) {
-        const data = settingsDoc.data();
-        savedTeacherName = data.teacherName || savedTeacherName;
-        savedSchoolName = data.schoolName || savedSchoolName;
-        savedSemester = data.currentSemester || savedSemester;
-        savedTestMethod = data.testMethod || savedTestMethod;
+
+      if (settingsData) {
+        savedTeacherName = settingsData.teacher_name || savedTeacherName;
+        savedSchoolName = settingsData.school_name || savedSchoolName;
+        savedSemester = settingsData.current_semester || savedSemester;
+        savedTestMethod = settingsData.test_method || savedTestMethod;
       }
-      
-      // تحديث الحالة
+
       setTeacherName(savedTeacherName);
       setSchoolName(savedSchoolName);
       setCurrentSemester(savedSemester);
       setHomeworkCurriculum(homeworkCurr);
-      setCurriculum(curriculumData);
+      setCurriculum(curriculumRecitation);
       setTestCalculationMethod(savedTestMethod);
-      
-      // معالجة بيانات الطلاب
-      const parsedStudents = studentsData.map(student => {
+
+      const parsedStudents = (studentsData || []).map(student => {
         const ensureArraySize = (array, size) => {
           const newArray = Array(size).fill(null);
           if (array && Array.isArray(array)) {
@@ -251,25 +262,30 @@ const SectionGrades = () => {
         };
 
         const studentGrades = {
-          ...student.grades,
           tests: ensureArraySize(student.grades?.tests, 2),
           homework: ensureArraySize(student.grades?.homework, 10),
-          performanceTasks: ensureArraySize(student.grades?.performanceTasks, 5),
+          performanceTasks: ensureArraySize(student.grades?.performance_tasks, 5),
           participation: ensureArraySize(student.grades?.participation, 10),
-          quranRecitation: ensureArraySize(student.grades?.quranRecitation, 5),
-          quranMemorization: ensureArraySize(student.grades?.quranMemorization, 5),
-          oralTest: ensureArraySize(student.grades?.oralTest, 5),
+          quranRecitation: ensureArraySize(student.grades?.quran_recitation, 5),
+          quranMemorization: ensureArraySize(student.grades?.quran_memorization, 5),
+          oralTest: ensureArraySize(student.grades?.oral_test, 5),
           weeklyNotes: ensureArraySize(student.grades?.weeklyNotes, 20),
         };
 
         const studentWithStars = {
           ...student,
+          id: student.id.toString(),
           grades: studentGrades,
-          viewKey: student.viewKey || `/student/${student.id}`,
-          acquiredStars: student.acquiredStars !== undefined ? student.acquiredStars : student.stars || 0,
-          consumedStars: student.consumedStars || 0,
-          stars: (student.acquiredStars !== undefined ? student.acquiredStars : student.stars || 0) - (student.consumedStars || 0),
-          absences: student.absences || [] // Initialize new absences array
+          viewKey: student.view_key || `/grades/${gradeId}/sections/${sectionId}/students/${student.id}`,
+          acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
+          consumedStars: student.consumed_stars || 0,
+          stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
+          absences: (student.absences || []).map(a => a.absence_date),
+          bookAbsences: (student.book_absences || []).map(b => b.absence_date),
+          nationalId: student.national_id,
+          parentPhone: student.parent_phone,
+          phone: student.phone,
+          photo: student.photo
         };
 
         if (!studentWithStars.viewKey) {
@@ -279,44 +295,81 @@ const SectionGrades = () => {
       }).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
 
       setStudents(parsedStudents);
-      
+
     } catch (error) {
-      console.error("Error fetching data from Firebase:", error);
+      console.error("Error fetching data from Supabase:", error);
       handleDialog("خطأ", "حدث خطأ أثناء جلب البيانات من قاعدة البيانات", "error");
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  // دالة لحفظ بيانات الطلاب في Firebase
-  const updateStudentsData = async (updatedStudents) => {
-    try {
-      const batch = writeBatch(db);
-      const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-      
-      // تحديث كل طالب في الدفعة
-      sortedStudents.forEach(student => {
-        const studentRef = doc(db, "grades", gradeId, "sections", sectionId, "students", student.id);
-        batch.set(studentRef, student);
-      });
-      
-      await batch.commit();
-      setStudents(sortedStudents);
-    } catch (error) {
-      console.error("Error updating students data:", error);
-      handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات في قاعدة البيانات", "error");
+const updateStudentsData = async (updatedStudents) => {
+    if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
+      return;
     }
-  };
-
-  // دالة لحفظ بيانات المنهج في Firebase
-  const updateCurriculumData = async (updatedCurriculum) => {
     try {
-      const curriculumRef = doc(db, "grades", gradeId, "sections", sectionId, "curriculum");
-      await setDoc(curriculumRef, { 
-        recitation: updatedCurriculum,
-        homework: homeworkCurriculum 
-      }, { merge: true });
-      
+        const studentsToUpdate = updatedStudents.map(student => ({
+            ...(student.id ? { id: student.id } : {}),
+            name: student.name,
+            national_id: student.nationalId,
+            phone: student.phone,
+            parent_phone: student.parentPhone,
+            photo: student.photo,
+            stars: (student.acquiredStars || 0) - (student.consumedStars || 0),
+            acquired_stars: student.acquiredStars,
+            consumed_stars: student.consumedStars,
+            recitation_history: student.recitation_history,
+            grades: {
+                tests: student.grades.tests,
+                homework: student.grades.homework,
+                performance_tasks: student.grades.performanceTasks,
+                participation: student.grades.participation,
+                quran_recitation: student.grades.quranRecitation,
+                quran_memorization: student.grades.quranMemorization,
+                oral_test: student.grades.oralTest,
+                weekly_notes: student.grades.weeklyNotes,
+            },
+            absences: student.absences,
+            book_absences: student.bookAbsences, // تم إضافة هذا السطر
+            grade_level: gradeId,
+            section: sectionId,
+            teacher_id: teacherId,
+        }));
+
+        const { error } = await supabase
+            .from('students')
+            .upsert(studentsToUpdate, { onConflict: 'national_id' });
+
+        if (error) throw error;
+
+        const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+        setStudents(sortedStudents);
+    } catch (error) {
+        console.error("Error updating students data:", error);
+        handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات في قاعدة البيانات", "error");
+    }
+};
+
+  const updateCurriculumData = async (updatedCurriculum) => {
+    if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن حفظ المنهج. معرف المعلم غير متوفر.", "error");
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('curriculum')
+        .upsert({
+          grade_level: gradeId,
+          section: sectionId,
+          recitation: updatedCurriculum,
+          homework: homeworkCurriculum,
+          teacher_id: teacherId,
+        }, { onConflict: 'grade_level,section' });
+
+      if (error) throw error;
+
       setCurriculum(updatedCurriculum);
     } catch (error) {
       console.error("Error updating curriculum:", error);
@@ -324,15 +377,24 @@ const SectionGrades = () => {
     }
   };
 
-  // دالة لحفظ بيانات واجبات المنهج في Firebase
   const updateHomeworkCurriculumData = async (updatedCurriculum) => {
+    if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن حفظ الواجبات. معرف المعلم غير متوفر.", "error");
+      return;
+    }
     try {
-      const curriculumRef = doc(db, "grades", gradeId, "sections", sectionId, "curriculum");
-      await setDoc(curriculumRef, { 
-        recitation: curriculum,
-        homework: updatedCurriculum 
-      }, { merge: true });
-      
+      const { error } = await supabase
+        .from('curriculum')
+        .upsert({
+          grade_level: gradeId,
+          section: sectionId,
+          recitation: curriculum,
+          homework: updatedCurriculum,
+          teacher_id: teacherId,
+        }, { onConflict: 'grade_level,section' });
+
+      if (error) throw error;
+
       setHomeworkCurriculum(updatedCurriculum);
     } catch (error) {
       console.error("Error updating homework curriculum:", error);
@@ -340,12 +402,21 @@ const SectionGrades = () => {
     }
   };
 
-  // دالة لحفظ طريقة حساب الاختبارات في Firebase
   const handleTestCalculationMethodChange = async (method) => {
+    if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن حفظ الإعدادات. معرف المعلم غير متوفر.", "error");
+      return;
+    }
     try {
-      const settingsRef = doc(db, "settings", "general");
-      await setDoc(settingsRef, { testMethod: method }, { merge: true });
-      
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'general',
+          test_method: method
+        }, { onConflict: 'id' });
+
+      if (error) throw error;
+
       setTestCalculationMethod(method);
     } catch (error) {
       console.error("Error saving test method:", error);
@@ -376,7 +447,7 @@ const SectionGrades = () => {
             }
             return s;
           });
-          
+
           await updateStudentsData(updatedStudents);
           setSelectedStudent(updatedStudents.find(s => s.id === studentId));
           handleDialog("نجاح", "تم حذف الملاحظة بنجاح", "success");
@@ -389,18 +460,23 @@ const SectionGrades = () => {
   };
 
   useEffect(() => {
-    fetchDataFromFirebase();
+    fetchDataFromSupabase();
   }, [gradeId, sectionId]);
 
-  useEffect(() => {
-    if (selectedStudent && gradesSectionRef.current) {
-      gradesSectionRef.current.scrollIntoView({ behavior: 'smooth' });
+  const handleSelectStudent = (student) => {
+    setSelectedStudent(student);
+    if (gradesSectionRef.current) {
+        gradesSectionRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [selectedStudent]);
+  };
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: facingMode
+        }
+       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
@@ -455,22 +531,51 @@ const SectionGrades = () => {
         import('xlsx'),
         import('file-saver')
       ]);
+      
+      const gradesHeaders = {
+        tests: ["اختبار 1 (15)", "اختبار 2 (15)"],
+        homework: Array.from({ length: 10 }, (_, i) => `واجب ${i + 1} (1)`),
+        performanceTasks: Array.from({ length: 5 }, (_, i) => `مهمة أدائية ${i + 1} (5)`),
+        participation: Array.from({ length: 10 }, (_, i) => `مشاركة ${i + 1} (1)`),
+        quranRecitation: Array.from({ length: 5 }, (_, i) => `تلاوة ${i + 1} (10)`),
+        quranMemorization: Array.from({ length: 5 }, (_, i) => `حفظ ${i + 1} (5)`),
+        oralTest: Array.from({ length: 5 }, (_, i) => `اختبار شفوي ${i + 1} (5)`),
+      };
 
-      const data = students.map(student => ({
-        'اسم الطالب': student.name,
-        'السجل المدني': student.nationalId,
-        'رقم ولي الأمر': student.parentPhone,
-      }));
+      const data = students.map(student => {
+        const studentRow = {
+          'اسم الطالب': student.name,
+          'السجل المدني': student.nationalId,
+          'رقم ولي الأمر': student.parentPhone,
+        };
+
+        Object.keys(gradesHeaders).forEach(category => {
+          gradesHeaders[category].forEach((header, index) => {
+            studentRow[header] = student.grades[category]?.[index] ?? '';
+          });
+        });
+
+        studentRow['مجموع الاختبارات'] = calculateCategoryScore(student.grades, 'tests', testCalculationMethod);
+        studentRow['مجموع الواجبات'] = calculateCategoryScore(student.grades, 'homework', 'sum');
+        studentRow['مجموع المهام الأدائية'] = calculateCategoryScore(student.grades, 'performanceTasks', 'best');
+        studentRow['مجموع المشاركات'] = calculateCategoryScore(student.grades, 'participation', 'sum');
+        studentRow['مجموع القرآن'] = (parseFloat(calculateCategoryScore(student.grades, 'quranRecitation', 'average')) + parseFloat(calculateCategoryScore(student.grades, 'quranMemorization', 'average'))).toFixed(2);
+        studentRow['مجموع الاختبار الشفوي'] = calculateCategoryScore(student.grades, 'oralTest', 'best');
+        studentRow['المجموع النهائي'] = calculateTotalScore(student.grades, testCalculationMethod);
+        studentRow['النجوم الحالية'] = student.stars;
+
+        return studentRow;
+      });
 
       const ws = utils.json_to_sheet(data);
       const wb = utils.book_new();
-      utils.book_append_sheet(wb, ws, "الطلاب");
+      utils.book_append_sheet(wb, ws, "الطلاب والدرجات");
 
       const excelBuffer = write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([excelBuffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
-      saveAs(blob, `بيانات_${gradeId}_${sectionId}.xlsx`);
+      saveAs(blob, `بيانات_ودرجات_${gradeName}_${sectionName}.xlsx`);
       handleDialog("نجاح", "تم تصدير الملف بنجاح!", "success");
     } catch (error) {
       handleDialog("خطأ", 'حدث خطأ أثناء تصدير الملف: ' + error.message, "error");
@@ -480,56 +585,143 @@ const SectionGrades = () => {
   const handleFileImport = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
+  
     try {
-      const [{ read, utils }] = await import('xlsx');
+      const xlsx = await import('xlsx');
+      const { read, utils } = xlsx;
+  
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const data = new Uint8Array(e.target.result);
           const workbook = read(data, { type: 'array' });
-
+  
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
           const jsonData = utils.sheet_to_json(sheet);
-
-          const updatedStudents = jsonData.map(row => ({
-            id: Date.now() + Math.random().toString(36).substr(2, 9),
-            name: row['اسم الطالب'] || '',
-            nationalId: row['السجل المدني'] || '',
-            parentPhone: row['رقم ولي الأمر'] || '',
-            viewKey: `/student-view/${Date.now() + Math.random()}-${Date.now()}`
-          }));
-
-          updateStudentsData(updatedStudents);
-          handleDialog("نجاح", "تم استيراد البيانات بنجاح!", "success");
+  
+          const updatedStudents = [];
+          
+          const { data: studentsFromDB, error: fetchError } = await supabase
+            .from('students')
+            .select('national_id')
+            .eq('grade_level', gradeId)
+            .eq('section', sectionId)
+            .eq('teacher_id', teacherId);
+  
+          if (fetchError) throw fetchError;
+          const existingNationalIds = new Set(studentsFromDB.map(s => s.national_id));
+  
+          let importedCount = 0;
+          let skippedCount = 0;
+          let skippedIds = [];
+  
+          for (const row of jsonData) {
+            const nationalId = String(row['السجل المدني']);
+            if (!nationalId || nationalId.length < 5) {
+              console.warn(`Skipping row with invalid national ID: ${JSON.stringify(row)}`);
+              skippedCount++;
+              continue;
+            }
+  
+            if (existingNationalIds.has(nationalId)) {
+              skippedCount++;
+              skippedIds.push(nationalId);
+              continue;
+            }
+  
+            const newStudentEntry = {
+              name: row['اسم الطالب'] || '',
+              nationalId: nationalId,
+              parentPhone: row['رقم ولي الأمر'] || '',
+              photo: row['صورة الطالب'] || '/images/1.webp',
+              stars: 0,
+              acquired_stars: 0,
+              consumed_stars: 0,
+              recitation_history: [],
+              grades: {
+                tests: Array(2).fill(null),
+                homework: Array(10).fill(null),
+                performanceTasks: Array(5).fill(null),
+                participation: Array(10).fill(null),
+                quranRecitation: Array(5).fill(null),
+                quranMemorization: Array(5).fill(null),
+                oralTest: Array(5).fill(null),
+                weeklyNotes: Array(20).fill(null),
+              },
+              absences: [],
+              book_absences: [],
+              grade_level: gradeId,
+              section: sectionId,
+              teacher_id: teacherId,
+            };
+            updatedStudents.push(newStudentEntry);
+            importedCount++;
+          }
+  
+          if (importedCount > 0) {
+            await updateStudentsData(updatedStudents);
+            handleDialog("نجاح", `تم استيراد ${importedCount} طالب بنجاح!`, "success");
+            fetchDataFromSupabase();
+          }
+  
+          if (skippedCount > 0) {
+            handleDialog("تحذير", `تم تجاهل ${skippedCount} طالب بسبب وجودهم مسبقًا أو بيانات غير صالحة.`, "warning");
+          }
+  
+          if (importedCount === 0 && skippedCount === 0) {
+            handleDialog("تحذير", "لم يتم العثور على أي طلاب جدد صالحين للاستيراد.", "warning");
+          }
+  
         } catch (error) {
-          handleDialog("خطأ", 'حدث خطأ أثناء استيراد الملف: ' + error.message, "error");
+          console.error("Error importing file:", error);
+          handleDialog("خطأ", `حدث خطأ أثناء استيراد الملف: ${error.message}`, "error");
         }
       };
       reader.readAsArrayBuffer(file);
     } catch (error) {
-      handleDialog("خطأ", 'حدث خطأ في تحميل مكتبة XLSX: ' + error.message, "error");
+      handleDialog("خطأ", `حدث خطأ في تحميل مكتبة XLSX: ${error.message}`, "error");
     }
   };
+
 
 const handleAddStudent = async () => {
     if (!newStudent.name || !newStudent.nationalId) {
       handleDialog("خطأ", "يرجى إدخال الاسم والسجل المدني", "error");
       return;
     }
-    
+    if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن إضافة الطالب. معرف المعلم غير متوفر.", "error");
+      return;
+    }
+
     try {
-      const newId = Date.now() + Math.random().toString(36).substr(2, 9);
+      const { data: existingStudent, error: fetchError } = await supabase
+        .from('students')
+        .select('id')
+        .eq('national_id', newStudent.nationalId)
+        .eq('teacher_id', teacherId)
+        .single();
+
+      if (existingStudent) {
+        handleDialog("خطأ", "هذا السجل المدني مسجل مسبقًا لطالب آخر", "error");
+        return;
+      }
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+
       const studentToAdd = {
-        id: newId,
-        ...newStudent,
+        name: newStudent.name,
+        national_id: newStudent.nationalId,
+        phone: newStudent.phone,
+        parent_phone: newStudent.parentPhone,
         photo: newStudent.photo || '/images/1.webp',
         stars: 0,
-        acquiredStars: 0,
-        consumedStars: 0,
-        recitationHistory: [],
-        viewKey: `/student-view/${newId}-${Date.now()}`,
+        acquired_stars: 0,
+        consumed_stars: 0,
+        recitation_history: [],
         grades: {
           tests: Array(2).fill(null),
           homework: Array(10).fill(null),
@@ -540,19 +732,22 @@ const handleAddStudent = async () => {
           oralTest: Array(5).fill(null),
           weeklyNotes: Array(20).fill(null),
         },
-        absences: [], // Initialize absences array for new student
+        grade_level: gradeId,
+        section: sectionId,
+        teacher_id: teacherId,
       };
-      
-      // إضافة الطالب إلى Firebase
-      const studentRef = doc(db, "grades", gradeId, "sections", sectionId, "students", newId);
-      await setDoc(studentRef, studentToAdd);
-      
+
+      const { error } = await supabase
+        .from('students')
+        .insert([studentToAdd]);
+
+      if (error) throw error;
+
       setShowAddForm(false);
       setNewStudent({ name: "", nationalId: "", phone: "", parentPhone: "", photo: "" });
       handleDialog("نجاح", "تم إضافة الطالب بنجاح!", "success");
-      
-      // تحديث قائمة الطلاب
-      fetchDataFromFirebase();
+
+      fetchDataFromSupabase();
     } catch (error) {
       console.error("Error adding student:", error);
       handleDialog("خطأ", "حدث خطأ أثناء إضافة الطالب", "error");
@@ -563,6 +758,7 @@ const handleAddStudent = async () => {
     const numValue = value === '' ? null : Number(value);
     let maxLimit = 0;
     let errorMessage = '';
+
     switch(category) {
       case 'tests': maxLimit = 15; errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 15."; break;
       case 'oralTest': maxLimit = 5; errorMessage = "خطأ: درجة الاختبار الشفوي لا يمكن أن تتجاوز 5."; break;
@@ -573,11 +769,31 @@ const handleAddStudent = async () => {
       case 'quranMemorization': maxLimit = 5; errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 5."; break;
       default: break;
     }
+    
+    // التحقق من صلاحية القيمة المدخلة
     if (numValue !== null && (numValue > maxLimit || numValue < 0)) {
       handleDialog("خطأ", errorMessage, "error");
+      
+      // مسح القيمة من الحقل
+      const updatedStudents = students.map(s => {
+        if (s.id === studentId) {
+          const newGrades = [...(s.grades[category] || [])];
+          newGrades[index] = null;
+          return {
+            ...s,
+            grades: {
+              ...s.grades,
+              [category]: newGrades,
+            },
+          };
+        }
+        return s;
+      });
+      setStudents(updatedStudents);
+      await updateStudentsData(updatedStudents);
       return;
     }
-    
+
     try {
       const updatedStudents = students.map((student) => {
         if (student.id === studentId) {
@@ -591,7 +807,8 @@ const handleAddStudent = async () => {
         }
         return student;
       });
-      
+
+      setStudents(updatedStudents);
       await updateStudentsData(updatedStudents);
       const updatedSelectedStudent = updatedStudents.find(s => s.id === studentId);
       if (updatedSelectedStudent) { setSelectedStudent(updatedSelectedStudent); }
@@ -645,16 +862,81 @@ const handleAddStudent = async () => {
     }
   };
 
-  const updateAbsenceData = async (updatedStudents) => {
+const updateAbsenceData = async (updatedStudents) => {
+    if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
+      return;
+    }
     try {
-      await updateStudentsData(updatedStudents);
-      const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent?.id);
-      if (updatedSelectedStudent) {
-        setSelectedStudent(updatedSelectedStudent);
+      for (const student of updatedStudents) {
+        const { error: deleteError } = await supabase
+          .from('absences')
+          .delete()
+          .eq('student_id', student.id)
+          .eq('teacher_id', teacherId);
+        
+        if (deleteError) throw deleteError;
+        
+        const newAbsences = (student.absences || []).map(date => ({
+          student_id: student.id,
+          absence_date: date,
+          teacher_id: teacherId
+        }));
+
+        if (newAbsences.length > 0) {
+          const { error: insertError } = await supabase
+            .from('absences')
+            .insert(newAbsences);
+          
+          if (insertError) throw insertError;
+        }
       }
+      
+      await fetchDataFromSupabase();
+      handleDialog("نجاح", "تم تحديث بيانات الغياب بنجاح!", "success");
+
     } catch (error) {
       console.error("Error updating absence:", error);
       handleDialog("خطأ", "حدث خطأ أثناء تحديث بيانات الغياب", "error");
+    }
+  };
+
+const updateBookAbsenceData = async (updatedStudents) => {
+    if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
+      return;
+    }
+    try {
+      for (const student of updatedStudents) {
+        const { error: deleteError } = await supabase
+          .from('book_absences')
+          .delete()
+          .eq('student_id', student.id)
+          .eq('teacher_id', teacherId);
+
+        if (deleteError) throw deleteError;
+
+        const newBookAbsences = (student.bookAbsences || []).map(date => ({
+          student_id: student.id,
+          absence_date: date,
+          teacher_id: teacherId
+        }));
+        
+        if (newBookAbsences.length > 0) {
+          const { error: insertError } = await supabase
+            .from('book_absences')
+            .insert(newBookAbsences);
+          
+          if (insertError) throw insertError;
+        }
+      }
+      
+      await fetchDataFromSupabase();
+      handleDialog("نجاح", "تم تحديث بيانات عدم إحضار الكتاب بنجاح!", "success");
+
+    } catch (error) {
+      console.error("Error updating book absence:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء تحديث بيانات عدم إحضار الكتاب", "error");
     }
   };
 
@@ -689,7 +971,7 @@ const handleAddStudent = async () => {
       handleDialog("خطأ", "يرجى إدخال الاسم والسجل المدني", "error");
       return;
     }
-    
+
     try {
       const updatedStudents = students.map(student =>
         student.id === editingStudent.id ? {
@@ -697,7 +979,7 @@ const handleAddStudent = async () => {
           stars: (editingStudent.acquiredStars || 0) - (editingStudent.consumedStars || 0)
         } : student
       );
-      
+
       await updateStudentsData(updatedStudents);
       setShowEditForm(false);
       setEditingStudent(null);
@@ -736,101 +1018,125 @@ const handleAddStudent = async () => {
     handleDialog("نجاح", "تم نسخ الرابط بنجاح!", "success");
   };
 
-  const handleExportQRCodes = async () => {
-    try {
-      handleDialog("جاري التصدير", "جاري إنشاء ملف الوورد، الرجاء الانتظار...", "info");
-      const [{ Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell, WidthType, ImageRun, AlignmentType }] = await Promise.all([
-        import('docx')
-      ]);
-      const [{ toDataURL }] = await import('qrcode');
-      const [{ saveAs }] = await import('file-saver');
+  const dataURLToUint8Array = (dataURL) => {
+    const base64 = dataURL.split(',')[1];
+    const binaryString = window.atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
 
-      const sections = [];
+const handleExportQRCodes = async () => {
+  try {
+    handleDialog("جاري التصدير", "جاري إنشاء ملف الوورد، الرجاء الانتظار...", "info");
+    const [{ Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell, WidthType, ImageRun, AlignmentType }, { toDataURL }, { saveAs }] = await Promise.all([
+      import('docx'),
+      import('qrcode'),
+      import('file-saver')
+    ]);
 
-      for (let i = 0; i < filteredStudents.length; i += 9) {
-        const batch = filteredStudents.slice(i, i + 9);
-        const studentCells = [];
+    const dataURLToUint8Array = (dataUrl) => {
+      const base64 = dataUrl.split(',')[1];
+      const binaryString = window.atob(base64);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes;
+    };
 
-        for (const student of batch) {
-          try {
-            const qrDataUrl = await toDataURL(`${window.location.origin}${student.viewKey}`, {
-              errorCorrectionLevel: 'H',
-              type: 'image/png',
-              width: 150,
-            });
+    const sections = [];
 
-            const response = await fetch(qrDataUrl);
-            const blob = await response.blob();
-            const qrImage = new Uint8Array(await blob.arrayBuffer());
+    let columns;
+    if (qrCodesPerPage === 1) {
+      columns = 1;
+    } else if (qrCodesPerPage === 9) {
+      columns = 3;
+    } else {
+      columns = 4;
+    }
 
-            studentCells.push(
-              new TableCell({
-                children: [
-                  new Paragraph({ text: student.name, alignment: AlignmentType.CENTER }),
-                  new Paragraph({
-                    children: [
-                      new ImageRun({
-                        data: qrImage,
-                        transformation: { width: 120, height: 120 },
-                      }),
-                    ],
-                    alignment: AlignmentType.CENTER,
-                  }),
-                  new Paragraph({ text: student.nationalId || "-", alignment: AlignmentType.CENTER }),
-                  new Paragraph({
-                    text: `النجوم: ${student.stars || 0}`,
-                    alignment: AlignmentType.CENTER
-                  }),
-                  new Paragraph({ text: `${gradeName} - ${sectionName}`, alignment: AlignmentType.CENTER }),
-                ],
-                margins: { top: 200, bottom: 200, left: 200, right: 200 },
-              })
-            );
-          } catch (error) {
-            console.error(`Error processing student ${student.name}:`, error);
-          }
-        }
+    for (let i = 0; i < filteredStudents.length; i += qrCodesPerPage) {
+      const batch = filteredStudents.slice(i, i + qrCodesPerPage);
+      const studentCells = [];
 
-        const rows = [];
-        for (let j = 0; j < studentCells.length; j += 3) {
-          rows.push(
-            new TableRow({
-              children: studentCells.slice(j, j + 3),
+      for (const student of batch) {
+        try {
+          const qrDataUrl = await toDataURL(`${window.location.origin}${student.viewKey}`, {
+            errorCorrectionLevel: 'H',
+            type: 'image/png',
+            width: 150,
+          });
+
+          const qrImage = dataURLToUint8Array(qrDataUrl);
+
+          studentCells.push(
+            new TableCell({
+              children: [
+                new Paragraph({ text: student.name, alignment: AlignmentType.CENTER, style: 'studentName' }),
+                new Paragraph({
+                  children: [
+                    new ImageRun({
+                      data: qrImage,
+                      transformation: { width: 120, height: 120 },
+                    }),
+                  ],
+                  alignment: AlignmentType.CENTER,
+                }),
+                new Paragraph({ text: `${gradeName} - ${sectionName}`, alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: `المدرسة: ${schoolName}`, alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: `المعلم: ${teacherName}`, alignment: AlignmentType.CENTER }),
+                new Paragraph({ text: `${currentSemester}`, alignment: AlignmentType.CENTER }),
+              ],
+              margins: { top: 200, bottom: 200, left: 200, right: 200 },
             })
           );
+        } catch (error) {
+          console.error(`Error processing student ${student.name}:`, error);
         }
-
-        const table = new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows,
-        });
-
-        sections.push({
-          properties: {},
-          children: [
-            new Paragraph({
-              text: `كشوفات طلاب ${gradeName} - ${sectionName}`,
-              heading: HeadingLevel.HEADING_1,
-              alignment: AlignmentType.RIGHT
-            }),
-            new Paragraph({ text: `المدرسة: ${schoolName}`, alignment: AlignmentType.RIGHT }),
-            new Paragraph({ text: `المعلم: ${teacherName}`, alignment: AlignmentType.RIGHT }),
-            new Paragraph({ text: `الفصل الدراسي: ${currentSemester}`, alignment: AlignmentType.RIGHT }),
-            new Paragraph({ text: " " }),
-            table,
-          ],
-        });
       }
 
-      const doc = new Document({ sections });
+      const rows = [];
+      for (let j = 0; j < studentCells.length; j += columns) {
+        rows.push(
+          new TableRow({
+            children: studentCells.slice(j, j + columns),
+          })
+        );
+      }
 
-      Packer.toBlob(doc).then((blob) => {
-        saveAs(blob, `طلاب_${gradeName}_${sectionName}.docx`);
-        handleDialog("نجاح", "تم تصدير الملف بنجاح!", "success");
+      const table = new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows,
       });
-    } catch (error) {
-      console.error("Error exporting document:", error);
-      handleDialog("خطأ", "حدث خطأ أثناء تصدير الملف. الرجاء المحاولة مرة أخرى.", "error");
+
+      sections.push({
+        properties: {},
+        children: [
+          new Paragraph({
+            text: `كشوفات طلاب ${gradeName} - ${sectionName}`,
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.RIGHT
+          }),
+          new Paragraph({ text: " " }),
+          table,
+        ],
+      });
+    }
+
+    const doc = new Document({ sections });
+
+    Packer.toBlob(doc).then((blob) => {
+      saveAs(blob, `بيانات_ودرجات_${gradeName}_${sectionId}.docx`);
+      handleDialog("نجاح", "تم تصدير الملف بنجاح!", "success");
+    });
+  } catch (error) {
+    console.error("Error exporting document:", error);
+    handleDialog("خطأ", "حدث خطأ أثناء تصدير الملف. الرجاء المحاولة مرة أخرى.", "error");
     }
   };
 
@@ -872,6 +1178,27 @@ const handleAddStudent = async () => {
   const averageScore = calculateAverage(grades.map(g => g.score));
   const performanceLevel = determinePerformanceLevel(averageScore);
 
+  const handleResetDataClick = () => {
+    handleDialog(
+      "تأكيد حذف البيانات",
+      "هل أنت متأكد من حذف درجات وملاحظات جميع الطلاب؟ لا يمكن التراجع عن هذا الإجراء.",
+      "confirm",
+      () => {
+        setShowVerificationModal(true);
+      }
+    );
+  };
+
+  const onVerificationSuccess = async (user) => {
+    if (user.id !== teacherId) {
+      handleDialog("خطأ", "بيانات الاعتماد غير صحيحة أو لا تطابق حسابك.", "error");
+      return;
+    }
+
+    setShowVerificationModal(false);
+    await resetStudentData(students, teacherId, handleDialog, fetchDataFromSupabase);
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-8xl mx-auto font-['Noto_Sans_Arabic',sans-serif] text-right bg-gray-900 text-gray-100 min-h-screen" dir="rtl">
       <header className="flex flex-col md:flex-row justify-center items-center bg-gray-800 p-4 md:p-6 shadow-lg rounded-xl mb-4 md:mb-8 border border-gray-700 text-center">
@@ -909,9 +1236,9 @@ const handleAddStudent = async () => {
           <button onClick={() => setShowHomeworkCurriculumModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-xs md:text-sm">
             <FaTasks /> الواجبات والمهام
           </button>
-          <button onClick={() => setShowHomeworkModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-xs md:text-sm">
-            <FaPencilAlt /> كشف الواجبات
-          </button>
+<button onClick={() => setShowHomeworkModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-xs md:text-sm">
+  <FaPencilAlt /> كشف الواجبات
+</button>
           <button onClick={() => setShowNotesModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-yellow-500 text-white rounded-lg hover:bg-yellow-400 transition-colors shadow-md text-xs md:text-sm">
             <FaStickyNote /> إدارة الملاحظات
           </button>
@@ -924,8 +1251,8 @@ const handleAddStudent = async () => {
           <button onClick={() => setShowQrList(!showQrList)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 transition-colors shadow-md text-xs md:text-sm">
             <FaQrcode /> {showQrList ? "إخفاء QR" : "عرض QR"}
           </button>
-          <button 
-            onClick={() => setShowTransferDeleteModal(true)} 
+          <button
+            onClick={() => setShowTransferDeleteModal(true)}
             className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-xs md:text-sm"
           >
             <FaUserMinus /> نقل و حذف
@@ -937,10 +1264,22 @@ const handleAddStudent = async () => {
             <FaCalendarTimes /> كشف الغياب
           </button>
           <button
+            onClick={() => setShowBookAbsenceModal(true)}
+            className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-md text-xs md:text-sm"
+          >
+            <FaBookOpen /> كشف الكتب
+          </button>
+          <button
             onClick={() => setShowTroubledStudentsModal(true)}
             className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-500 transition-colors shadow-md text-xs md:text-sm"
           >
             <FaExclamationTriangle /> كشف المتعثرين
+          </button>
+          <button
+            onClick={handleResetDataClick}
+            className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-red-800 text-white rounded-lg hover:bg-red-700 transition-colors shadow-md text-xs md:text-sm"
+          >
+            <FaTimesCircle /> حذف كل الدرجات والملاحظات
           </button>
         </div>
       </div>
@@ -985,7 +1324,7 @@ const handleAddStudent = async () => {
           <button onClick={() => navigate('/')} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-sm">
             <FaHome /> الصفحة الرئيسية
           </button>
-          <button onClick={fetchDataFromLocalStorage} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-sm">
+          <button onClick={fetchDataFromSupabase} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-sm">
             <FaSyncAlt className={isRefreshing ? "animate-spin" : ""} /> تحديث البيانات
           </button>
         </div>
@@ -1006,7 +1345,6 @@ const handleAddStudent = async () => {
           </div>
           <input type="text" placeholder="اسم الطالب" value={newStudent.name} onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <input type="text" placeholder="السجل المدني" value={newStudent.nationalId} onChange={(e) => setNewStudent({ ...newStudent, nationalId: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
-          <input type="text" placeholder="رقم التواصل" value={newStudent.phone} onChange={(e) => setNewStudent({ ...newStudent, phone: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <input type="text" placeholder="رقم ولي الأمر" value={newStudent.parentPhone} onChange={(e) => setNewStudent({ ...newStudent, parentPhone: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <div className="flex flex-col gap-2 mb-4">
             <label className="block text-sm font-medium text-gray-300 text-right">إضافة صورة الطالب:</label>
@@ -1034,7 +1372,6 @@ const handleAddStudent = async () => {
           </div>
           <input type="text" placeholder="اسم الطالب" value={editingStudent.name} onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <input type="text" placeholder="السجل المدني" value={editingStudent.nationalId} onChange={(e) => setEditingStudent({ ...editingStudent, nationalId: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
-          <input type="text" placeholder="رقم التواصل" value={editingStudent.phone || ''} onChange={(e) => setEditingStudent({ ...editingStudent, phone: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <input type="text" placeholder="رقم ولي الأمر" value={editingStudent.parentPhone || ''} onChange={(e) => setEditingStudent({ ...editingStudent, parentPhone: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <div className="flex flex-col gap-2 mb-4">
             <label className="block text-sm font-medium text-gray-300 text-right">تغيير صورة الطالب:</label>
@@ -1065,7 +1402,10 @@ const handleAddStudent = async () => {
             <h3 className="text-xl font-bold mb-4 text-blue-400 text-right">التقاط صورة</h3>
             <video ref={videoRef} autoPlay className="w-full h-auto rounded-lg mb-4 border border-gray-600"></video>
             <canvas ref={canvasRef} className="hidden"></canvas>
-            <div className="flex justify-between gap-4">
+            <div className="flex justify-between gap-4 mt-4">
+               <button onClick={() => setFacingMode(prev => (prev === 'user' ? 'environment' : 'user'))} className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-sm" >
+                   تبديل الكاميرا
+               </button>
               <button onClick={capturePhoto} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors shadow-md text-sm">
                 التقاط
               </button>
@@ -1081,12 +1421,27 @@ const handleAddStudent = async () => {
         <div className="bg-gray-800 p-4 md:p-6 rounded-xl shadow-lg mb-4 md:mb-8 border border-gray-700">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl md:text-2xl font-extrabold text-white text-center">رموز QR للطلاب</h2>
-            <button 
-              onClick={() => handleExportQRCodes()} 
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-md text-sm"
-            >
-              <FaFileWord /> تصدير QR كملف Word
-            </button>
+             <div className="flex items-center gap-4">
+                 <label htmlFor="qr-count" className="text-sm font-medium text-gray-300">
+                     رموز لكل صفحة:
+                 </label>
+                 <select
+                     id="qr-count"
+                     value={qrCodesPerPage}
+                     onChange={(e) => setQrCodesPerPage(Number(e.target.value))}
+                     className="bg-gray-700 text-white text-sm rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500"
+                 >
+                     <option value={1}>1</option>
+                     <option value={9}>9</option>
+                     <option value={12}>12</option>
+                 </select>
+                 <button
+                   onClick={() => handleExportQRCodes()}
+                   className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-md text-xs md:text-sm"
+                 >
+                   <FaFileWord /> تصدير QR كملف Word
+                 </button>
+             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {filteredStudents.map(student => (
@@ -1096,8 +1451,8 @@ const handleAddStudent = async () => {
                   <FaStar className="text-yellow-400" />
                   <span className="text-yellow-400 font-bold">{student.stars || 0}</span>
                 </div>
-                <Link to={student.viewKey} target="_blank" rel="noopener noreferrer">
-                  <StudentQrCode viewKey={student.viewKey} size={150} />
+                <Link to={`/grades/${gradeId}/sections/${sectionId}/students/${student.id}`} target="_blank" rel="noopener noreferrer">
+                  <StudentQrCode viewKey={`/grades/${gradeId}/sections/${sectionId}/students/${student.id}`} size={150} />
                 </Link>
                 <span className="mt-2 text-sm text-gray-400">{student.nationalId}</span>
                 <span className="text-sm text-gray-300">{gradeName} - {sectionName}</span>
@@ -1105,7 +1460,7 @@ const handleAddStudent = async () => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      copyStudentLink(student.viewKey);
+                      copyStudentLink(`/grades/${gradeId}/sections/${sectionId}/students/${student.id}`);
                     }}
                     className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-xs"
                   >
@@ -1137,7 +1492,7 @@ const handleAddStudent = async () => {
               <p className="text-gray-400 text-lg text-center w-full">لا يوجد طلاب في هذا الفصل حاليًا. يمكنك إضافة طالب جديد أو استيراد بيانات.</p>
             ) : (
               filteredStudents.map((student) => (
-                <div key={student.id} onClick={() => setSelectedStudent(student)} className={`flex items-center gap-4 p-4 border rounded-xl w-full sm:w-1/2 md:w-1/3 lg:w-1/4 xl:w-1/5 cursor-pointer transition-all duration-300 transform hover:scale-105 shadow-sm ${selectedStudent?.id === student.id ? "border-blue-500 bg-gray-700 shadow-lg" : "border-gray-700 bg-gray-800 hover:bg-gray-700"}`}>
+                <div key={student.id} onClick={() => handleSelectStudent(student)} className={`flex items-center gap-4 p-4 border rounded-xl w-full sm:w-1/2 md:w-1/3 lg:w-1/4 xl:w-1/5 cursor-pointer transition-all duration-300 transform hover:scale-105 shadow-sm ${selectedStudent?.id === student.id ? "border-blue-500 bg-gray-700 shadow-lg" : "border-gray-700 bg-gray-800 hover:bg-gray-700"}`}>
                   <div className="flex-shrink-0">
                     <img src={student.photo || '/images/1.webp'} alt={student.name} className="w-16 h-16 rounded-full object-cover border-2 border-gray-600" />
                   </div>
@@ -1153,10 +1508,21 @@ const handleAddStudent = async () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          setSelectedStudent(student);
+                          setShowNotesModal(true);
+                        }}
+                        className="text-blue-400 hover:text-blue-300 transition-colors"
+                        title="الملاحظات"
+                      >
+                        <FaStickyNote />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setEditingStudent(student);
                           setShowEditForm(true);
                         }}
-                        className="text-gray-400 hover:text-blue-400 transition-colors"
+                        className="text-yellow-400 hover:text-yellow-300 transition-colors"
                         title="تعديل بيانات الطالب"
                       >
                         <FaPencilAlt />
@@ -1186,7 +1552,6 @@ const handleAddStudent = async () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {/* بطاقة المجموع النهائي */}
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
@@ -1197,14 +1562,13 @@ const handleAddStudent = async () => {
               </div>
             </div>
 
-            {/* بطاقة النجوم */}
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 col-span-1 flex flex-col items-center justify-center">
               <h4 className="font-semibold text-gray-100 text-lg mb-4">النجوم</h4>
               <div className="flex flex-col items-center justify-center w-full">
                 <div className="flex items-center gap-4 mb-4">
                   <div className="flex items-center gap-2">
                     <FaStar className="text-3xl text-yellow-400" />
-                    <span className="text-md font-semibold text-yellow-400">الكلية</span>
+                    <span className="text-md font-semibold text-yellow-400">الحالية</span>
                     <span className="text-lg font-bold text-yellow-400">({selectedStudent.stars || 0})</span>
                   </div>
                   <div className="flex items-center flex-wrap justify-center gap-1">
@@ -1249,12 +1613,11 @@ const handleAddStudent = async () => {
               </div>
             </div>
 
-            {/* بقية بطاقات الدرجات */}
           <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
             <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
               <FaBookOpen className="text-3xl text-red-400" /> الاختبارات
               <span className="text-red-400 font-bold mr-2 text-2xl">
-                {calculateCategoryScore(selectedStudent.grades, 'tests', 'best')} / 15
+                {calculateCategoryScore(selectedStudent.grades, 'tests', testCalculationMethod)} / 15
               </span>
             </h4>
                         <div className="flex items-center gap-2 mb-2">
@@ -1264,23 +1627,9 @@ const handleAddStudent = async () => {
                 ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'test').text})
               </span>
             </div>
-              <div className="flex gap-2 mb-3 text-sm">
-                <button
-                  onClick={() => handleTestCalculationMethodChange('best')}
-                  className={`px-3 py-1 rounded-lg transition-colors ${testCalculationMethod === 'best' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}
-                >
-                  أحسن درجة
-                </button>
-                <button
-                  onClick={() => handleTestCalculationMethodChange('average')}
-                  className={`px-3 py-1 rounded-lg transition-colors ${testCalculationMethod === 'average' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}
-                >
-                  المتوسط
-                </button>
-              </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.tests.slice(0, 2).map((grade, i) => (
-                  <input key={i} type="number" min="0" max="15" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  <input key={i} type="number" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
                 ))}
               </div>
             </div>
@@ -1291,7 +1640,7 @@ const handleAddStudent = async () => {
               </h4>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.oralTest.slice(0, 5).map((grade, i) => (
-                  <input key={i} type="number" min="0" max="5" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "oralTest", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
+                  <input key={i} type="number" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "oralTest", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
                 ))}
               </div>
             </div>
@@ -1300,7 +1649,7 @@ const handleAddStudent = async () => {
             <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
               <FaTasks className="text-3xl text-green-400" /> الواجبات
               <span className="text-green-400 font-bold mr-2 text-2xl">
-                {calculateCategoryScore(selectedStudent.grades, 'homework', 'average')} / 10
+                {calculateCategoryScore(selectedStudent.grades, 'homework', 'sum')} / 10
               </span>
             </h4>
             <div className="flex items-center gap-2 mb-2">
@@ -1312,7 +1661,7 @@ const handleAddStudent = async () => {
             </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.homework.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="number" min="0" max="1" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <input key={i} type="number" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 ))}
               </div>
             </div>
@@ -1333,15 +1682,13 @@ const handleAddStudent = async () => {
             </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.performanceTasks.slice(0, 3).map((grade, i) => (
-                  <input 
-                    key={i} 
-                    type="number" 
-                    min="0" 
-                    max="5"
-                    placeholder="--" 
-                    value={grade === null ? '' : grade} 
-                    onChange={(e) => updateStudentGrade(selectedStudent.id, "performanceTasks", i, e.target.value)} 
-                    className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-500" 
+                  <input
+                    key={i}
+                    type="number"
+                    placeholder="--"
+                    value={grade === null ? '' : grade}
+                    onChange={(e) => updateStudentGrade(selectedStudent.id, "performanceTasks", i, e.target.value)}
+                    className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
                 ))}
               </div>
@@ -1353,7 +1700,7 @@ const handleAddStudent = async () => {
               </h4>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.participation.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="number" min="0" max="1" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  <input key={i} type="number" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                 ))}
               </div>
             </div>
@@ -1380,8 +1727,6 @@ const handleAddStudent = async () => {
                       <input
                         key={i}
                         type="number"
-                        min="0"
-                        max="10"
                         placeholder="--"
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranRecitation", i, e.target.value)}
@@ -1404,8 +1749,6 @@ const handleAddStudent = async () => {
                       <input
                         key={i}
                         type="number"
-                        min="0"
-                        max="5"
                         placeholder="--"
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranMemorization", i, e.target.value)}
@@ -1426,17 +1769,17 @@ const handleAddStudent = async () => {
       إدارة الملاحظات
     </button>
   </div>
-  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 max-h-96 overflow-y-auto">
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 max-h-96 overflow-y-auto">
     {(selectedStudent.grades.weeklyNotes || []).map((notes, weekIndex) => (
       <div key={weekIndex} className="bg-gray-800 p-3 rounded-lg border border-gray-600 min-h-[120px] relative">
         <h5 className="font-bold text-gray-200 mb-1 text-center">الأسبوع {weekIndex + 1}</h5>
         <div className="h-px bg-gray-600 mb-2"></div>
         {notes && notes.length > 0 ? (
-          <ul className="list-disc pr-4 text-gray-300 text-sm space-y-1">
+          <ul className="list-none pr-0 text-gray-300 text-sm space-y-1">
             {notes.map((note, noteIndex) => (
-              <li key={noteIndex} className="pb-1 flex justify-between items-start">
+              <li key={noteIndex} className="pb-1 flex justify-between items-start border-b border-gray-700 last:border-b-0">
                 <span>{note}</span>
-                <button 
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDeleteNote(selectedStudent.id, weekIndex, noteIndex);
@@ -1454,9 +1797,9 @@ const handleAddStudent = async () => {
         )}
       </div>
     ))}
-              </div>
-            </div>
-          </div>
+  </div>
+</div>
+</div>
         </div>
       )}
 
@@ -1468,7 +1811,6 @@ const handleAddStudent = async () => {
         <FaArrowUp />
       </button>
 
-      {/* المكونات المنبثقة */}
       {showNotesModal && (
         <NotesModal
           students={students}
@@ -1499,18 +1841,12 @@ const handleAddStudent = async () => {
 
       {showCurriculumModal && (
         <CurriculumModal
-          curriculum={curriculum}
-          onClose={() => setShowCurriculumModal(false)}
-          onSave={updateCurriculumData}
-        />
-      )}
-
-      {showHomeworkModal && (
-        <HomeworkModal
-          students={students}
-          homeworkCurriculum={homeworkCurriculum}
-          onClose={() => setShowHomeworkModal(false)}
-          onSave={updateStudentsData}
+          gradeId={gradeId}
+          sectionId={sectionId}
+          onClose={() => {
+            setShowCurriculumModal(false);
+            fetchDataFromSupabase();
+          }}
         />
       )}
 
@@ -1527,9 +1863,12 @@ const handleAddStudent = async () => {
 
       {showHomeworkCurriculumModal && (
         <HomeworkCurriculumModal
-          homeworkCurriculum={homeworkCurriculum}
-          onClose={() => setShowHomeworkCurriculumModal(false)}
-          onSave={updateHomeworkCurriculumData}
+          gradeId={gradeId}
+          sectionId={sectionId}
+          onClose={() => {
+            setShowHomeworkCurriculumModal(false);
+            fetchDataFromSupabase();
+          }}
         />
       )}
 
@@ -1564,7 +1903,6 @@ const handleAddStudent = async () => {
           schoolName={schoolName}
           teacherName={teacherName}
           currentSemester={currentSemester}
-          testCalculationMethod={testCalculationMethod}
           handleTestCalculationMethodChange={handleTestCalculationMethodChange}
         />
       )}
@@ -1588,14 +1926,29 @@ const handleAddStudent = async () => {
           handleDialog={handleDialog}
           gradeId={gradeId}
           sectionId={sectionId}
+          teacherId={teacherId}
         />
       )}
 
       {showAbsenceModal && (
         <AbsenceModal
           students={students}
-          onClose={() => setShowAbsenceModal(false)}
+          onClose={() => {
+            setShowAbsenceModal(false);
+            fetchDataFromSupabase();
+          }}
           onSave={updateAbsenceData}
+        />
+      )}
+
+      {showBookAbsenceModal && (
+        <BookAbsenceModal
+          students={students}
+          onClose={() => {
+            setShowBookAbsenceModal(false);
+            fetchDataFromSupabase();
+          }}
+          onSave={updateBookAbsenceData}
         />
       )}
 
@@ -1618,12 +1971,25 @@ const handleAddStudent = async () => {
           sectionName={sectionName}
         />
       )}
+
+{showHomeworkModal && (
+  <HomeworkModal
+    students={students}
+    onClose={() => setShowHomeworkModal(false)}
+    onSave={updateStudentsData}
+    homeworkCurriculum={homeworkCurriculum}
+  />
+)}
+
+      {showVerificationModal && (
+        <VerificationModal
+          onClose={() => setShowVerificationModal(false)}
+          onVerificationSuccess={onVerificationSuccess}
+          teacherId={teacherId}
+        />
+      )}
     </div>
   );
 };
 
-
 export default SectionGrades;
-
-
-

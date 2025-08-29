@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@fontsource/tajawal": "^5.2.6",
+    "@supabase/supabase-js": "^2.56.0",
     "docx": "^9.5.1",
     "file-saver": "^2.0.5",
     "firebase": "^9.23.0",
@@ -12,9 +13,9 @@
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
+    "react-device-detect": "^2.2.3",
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
-    "react-device-detect": "^2.2.3",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.5.0",

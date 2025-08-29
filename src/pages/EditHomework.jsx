@@ -1,8 +1,7 @@
 // src/pages/EditHomework.jsx
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { db } from "../firebase";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { supabase } from "../supabaseClient"; // تم تعديل هذا السطر
 
 const EditHomework = () => {
   const { gradeId, classId } = useParams();
@@ -14,19 +13,26 @@ const EditHomework = () => {
     async function fetchStudents() {
       setLoading(true);
       try {
-        const snapshot = await getDocs(
-          collection(db, `grades/${gradeId}/classes/${classId}/students`)
-        );
-        const data = snapshot.docs.map((docSnap) => {
-          return {
-            id: docSnap.id,
-            ...docSnap.data(),
-            homework: docSnap.data().homework || Array(11).fill(0),
-          };
-        });
-        setStudents(data);
+        // جلب الطلاب من جدول 'students' بناءً على gradeId و classId
+        const { data, error } = await supabase
+          .from("students")
+          .select("id, name, homework") // جلب فقط الأعمدة التي تحتاجها
+          .eq("grade_id", gradeId)
+          .eq("class_id", classId);
+
+        if (error) {
+          console.error("خطأ في جلب بيانات الطلاب:", error);
+          return;
+        }
+
+        const studentList = data.map((student) => ({
+          ...student,
+          homework: student.homework || Array(11).fill(0),
+        }));
+
+        setStudents(studentList);
       } catch (error) {
-        console.error("Error fetching students:", error);
+        console.error("خطأ في جلب بيانات الطلاب:", error);
       } finally {
         setLoading(false);
       }
@@ -40,8 +46,8 @@ const EditHomework = () => {
         stu.id === studentId
           ? {
               ...stu,
-              homework: stu.homework.map((val, i) =>
-                i === index ? Math.min(Math.max(Number(value), 0), 1) : val
+              homework: stu.homework.map((score, idx) =>
+                idx === index ? Number(value) : score
               ),
             }
           : stu
@@ -50,53 +56,39 @@ const EditHomework = () => {
   };
 
   const handleSave = async (studentId) => {
-    const student = students.find((stu) => stu.id === studentId);
-    if (!student) return;
-    
     try {
-      const studentRef = doc(
-        db,
-        `grades/${gradeId}/classes/${classId}/students`,
-        studentId
-      );
-      await updateDoc(studentRef, {
-        homework: student.homework,
-      });
-      setSuccess(`تم حفظ درجات الواجبات للطالب ${student.name}`);
-      setTimeout(() => setSuccess(''), 3000);
+      const studentToSave = students.find((s) => s.id === studentId);
+      if (!studentToSave) return;
+
+      // تحديث حقل homework للطالب في قاعدة البيانات
+      const { error } = await supabase
+        .from("students")
+        .update({ homework: studentToSave.homework })
+        .eq("id", studentId);
+
+      if (error) {
+        console.error("خطأ في حفظ الواجبات:", error);
+        return;
+      }
+      
+      setSuccess("تم حفظ الواجبات بنجاح!");
+      setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error("Error saving homework:", error);
+      console.error("خطأ في حفظ الواجبات:", error);
     }
   };
 
-  if (loading) return (
-    <div className="flex justify-center items-center h-64">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-    </div>
-  );
-
   return (
-    <div className="container mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold mb-6 text-primary">
+    <div className="bg-gray-100 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right p-8">
+      <div className="max-w-7xl mx-auto bg-white rounded-xl shadow-lg p-6">
+        <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">
           تعديل درجات الواجبات
-          <span className="block text-lg text-gray-600 mt-1">
-            الصف {gradeId} - الفصل {classId}
-          </span>
-        </h2>
-        
+        </h1>
+
+        {loading && <p className="text-center text-lg text-gray-600">جاري التحميل...</p>}
         {success && (
-          <div className="mb-4 bg-green-100 border-l-4 border-green-500 p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-green-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-green-700">{success}</p>
-              </div>
-            </div>
+          <div className="bg-green-100 border-r-4 border-green-500 text-green-700 p-4 mb-4 rounded-md shadow">
+            {success}
           </div>
         )}
 
@@ -104,25 +96,42 @@ const EditHomework = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">اسم الطالب</th>
-                {[...Array(10)].map((_, i) => (
-                  <th key={i} className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    واجب {i + 1}
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wider"
+                >
+                  الاسم
+                </th>
+                {Array.from({ length: 11 }, (_, i) => i + 1).map((num) => (
+                  <th
+                    key={num}
+                    scope="col"
+                    className="px-6 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wider"
+                  >
+                    واجب {num}
                   </th>
                 ))}
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">المجموع</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">حفظ</th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-sm font-semibold text-gray-500 uppercase tracking-wider text-center"
+                >
+                  المجموع
+                </th>
+                <th scope="col" className="relative px-6 py-3">
+                  <span className="sr-only">تعديل</span>
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {students.map((stu) => {
-                const totalHomework = stu.homework.slice(0, 10).reduce((a, b) => a + b, 0);
+                const totalHomework = stu.homework.reduce((sum, current) => sum + current, 0);
+
                 return (
-                  <tr key={stu.id}>
+                  <tr key={stu.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       {stu.name}
                     </td>
-                    {stu.homework.slice(0, 10).map((score, idx) => (
+                    {stu.homework.slice(0, 11).map((score, idx) => (
                       <td key={idx} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
                         <input
                           type="number"

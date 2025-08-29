@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../firebase';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { supabase } from '../supabaseClient'; // تم تعديل هذا السطر
+
 
 const EditParticipation = () => {
   const [students, setStudents] = useState([]);

@@ -1,39 +1,21 @@
 // src/services/gradeService.js
-import { db, ref, set, push, update, onValue, remove } from "../firebase";
-
-// هيكل البيانات الأساسي
-const initialDataStructure = {
-  grades: {
-    "first-intermediate": {
-      sections: {}
-    },
-    "second-intermediate": {
-      sections: {}
-    },
-    "third-intermediate": {
-      sections: {}
-    }
-  }
-};
-
-// تهيئة البيانات الأولية
-export const initializeData = async () => {
-  try {
-    await set(ref(db, '/'), initialDataStructure);
-  } catch (error) {
-    console.error("Error initializing data:", error);
-  }
-};
+import { supabase } from "../supabaseClient";
 
 // إضافة فصل جديد
 export const addSection = async (gradeId, sectionName) => {
   try {
-    const sectionRef = push(ref(db, `grades/${gradeId}/sections`));
-    await set(sectionRef, {
-      name: sectionName,
-      students: {}
-    });
-    return sectionRef.key;
+    const { data, error } = await supabase
+      .from("sections")
+      .insert([
+        {
+          name: sectionName,
+          grade_id: gradeId,
+        },
+      ])
+      .select();
+
+    if (error) throw error;
+    return data[0].id; // إرجاع الـ ID الخاص بالفصل الجديد
   } catch (error) {
     console.error("Error adding section:", error);
     throw error;
@@ -43,23 +25,30 @@ export const addSection = async (gradeId, sectionName) => {
 // إضافة طالب جديد
 export const addStudent = async (gradeId, sectionId, studentData) => {
   try {
-    const studentRef = push(ref(db, `grades/${gradeId}/sections/${sectionId}/students`));
     const studentWithDefaults = {
       ...studentData,
+      grade_id: gradeId,
+      section_id: sectionId,
       grades: {
-        tests: [0, 0],
+        tests: Array(5).fill(0),
         homework: Array(10).fill(0),
         participation: Array(10).fill(0),
         performanceTasks: 0,
         quranRecitation: Array(4).fill(0),
         quranMemorization: Array(4).fill(0),
         oralTest: Array(5).fill(0),
-        weeklyNotes: Array(16).fill("")
+        weeklyNotes: Array(16).fill(""),
       },
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
-    await set(studentRef, studentWithDefaults);
-    return studentRef.key;
+
+    const { data, error } = await supabase
+      .from("students")
+      .insert([studentWithDefaults])
+      .select();
+
+    if (error) throw error;
+    return data[0].id; // إرجاع الـ ID الخاص بالطالب الجديد
   } catch (error) {
     console.error("Error adding student:", error);
     throw error;
@@ -69,7 +58,12 @@ export const addStudent = async (gradeId, sectionId, studentData) => {
 // تحديث درجات الطالب
 export const updateStudentGrades = async (gradeId, sectionId, studentId, grades) => {
   try {
-    await update(ref(db, `grades/${gradeId}/sections/${sectionId}/students/${studentId}/grades`), grades);
+    const { data, error } = await supabase
+      .from("students")
+      .update({ grades: grades })
+      .eq("id", studentId);
+
+    if (error) throw error;
   } catch (error) {
     console.error("Error updating grades:", error);
     throw error;
@@ -77,19 +71,63 @@ export const updateStudentGrades = async (gradeId, sectionId, studentId, grades)
 };
 
 // جلب جميع الفصول لصف معين
-export const getSections = (gradeId, callback) => {
-  const sectionsRef = ref(db, `grades/${gradeId}/sections`);
-  return onValue(sectionsRef, (snapshot) => {
-    const data = snapshot.val() || {};
-    callback(Object.keys(data).map(key => ({ id: key, ...data[key] })));
-  });
+export const getSections = async (gradeId) => {
+  try {
+    const { data, error } = await supabase
+      .from("sections")
+      .select("*")
+      .eq("grade_id", gradeId);
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("Error fetching sections:", error);
+    throw error;
+  }
 };
 
 // جلب جميع الطلاب لفصل معين
-export const getStudents = (gradeId, sectionId, callback) => {
-  const studentsRef = ref(db, `grades/${gradeId}/sections/${sectionId}/students`);
-  return onValue(studentsRef, (snapshot) => {
-    const data = snapshot.val() || {};
-    callback(Object.keys(data).map(key => ({ id: key, ...data[key] })));
-  });
+export const getStudents = async (gradeId, sectionId) => {
+  try {
+    const { data, error } = await supabase
+      .from("students")
+      .select("*")
+      .eq("grade_id", gradeId)
+      .eq("section_id", sectionId);
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("Error fetching students:", error);
+    throw error;
+  }
+};
+
+// جلب طالب واحد بواسطة الـ ID
+export const getStudentById = async (gradeId, sectionId, studentId) => {
+  try {
+    const { data, error } = await supabase
+      .from("students")
+      .select("*")
+      .eq("id", studentId)
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("Error fetching student:", error);
+    throw error;
+  }
+};
+
+// حذف طالب
+export const deleteStudent = async (gradeId, sectionId, studentId) => {
+  try {
+    const { error } = await supabase.from("students").delete().eq("id", studentId);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error("Error deleting student:", error);
+    throw error;
+  }
 };

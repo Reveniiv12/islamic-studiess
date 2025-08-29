@@ -12,7 +12,7 @@ import StudentGrades from "./pages/StudentGrades";
 import StudentView from "./pages/StudentView";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { auth } from "./firebase";
+import { supabase } from "./supabaseClient"; 
 import Portfolio from "./pages/Portfolio";
 import PortfolioPublic from "./pages/PortfolioPublic";
 
@@ -40,7 +40,10 @@ export default function App() {
             {/* صفحة إنشاء حساب جديد */}
             <Route path="/register" element={<Register />} />
 
-            {/* صفحة الفصول الدراسية */}
+            {/* صفحة درجات الطالب العامة (بدون حماية) */}
+            <Route path="/student-grades/:id" element={<StudentGradesPublic />} />
+
+            {/* مسار الصفوف */}
             <Route
               path="/grades/:gradeId"
               element={
@@ -49,8 +52,8 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-
-            {/* عرض درجات فصل معين */}
+            
+            {/* مسار صفحة درجات الفصل */}
             <Route
               path="/grades/:gradeId/sections/:sectionId"
               element={
@@ -70,7 +73,7 @@ export default function App() {
               }
             />
 
-            {/* عرض قائمة الطلاب لفصل معين (المسار الجديد مع gradeId + classId) */}
+            {/* عرض قائمة الطلاب لفصل معين */}
             <Route
               path="/grades/:gradeId/sections/:sectionId/students"
               element={

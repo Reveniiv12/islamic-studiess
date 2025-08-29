@@ -1,7 +1,6 @@
 // src/pages/AddStudent.jsx
 import React, { useState } from "react";
-import { collection, addDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase } from "../supabaseClient"; // تم إضافة هذا السطر
 import { v4 as uuidv4 } from "uuid";
 
 const AddStudent = () => {
@@ -15,16 +14,27 @@ const AddStudent = () => {
     e.preventDefault();
     try {
       const viewKey = uuidv4();
-      const docRef = await addDoc(collection(db, "students"), {
-        name,
-        nationalId,
-        phone,
-        imageUrl,
-        viewKey,
-        grades: {},
-      });
+      
+      const { data, error } = await supabase
+        .from('students') // اسم الجدول المقابل للمجموعة
+        .insert([
+          { 
+            name, 
+            national_id: nationalId, // ملاحظة: يفضل استخدام snake_case في Supabase
+            phone, 
+            image_url: imageUrl, 
+            view_key: viewKey,
+            grades: {}, // إذا كان grades كائنًا JSON
+          }
+        ]);
 
-      const studentLink = `${window.location.origin}/student/${viewKey}`;
+      if (error) {
+        console.error("خطأ أثناء إضافة الطالب:", error);
+        setMessage("حدث خطأ أثناء الإضافة، حاول مرة أخرى.");
+        return;
+      }
+      
+      const studentLink = `${window.location.origin}/student-grades/${viewKey}`;
       setMessage(`تم إضافة الطالب بنجاح! رابط الطالب: ${studentLink}`);
 
       setName("");
@@ -53,7 +63,39 @@ const AddStudent = () => {
           />
         </div>
         
-        {/* باقي الحقول بنفس النمط */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">الرقم الوطني/الإقامة</label>
+          <input
+            type="text"
+            placeholder="الرقم الوطني/الإقامة"
+            value={nationalId}
+            onChange={(e) => setNationalId(e.target.value)}
+            required
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">رقم الهاتف</label>
+          <input
+            type="tel"
+            placeholder="رقم الهاتف"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">رابط صورة الطالب</label>
+          <input
+            type="url"
+            placeholder="رابط الصورة"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
         
         <button
           type="submit"
@@ -64,7 +106,7 @@ const AddStudent = () => {
       </form>
       
       {message && (
-        <div className={`mt-4 p-3 rounded-md ${message.includes("نجاح") ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+        <div className="mt-4 p-4 rounded-md bg-green-100 text-green-700 border border-green-200">
           {message}
         </div>
       )}

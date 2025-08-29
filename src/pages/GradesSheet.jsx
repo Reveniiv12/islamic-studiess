@@ -1,5 +1,8 @@
 // src/pages/GradesSheet.jsx
 import React from 'react';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, HeadingLevel, AlignmentType, PageOrientation } from "docx";
 
 const StarIcon = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
@@ -32,6 +35,79 @@ const GradesSheet = ({
             </th>
         ));
     };
+    
+    const handleExportToExcel = () => {
+        const worksheet = XLSX.utils.json_to_sheet([]);
+        const workbook = XLSX.utils.book_new();
+
+        // Define the full set of headers in the correct order (right-to-left)
+        const headers = [
+            'النجوم',
+            'المجموع (60)',
+            ...students[0].grades.quranMemorization.map((_, i) => `حفظ القرآن (${i + 1})`).reverse(),
+            ...students[0].grades.quranRecitation.map((_, i) => `تلاوة القرآن (${i + 1})`).reverse(),
+            ...students[0].grades.performanceTasks.map((_, i) => `المهام الأدائية (${i + 1})`).reverse(),
+            ...students[0].grades.participation.map((_, i) => `المشاركات (${i + 1})`).reverse(),
+            ...students[0].grades.homework.map((_, i) => `الواجبات (${i + 1})`).reverse(),
+            ...students[0].grades.oralTest.map((_, i) => `الشفوي (${i + 1})`).reverse(),
+            ...students[0].grades.tests.map((_, i) => `الاختبارات (${i + 1})`).reverse(),
+            'الاسم'
+        ];
+
+        // Prepare student data as an array of arrays to ensure order
+        const studentData = students.map(student => {
+            const rowData = [
+                student.stars || 0,
+                calculateTotalScore(student.grades),
+                ...student.grades.quranMemorization.reverse(),
+                ...student.grades.quranRecitation.reverse(),
+                ...student.grades.performanceTasks.reverse(),
+                ...student.grades.participation.reverse(),
+                ...student.grades.homework.reverse(),
+                ...student.grades.oralTest.reverse(),
+                ...student.grades.tests.reverse(),
+                student.name
+            ];
+            return rowData;
+        });
+
+        // Add headers and data to the worksheet
+        XLSX.utils.sheet_add_aoa(worksheet, [headers], { origin: 'A8' });
+        XLSX.utils.sheet_add_aoa(worksheet, studentData, { origin: 'A9' });
+        
+        // Add column widths
+        const maxNameLength = Math.max(...students.map(s => s.name.length), 'الاسم'.length);
+        const wscols = headers.map(header => {
+            let wch = header.length + 5;
+            if (header === 'الاسم') {
+                wch = maxNameLength + 5;
+            }
+            return { wch: wch };
+        });
+        worksheet['!cols'] = wscols;
+
+        // Add metadata to the sheet right above the 'الاسم' column
+        const metadata = [
+            ['', 'كشف الدرجات الشامل'],
+            ['المدرسة:', schoolName],
+            ['المعلم:', teacherName],
+            ['الفصل الدراسي:', currentSemester],
+            ['الصف:', gradeName],
+            ['الفصل:', sectionName]
+        ].map(row => row.reverse()); // Reverse for proper RTL display
+
+        const numColumns = headers.length;
+        const originCol = XLSX.utils.encode_col(numColumns - 2); // Get the column just before 'الاسم'
+        XLSX.utils.sheet_add_aoa(worksheet, metadata, { origin: `${originCol}1` });
+        
+        // Finalize workbook
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Grades');
+        
+        // Export file
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const dataBlob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        saveAs(dataBlob, 'كشف-الدرجات-الشامل.xlsx');
+    };
 
     return (
         <div className="bg-gray-800 p-4 md:p-8 rounded-xl shadow-lg mt-4 md:mt-6 overflow-auto border border-gray-700 max-h-[80vh]">
@@ -39,18 +115,27 @@ const GradesSheet = ({
             <h3 className="text-xl md:text-2xl font-bold text-blue-400 text-right mb-4">كشف الدرجات الشامل</h3>
             <p className="text-gray-400 mb-4">{schoolName} | {teacherName} | {currentSemester}</p>
 
-            <div className="flex gap-2 mb-4 text-sm">
-                <span className="text-gray-400 self-center">طريقة حساب الاختبارات:</span>
-                <button
-                    onClick={() => handleTestCalculationMethodChange('best')}
-                    className={`px-3 py-1 rounded-lg transition-colors ${testCalculationMethod === 'best' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}>
-                    أحسن درجة
-                </button>
-                <button
-                    onClick={() => handleTestCalculationMethodChange('average')}
-                    className={`px-3 py-1 rounded-lg transition-colors ${testCalculationMethod === 'average' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}>
-                    المتوسط
-                </button>
+            <div className="flex gap-2 mb-4 text-sm justify-between">
+                <div className="flex gap-2 text-sm">
+                    <span className="text-gray-400 self-center">طريقة حساب الاختبارات:</span>
+                    <button
+                        onClick={() => handleTestCalculationMethodChange('best')}
+                        className={`px-3 py-1 rounded-lg transition-colors ${testCalculationMethod === 'best' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}>
+                        أحسن درجة
+                    </button>
+                    <button
+                        onClick={() => handleTestCalculationMethodChange('average')}
+                        className={`px-3 py-1 rounded-lg transition-colors ${testCalculationMethod === 'average' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}>
+                        المتوسط
+                    </button>
+                </div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleExportToExcel}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        تصدير Excel
+                    </button>
+                </div>
             </div>
 
             {/* الجدول RTL */}

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
-import { auth } from "../firebase";
+// لم يعد هناك حاجة إلى استدعاء signOut بشكل مستقل، فهو ضمن supabase.auth
 import { FaSignOutAlt, FaHome } from "react-icons/fa";
+import { supabase } from "../supabaseClient"; // تم تعديل هذا السطر
 
 const Navbar = () => {
     const navigate = useNavigate();
@@ -19,8 +19,13 @@ const Navbar = () => {
 
     const handleLogout = async () => {
         try {
-            await signOut(auth);
-            navigate("/");
+            const { error } = await supabase.auth.signOut(); // تم تعديل هذا السطر
+            if (error) {
+                console.error("Logout Error:", error);
+                alert("فشل تسجيل الخروج، الرجاء المحاولة مرة أخرى.");
+            } else {
+                navigate("/login"); // إعادة توجيه المستخدم إلى صفحة تسجيل الدخول
+            }
         } catch (error) {
             console.error("Logout Error:", error);
             alert("فشل تسجيل الخروج، الرجاء المحاولة مرة أخرى.");
@@ -49,7 +54,7 @@ const Navbar = () => {
                     className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md"
                 >
                     <FaSignOutAlt />
-                    تسجيل الخروج
+                    تسجيل خروج
                 </button>
             </div>
         </nav>

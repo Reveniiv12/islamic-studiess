@@ -4,9 +4,8 @@ import { FaBookOpen, FaStickyNote, FaSave, FaTimes, FaCheckCircle, FaTimesCircle
 import { getRecitationStatus, getHijriToday, compareHijriDates } from '../utils/recitationUtils';
 
 const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
-    const [mode, setMode] = useState('recitation'); // 'recitation' or 'note'
+    const [mode, setMode] = useState('note'); // 'recitation' or 'note'
     const [recitationType, setRecitationType] = useState('memorization');
-    const [gradeValue, setGradeValue] = useState(10);
     
     // States for notes
     const [noteType, setNoteType] = useState('custom'); // 'custom' or 'template'
@@ -95,30 +94,7 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
                 let studentRecord = {};
                 let updatedGrades = { ...student.grades };
                 
-                if (mode === 'recitation') {
-                    const gradesKey = recitationType === 'memorization' ? 'quranMemorization' : 'quranRecitation';
-                    const gradesArray = [...(student.grades[gradesKey] || [])];
-                    const relevantCurriculum = curriculum
-                        .filter(c => c.type === recitationType)
-                        .sort((a, b) => compareHijriDates(a.dueDate, b.dueDate));
-
-                    const nextPartIndex = gradesArray.findIndex(grade => grade === null);
-
-                    if (nextPartIndex !== -1 && relevantCurriculum[nextPartIndex]) {
-                        const currentPart = relevantCurriculum[nextPartIndex];
-                        studentRecord = {
-                            date: today,
-                            part: `${currentPart.start} - ${currentPart.end}`,
-                            type: recitationType,
-                            grade: gradeValue,
-                            note: ''
-                        };
-                        updatedGrades = { ...student.grades, [gradesKey]: [...gradesArray] };
-                        updatedGrades[gradesKey][nextPartIndex] = gradeValue;
-                    } else {
-                        return student; // No parts to grade
-                    }
-                } else if (mode === 'note') {
+                if (mode === 'note') {
                     const noteText = noteType === 'custom'
                         ? customNote
                         : noteTemplates.find(t => t.id === selectedTemplate)?.text || '';
@@ -158,7 +134,6 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
 
     const isSaveDisabled = () => {
         if (selectedStudents.length === 0) return true;
-        if (mode === 'recitation' && (!gradeValue && gradeValue !== 0)) return true;
         if (mode === 'note' && noteType === 'custom' && !customNote.trim()) return true;
         if (mode === 'note' && noteType === 'template' && !selectedTemplate) return true;
         return false;
@@ -315,88 +290,74 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
 
                     {/* Action Section */}
                     <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-                        <h4 className="text-lg font-bold mb-4 text-gray-100">{mode === 'recitation' ? 'تسجيل درجة' : 'إضافة ملاحظة'}</h4>
-                        {mode === 'recitation' ? (
+                        <h4 className="text-lg font-bold mb-4 text-gray-100">إضافة ملاحظة</h4>
+                        <>
                             <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-300 mb-2">درجة التسميع (1-10)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="10"
-                                    value={gradeValue}
-                                    onChange={(e) => setGradeValue(Number(e.target.value))}
-                                    className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                        ) : (
-                            <>
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">نوع الملاحظة</label>
-                                    <div className="flex gap-4">
-                                        <label className="flex items-center text-gray-100">
-                                            <input
-                                                type="radio"
-                                                name="noteType"
-                                                value="custom"
-                                                checked={noteType === 'custom'}
-                                                onChange={() => setNoteType('custom')}
-                                                className="accent-blue-500 ml-2"
-                                            />
-                                            ملاحظة مخصصة
-                                        </label>
-                                        <label className="flex items-center text-gray-100">
-                                            <input
-                                                type="radio"
-                                                name="noteType"
-                                                value="template"
-                                                checked={noteType === 'template'}
-                                                onChange={() => setNoteType('template')}
-                                                className="accent-blue-500 ml-2"
-                                            />
-                                            قالب جاهز
-                                        </label>
-                                    </div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">نوع الملاحظة</label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center text-gray-100">
+                                        <input
+                                            type="radio"
+                                            name="noteType"
+                                            value="custom"
+                                            checked={noteType === 'custom'}
+                                            onChange={() => setNoteType('custom')}
+                                            className="accent-blue-500 ml-2"
+                                        />
+                                        ملاحظة مخصصة
+                                    </label>
+                                    <label className="flex items-center text-gray-100">
+                                        <input
+                                            type="radio"
+                                            name="noteType"
+                                            value="template"
+                                            checked={noteType === 'template'}
+                                            onChange={() => setNoteType('template')}
+                                            className="accent-blue-500 ml-2"
+                                        />
+                                        قالب جاهز
+                                    </label>
                                 </div>
-                                {noteType === 'custom' ? (
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-gray-300 mb-2">ملاحظة مخصصة</label>
-                                        <textarea
-                                            value={customNote}
-                                            onChange={(e) => setCustomNote(e.target.value)}
-                                            placeholder="اكتب ملاحظة..."
-                                            rows="4"
-                                            className="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        ></textarea>
-                                    </div>
-                                ) : (
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-gray-300 mb-2">قالب ملاحظة جاهز</label>
-                                        <select
-                                            value={selectedTemplate}
-                                            onChange={(e) => setSelectedTemplate(e.target.value)}
-                                            className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        >
-                                            <option value="">اختر قالباً...</option>
-                                            {noteTemplates.map(t => (
-                                                <option key={t.id} value={t.id}>{t.text}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
+                            </div>
+                            {noteType === 'custom' ? (
                                 <div className="mb-4">
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">الأسبوع</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">ملاحظة مخصصة</label>
+                                    <textarea
+                                        value={customNote}
+                                        onChange={(e) => setCustomNote(e.target.value)}
+                                        placeholder="اكتب ملاحظة..."
+                                        rows="4"
+                                        className="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    ></textarea>
+                                </div>
+                            ) : (
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">قالب ملاحظة جاهز</label>
                                     <select
-                                        value={weekIndex}
-                                        onChange={(e) => setWeekIndex(Number(e.target.value))}
+                                        value={selectedTemplate}
+                                        onChange={(e) => setSelectedTemplate(e.target.value)}
                                         className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
-                                        {Array(20).fill().map((_, i) => (
-                                            <option key={i} value={i}>الأسبوع {i + 1}</option>
+                                        <option value="">اختر قالباً...</option>
+                                        {noteTemplates.map(t => (
+                                            <option key={t.id} value={t.id}>{t.text}</option>
                                         ))}
                                     </select>
                                 </div>
-                            </>
-                        )}
+                            )}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-300 mb-2">الأسبوع</label>
+                                <select
+                                    value={weekIndex}
+                                    onChange={(e) => setWeekIndex(Number(e.target.value))}
+                                    className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    {Array(20).fill().map((_, i) => (
+                                        <option key={i} value={i}>الأسبوع {i + 1}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </>
                         <div className="flex gap-2 justify-end">
                             <button
                                 onClick={handleSave}

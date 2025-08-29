@@ -1,8 +1,8 @@
-// src/components/AbsenceModal.jsx
+// src/components/BookAbsenceModal.jsx
 
 import React, { useState, useMemo } from 'react';
 import {
-  FaCalendarTimes,
+  FaBookOpen,
   FaSave,
   FaTimes,
   FaSearch,
@@ -10,32 +10,28 @@ import {
   FaTimesCircle
 } from 'react-icons/fa';
 
-const AbsenceModal = ({ students, onClose, onSave }) => {
+const BookAbsenceModal = ({ students, onClose, onSave }) => {
   const startDate = new Date('2024-09-01');
 
   // دالة للحصول على التاريخ الهجري لليوم الحالي بتنسيق مختصر (يوم/شهر)
   const getHijriTodayShort = () => {
     const date = new Date();
-    // استخدام 'ar-SA-u-ca-islamic' للحصول على التاريخ الهجري
-    // ثم تقسيمه للحصول على اليوم والشهر
     const hijriDateParts = date.toLocaleDateString('ar-SA-u-ca-islamic', {
       day: 'numeric',
       month: 'numeric',
-      year: 'numeric' // نحتاج السنة للحصول على تاريخ صحيح ثم إزالتها
+      year: 'numeric'
     }).split('/');
     
-    // التأكد من أن اليوم والشهر موجودان
     if (hijriDateParts.length >= 2) {
-      // إرجاع اليوم/الشهر، ويمكنك التعديل هنا لترتيب مختلف (مثل الشهر/اليوم)
       return `${hijriDateParts[0]}/${hijriDateParts[1]}`;
     }
-    return ''; // أو أي قيمة افتراضية أخرى
+    return '';
   };
 
-  const initialAbsences = {};
+  const initialBookAbsences = {};
   students.forEach(student => {
-    initialAbsences[student.id] =
-      student.absences?.map(dateString => {
+    initialBookAbsences[student.id] =
+      student.bookAbsences?.map(dateString => {
         if (dateString.startsWith('W')) {
           const [weekPart, dayPart] = dateString.split('-');
           const week = parseInt(weekPart.substring(1));
@@ -63,21 +59,21 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
       }).filter(a => a !== null) || [];
   });
 
-  const [absencesByStudent, setAbsencesByStudent] = useState(initialAbsences);
+  const [bookAbsencesByStudent, setBookAbsencesByStudent] = useState(initialBookAbsences);
   const [selectedWeek, setSelectedWeek] = useState('all');
   const [searchByView, setSearchByView] = useState({ all: '' });
   const currentSearch = searchByView[selectedWeek] ?? '';
   const setCurrentSearch = (val) =>
     setSearchByView(prev => ({ ...prev, [selectedWeek]: val }));
-  
+
   // حالة جديدة للتحكم في شاشة التحميل
   const [isSaving, setIsSaving] = useState(false);
 
   const weeks = Array.from({ length: 20 }, (_, i) => i + 1);
   const days = Array.from({ length: 5 }, (_, i) => i);
 
-  const toggleAbsence = (studentId, week, day) => {
-    setAbsencesByStudent(prev => {
+  const toggleBookAbsence = (studentId, week, day) => {
+    setBookAbsencesByStudent(prev => {
       const curr = prev[studentId] || [];
       const exists = curr.some(a => a.week === week && a.day === day);
       return {
@@ -89,30 +85,31 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
     });
   };
 
-  const handleSaveAbsences = async () => {
+const handleSaveBookAbsences = async () => {
     setIsSaving(true); // إظهار شاشة التحميل
     const updatedStudents = students.map(student => {
-      const newAbsences =
-        absencesByStudent[student.id]?.map(a => `W${a.week}-D${a.day}`) || [];
-      return { ...student, absences: newAbsences };
+      const newBookAbsences = bookAbsencesByStudent[student.id]?.map(a => `W${a.week}-D${a.day}`) || [];
+      return { ...student, bookAbsences: newBookAbsences };
     });
+    
     await onSave(updatedStudents);
+    
     setIsSaving(false); // إخفاء شاشة التحميل
     onClose();
-  };
+};
 
   const getDayName = (i) => ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'][i];
 
   const getAbsenceDate = (studentId, week, day) => {
-    const absence = absencesByStudent[studentId]?.find(a => a.week === week && a.day === day);
+    const absence = bookAbsencesByStudent[studentId]?.find(a => a.week === week && a.day === day);
     return absence ? absence.date : '';
   };
 
   const isStudentAbsent = (studentId, week, day) =>
-    absencesByStudent[studentId]?.some(a => a.week === week && a.day === day);
+    bookAbsencesByStudent[studentId]?.some(a => a.week === week && a.day === day);
 
   const getAbsenceCount = (studentId) =>
-    absencesByStudent[studentId]?.length || 0;
+    bookAbsencesByStudent[studentId]?.length || 0;
 
   const normalizeArabic = (s = '') =>
     s
@@ -161,7 +158,7 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
       <div className="bg-gray-800 rounded-lg shadow-xl overflow-hidden max-w-6xl w-full max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-700">
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <FaCalendarTimes className="text-red-400" /> كشف الغياب الأسبوعي
+            <FaBookOpen className="text-blue-400" /> كشف من لم يحضر الكتاب
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <FaTimes size={24} />
@@ -215,7 +212,7 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
               <thead className="text-xs text-gray-200 uppercase bg-gray-700 sticky top-0 z-20">
                 <tr>
                   <th scope="col" className="py-3 px-6 sticky right-0 bg-gray-700 z-30">
-                    اسم الطالب (<span className="text-blue-400">عدد مرات الغياب</span>)
+                    اسم الطالب (<span className="text-blue-400">عدد مرات عدم إحضار الكتاب</span>)
                   </th>
                   {weeksToDisplay.map(week => (
                     <th key={week} scope="col" colSpan={days.length} className="py-3 px-6 text-center border-l border-gray-600">
@@ -245,9 +242,9 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
                         <td
                           key={`${student.id}-${week}-${day}`}
                           className={`py-4 px-2 text-center cursor-pointer transition-colors border-l border-gray-700 text-xs ${
-                            isStudentAbsent(student.id, week, day) ? 'bg-red-600' : 'hover:bg-gray-600'
+                            isStudentAbsent(student.id, week, day) ? 'bg-blue-600' : 'hover:bg-gray-600'
                           }`}
-                          onClick={() => toggleAbsence(student.id, week, day)}
+                          onClick={() => toggleBookAbsence(student.id, week, day)}
                           title={isStudentAbsent(student.id, week, day) ? getAbsenceDate(student.id, week, day) : ''}
                         >
                           {isStudentAbsent(student.id, week, day) ? getAbsenceDate(student.id, week, day) : ''}
@@ -269,7 +266,7 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
 
         <div className="p-4 border-t border-gray-700 flex justify-end gap-2 bg-gray-700">
           <button
-            onClick={handleSaveAbsences}
+            onClick={handleSaveBookAbsences}
             disabled={isSaving} // تعطيل الزر أثناء الحفظ
             className="bg-blue-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -281,7 +278,7 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
             ) : (
               <FaSave />
             )}
-            {isSaving ? 'جارٍ الحفظ...' : 'حفظ الغياب'}
+            {isSaving ? 'جارٍ الحفظ...' : 'حفظ البيانات'}
           </button>
           <button
             onClick={onClose}
@@ -297,4 +294,4 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
   );
 };
 
-export default AbsenceModal;
+export default BookAbsenceModal;

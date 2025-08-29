@@ -1,8 +1,9 @@
 // src/pages/StudentView.jsx
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
+import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "../supabaseClient";
+import { gradesData } from "../data/mockData";
+
 import {
   FaQuran,
   FaStar,
@@ -10,58 +11,157 @@ import {
   FaPencilAlt,
   FaBookOpen,
   FaStickyNote,
-  FaUserCircle,
+  FaAward,
+  FaMicrophone,
+  FaCommentDots,
+  FaArrowLeft,
+  FaRegStar,
+  FaCoins
 } from "react-icons/fa";
+
 import {
   calculateTotalScore,
   calculateCategoryScore,
   getStatusInfo,
-  getStatusColor,
+  getGradeNameById,
+  getSectionNameById,
+  taskStatusUtils,
 } from "../utils/gradeUtils";
+import { getRecitationStatus } from "../utils/recitationUtils";
 
-const StarRating = ({ count }) => {
+const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
+  const sizes = {
+    sm: 'text-sm',
+    md: 'text-base',
+    lg: 'text-lg',
+    xl: 'text-xl'
+  };
+
   return (
-    <div className="flex gap-1 text-yellow-400">
-      {Array.from({ length: 10 }).map((_, index) => (
-        <FaStar key={index} className={index < count ? 'text-yellow-400' : 'text-gray-600'} />
-      ))}
+    <div className="flex gap-1 items-center">
+      <span className={`${sizes[size]} font-bold mr-2 text-${color}-400`}>{count}</span>
+      <div className="flex gap-0.5">
+        {Array.from({ length: max }).map((_, index) => (
+          <FaStar
+            key={index}
+            className={`${sizes[size]} ${index < count ? `text-${color}-400` : 'text-gray-600'}`}
+          />
+        ))}
+      </div>
     </div>
   );
 };
 
 function StudentView() {
-  const { gradeId, sectionId, studentId } = useParams();
+  const { studentId } = useParams();
+  const navigate = useNavigate();
   const [studentData, setStudentData] = useState(null);
+  const [curriculum, setCurriculum] = useState([]);
+  const [homeworkCurriculum, setHomeworkCurriculum] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [testCalculationMethod, setTestCalculationMethod] = useState('average');
-  const [curriculum, setCurriculum] = useState([]);
+  const [teacherName, setTeacherName] = useState("");
+  const [schoolName, setSchoolName] = useState("");
+  const [currentSemester, setCurrentSemester] = useState("");
+
+  const gradeName = getGradeNameById(studentData?.grade_level);
+  const sectionName = getSectionNameById(studentData?.section);
 
   useEffect(() => {
-    if (!studentId || !gradeId || !sectionId) {
-      setError("معرّف الطالب أو الصف أو الفصل مفقود.");
-      setLoading(false);
-      return;
-    }
-
-    const docRef = doc(db, `grades/${gradeId}/classes/${sectionId}/students`, studentId);
-
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setStudentData({ id: docSnap.id, ...docSnap.data() });
-        setError(null);
-      } else {
-        setError("لم يتم العثور على الطالب.");
+    const fetchData = async () => {
+      if (!studentId) {
+        setError("معرف الطالب مفقود.");
+        setLoading(false);
+        return;
       }
-      setLoading(false);
-    }, (err) => {
-      console.error("Error fetching student data: ", err);
-      setError("فشل في جلب بيانات الطالب.");
-      setLoading(false);
-    });
 
-    return () => unsubscribe();
-  }, [gradeId, sectionId, studentId]);
+      try {
+        setLoading(true);
+
+        // جلب بيانات الطالب من Supabase
+        const { data: student, error: studentError } = await supabase
+          .from('students')
+          .select('*')
+          .eq('id', studentId)
+          .single();
+
+        if (studentError) {
+          throw studentError;
+        }
+
+        // جلب بيانات المنهج باستخدام teacher_id من بيانات الطالب
+        const { data: curriculumData, error: curriculumError } = await supabase
+          .from('curriculum')
+          .select('*')
+          .eq('grade_id', student.grade_level)
+          .eq('section_id', student.section)
+          .eq('teacher_id', student.teacher_id)
+          .single();
+
+        if (curriculumError) {
+          console.warn("Warning: Could not fetch curriculum data.", curriculumError);
+          if (curriculumError.code !== 'PGRST205' && curriculumError.code !== 'PGRST116') {
+            throw curriculumError;
+          }
+        }
+
+        if (curriculumData) {
+          setCurriculum(curriculumData.recitation || []);
+          setHomeworkCurriculum(curriculumData.homework || []);
+        }
+
+        // جلب إعدادات المعلم والمدرسة
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('settings')
+          .select('test_method, teacher_name, school_name, current_semester')
+          .eq('id', 'general')
+          .single();
+
+        if (settingsError) {
+            console.error("Error fetching settings:", settingsError);
+        }
+
+        if (settingsData) {
+          setTestCalculationMethod(settingsData.test_method || 'average');
+          setTeacherName(settingsData.teacher_name || "");
+          setSchoolName(settingsData.school_name || "");
+          setCurrentSemester(settingsData.current_semester || "");
+        }
+
+        // معالجة بيانات الطالب
+        const processedStudentData = {
+          ...student,
+          grades: {
+            tests: student.grades?.tests || [],
+            oralTest: student.grades?.oral_test || [],
+            homework: student.grades?.homework || [],
+            performanceTasks: student.grades?.performance_tasks || [],
+            participation: student.grades?.participation || [],
+            quranRecitation: student.grades?.quran_recitation || [],
+            quranMemorization: student.grades?.quran_memorization || [],
+            weeklyNotes: student.grades?.weekly_notes || [],
+          },
+          nationalId: student.national_id,
+          parentPhone: student.parent_phone,
+          acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
+          consumedStars: student.consumed_stars || 0,
+          stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
+          grade_level: student.grade_level,
+          section: student.section,
+        };
+
+        setStudentData(processedStudentData);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching student data:", err);
+        setError("فشل في جلب بيانات الطالب.");
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [studentId]);
 
   if (loading) {
     return <div className="p-8 text-center text-blue-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">جاري تحميل بيانات الطالب...</div>;
@@ -84,148 +184,233 @@ function StudentView() {
   }
 
   return (
-    <div className="p-4 md:p-8 bg-gray-100 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right" dir="rtl">
-      <div className="max-w-6xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden border border-gray-200">
+    <div className="p-4 md:p-8 bg-gray-900 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100" dir="rtl">
+      {/* الشريط العلوي الجديد */}
+      <header className="flex flex-col md:flex-row justify-center items-center bg-gray-800 p-4 md:p-6 shadow-lg rounded-xl mb-4 md:mb-8 border border-gray-700 text-center relative">
+        <div className="flex flex-col">
+          <h1 className="text-lg md:text-2xl font-extrabold text-white">
+            سجل متابعة مادة القرآن الكريم والدراسات الإسلامية
+          </h1>
+          <p className="text-sm md:text-md font-medium text-gray-400">
+            المدرسة: {schoolName}
+          </p>
+          <p className="text-sm md:text-md font-medium text-gray-400">
+            معلم المادة:  {teacherName}
+          </p>
+          <p className="text-sm md:text-md font-medium text-gray-400">
+            الفصل الدراسي: {currentSemester}
+          </p>
+        </div>
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors shadow-md text-sm md:absolute md:top-6 md:left-6"
+        >
+          <FaArrowLeft /> العودة
+        </button>
+      </header>
+
+      <div className="max-w-6xl mx-auto bg-gray-800 shadow-xl rounded-2xl overflow-hidden border border-gray-700">
         <div className="p-6 md:p-8">
-          <div className="flex items-center gap-6 mb-8 pb-6 border-b border-gray-200">
+          <div className="flex items-center gap-6 mb-8 pb-6 border-b border-gray-700 flex-row-reverse">
             <div className="flex-shrink-0">
-              <img src={studentData.photo || '/images/1.webp'} alt="صورة الطالب" className="w-24 h-24 rounded-full object-cover border-4 border-blue-400 shadow-lg" />
+              <img src={studentData.photo || '/images/1.webp'} alt="صورة الطالب" className="w-32 h-32 rounded-full object-cover border-4 border-blue-400 shadow-lg" />
             </div>
             <div className="flex-grow">
-              <h1 className="text-2xl md:text-3xl font-extrabold text-blue-600 mb-1">{studentData.name}</h1>
-              <p className="text-gray-600">السجل المدني: {studentData.nationalId}</p>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-blue-400 mb-1">{studentData.name}</h1>
+              <p className="text-gray-400">السجل المدني: {studentData.nationalId}</p>
+              <p className="text-gray-400">الصف: {gradeName} / {sectionName}</p>
               {studentData.parentPhone && (
-                <p className="text-gray-600">رقم ولي الأمر: {studentData.parentPhone}</p>
+                <p className="text-gray-400">رقم ولي الأمر: {studentData.parentPhone}</p>
               )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8">
-            <div className="bg-blue-50 p-5 rounded-xl shadow-md border border-blue-200 flex items-center justify-between">
+            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
-                  <h4 className="font-semibold text-gray-800">المجموع النهائي</h4>
-                  <span className="text-xl md:text-2xl font-bold text-blue-600">
+                  <h4 className="font-semibold text-gray-100">المجموع النهائي</h4>
+                  <span className="text-xl md:text-2xl font-bold text-green-500">
                     {calculateTotalScore(studentData.grades, testCalculationMethod)} / 60
                   </span>
                 </div>
-                <FaAward className="text-4xl text-blue-400" />
+                <FaAward className="text-4xl text-green-400" />
               </div>
             </div>
 
-            <div className="bg-yellow-50 p-5 rounded-xl shadow-md border border-yellow-200 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col text-right">
-                  <h4 className="font-semibold text-gray-800">النجوم المكتسبة</h4>
-                  <StarRating count={studentData.stars || 0} />
+            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 col-span-1 flex flex-col items-center justify-center">
+              <h4 className="font-semibold text-gray-100 text-lg mb-4">النجوم</h4>
+              <div className="flex flex-col items-center justify-center w-full">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <FaStar className="text-3xl text-yellow-400" />
+                    <span className="text-md font-semibold text-yellow-400">الحالية</span>
+                    <span className="text-lg font-bold text-yellow-400">({studentData.stars || 0})</span>
+                  </div>
+                  <div className="flex items-center flex-wrap justify-center gap-1">
+                    {[...Array(10)].map((_, i) => (
+                      <FaStar
+                        key={`total-${i}`}
+                        className={`text-xl ${i < (studentData.stars || 0) ? 'text-yellow-400' : 'text-gray-400'}`}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <FaStar className="text-4xl text-yellow-400" />
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="flex items-center gap-2">
+                    <FaCoins className="text-3xl text-green-400" />
+                    <span className="text-md font-semibold text-green-400">المكتسبة</span>
+                    <span className="text-lg font-bold text-green-400">({studentData.acquiredStars || 0})</span>
+                  </div>
+                  <div className="flex items-center flex-wrap justify-center gap-1">
+                    {[...Array(10)].map((_, i) => (
+                      <FaStar
+                        key={`acquired-${i}`}
+                        className={`text-xl ${i < (studentData.acquiredStars || 0) ? 'text-green-400' : 'text-gray-400'}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <FaRegStar className="text-3xl text-red-400" />
+                    <span className="text-md font-semibold text-red-400">المستهلكة</span>
+                    <span className="text-lg font-bold text-red-400">({studentData.consumedStars || 0})</span>
+                  </div>
+                  <div className="flex items-center flex-wrap justify-center gap-1">
+                    {[...Array(10)].map((_, i) => (
+                      <FaStar
+                        key={`consumed-${i}`}
+                        className={`text-xl ${i < (studentData.consumedStars || 0) ? 'text-red-400' : 'text-gray-400'}`}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="bg-green-50 p-5 rounded-xl shadow-md border border-green-200">
-              <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-800 text-lg">
-                <FaPencilAlt className="text-2xl text-green-500" /> الاختبارات (15)
-                <span className="text-green-600 font-bold text-xl">
+            <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
+                <FaBookOpen className="text-3xl text-red-400" /> الاختبارات
+                <span className="text-red-400 font-bold mr-2 text-2xl">
                   {calculateCategoryScore(studentData.grades, 'tests', testCalculationMethod)} / 15
                 </span>
               </h4>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2 mb-2">
+                <h5 className="font-medium text-gray-100">حالة الاختبارات</h5>
+                {taskStatusUtils(studentData, homeworkCurriculum, 'test').icon}
+                <span className="text-sm text-gray-400">
+                  ({taskStatusUtils(studentData, homeworkCurriculum, 'test').text})
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 {studentData.grades.tests.slice(0, 2).map((grade, i) => (
-                  <div key={i} className="w-16 p-2 border border-gray-300 rounded-lg text-center bg-white text-gray-700">
+                  <div key={i} className="w-16 p-2 border border-gray-600 rounded-lg text-center bg-gray-800 text-gray-300">
                     {grade !== null ? grade : '--'}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="bg-purple-50 p-5 rounded-xl shadow-md border border-purple-200">
-              <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-800 text-lg">
-                <FaMicrophone className="text-2xl text-purple-500" /> الاختبار الشفوي (5)
-                <span className="text-purple-600 font-bold text-xl">
+            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
+                <FaMicrophone className="text-3xl text-yellow-400" /> الاختبار الشفوي (5)
+                <span className="text-yellow-400 font-bold text-2xl">
                   {calculateCategoryScore(studentData.grades, 'oralTest', 'best')} / 5
                 </span>
               </h4>
               <div className="flex flex-wrap gap-2">
                 {studentData.grades.oralTest.slice(0, 5).map((grade, i) => (
-                  <div key={i} className="w-10 p-2 border border-gray-300 rounded-lg text-center bg-white text-gray-700">
+                  <div key={i} className="w-10 p-2 border border-gray-600 rounded-lg text-center bg-gray-800 text-gray-300">
                     {grade !== null ? grade : '--'}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="bg-pink-50 p-5 rounded-xl shadow-md border border-pink-200">
-              <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-800 text-lg">
-                <FaTasks className="text-2xl text-pink-500" /> الواجبات (10)
-                <span className="text-pink-600 font-bold text-xl">
+            <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
+                <FaTasks className="text-3xl text-green-400" /> الواجبات
+                <span className="text-green-400 font-bold mr-2 text-2xl">
                   {calculateCategoryScore(studentData.grades, 'homework', 'sum')} / 10
                 </span>
               </h4>
+              <div className="flex items-center gap-2 mb-2">
+                <h5 className="font-medium text-gray-100">حالة الواجبات</h5>
+                {taskStatusUtils(studentData, homeworkCurriculum, 'homework').icon}
+                <span className="text-sm text-gray-400">
+                  ({taskStatusUtils(studentData, homeworkCurriculum, 'homework').text})
+                </span>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {studentData.grades.homework.slice(0, 10).map((grade, i) => (
-                  <div key={i} className="w-10 p-2 border border-gray-300 rounded-lg text-center bg-white text-gray-700">
+                  <div key={i} className="w-10 p-2 border border-gray-600 rounded-lg text-center bg-gray-800 text-gray-300">
                     {grade !== null ? grade : '--'}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="bg-rose-50 p-5 rounded-xl shadow-md border border-rose-200">
-              <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-800 text-lg">
-                <FaBookOpen className="text-2xl text-rose-500" /> مهام أدائية (5)
-                <span className="text-rose-600 font-bold text-xl">
-                  {calculateCategoryScore(studentData.grades, 'performanceTasks', 'best')} / 5
+            <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
+                <FaPencilAlt className="text-3xl text-purple-400" /> المهام الأدائية
+                <span className="text-purple-400 font-bold mr-2 text-2xl">
+                  {calculateCategoryScore(studentData.grades, 'performanceTasks', 'best')} / 10
                 </span>
               </h4>
+              <div className="flex items-center gap-2 mb-2">
+                <h5 className="font-medium text-gray-100">حالة المهام</h5>
+                {taskStatusUtils(studentData, homeworkCurriculum, 'performanceTask').icon}
+                <span className="text-sm text-gray-400">
+                  ({taskStatusUtils(studentData, homeworkCurriculum, 'performanceTask').text})
+                </span>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {studentData.grades.performanceTasks.slice(0, 5).map((grade, i) => (
-                  <div key={i} className="w-16 p-2 border border-gray-300 rounded-lg text-center bg-white text-gray-700">
+                {studentData.grades.performanceTasks.slice(0, 3).map((grade, i) => (
+                  <div key={i} className="w-16 p-2 border border-gray-600 rounded-lg text-center bg-gray-800 text-gray-300">
                     {grade !== null ? grade : '--'}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="bg-cyan-50 p-5 rounded-xl shadow-md border border-cyan-200">
-              <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-800 text-lg">
-                <FaCommentDots className="text-2xl text-cyan-500" /> المشاركة (10)
-                <span className="text-cyan-600 font-bold text-xl">
+            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
+                <FaCommentDots className="text-3xl text-cyan-400" /> المشاركة (10)
+                <span className="text-cyan-400 font-bold text-2xl">
                   {calculateCategoryScore(studentData.grades, 'participation', 'sum')} / 10
                 </span>
               </h4>
               <div className="flex flex-wrap gap-2">
                 {studentData.grades.participation.slice(0, 10).map((grade, i) => (
-                  <div key={i} className="w-10 p-2 border border-gray-300 rounded-lg text-center bg-white text-gray-700">
+                  <div key={i} className="w-10 p-2 border border-gray-600 rounded-lg text-center bg-gray-800 text-gray-300">
                     {grade !== null ? grade : '--'}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="col-span-full bg-indigo-50 p-5 rounded-xl shadow-md border border-indigo-200">
-              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-800 text-lg">
-                <FaQuran className="text-2xl text-indigo-500" /> القرآن الكريم
-                <span className="text-indigo-600 font-bold text-xl">
-                  {(parseFloat(calculateCategoryScore(studentData.grades, 'quranRecitation', 'average')) + 
-                   parseFloat(calculateCategoryScore(studentData.grades, 'quranMemorization', 'average'))).toFixed(2)} / 15
+            <div className="col-span-full md:col-span-2 lg:col-span-3 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
+                <FaQuran className="text-3xl text-blue-400" /> القرآن الكريم
+                <span className="text-blue-400 font-bold mr-2 text-2xl">
+                  {(parseFloat(calculateCategoryScore(studentData.grades, 'quranRecitation', 'average')) +
+                    parseFloat(calculateCategoryScore(studentData.grades, 'quranMemorization', 'average'))).toFixed(2)} / 15
                 </span>
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h5 className="font-medium text-gray-800">تلاوة القرآن (10)</h5>
+                    <h5 className="font-medium text-gray-100">تلاوة القرآن (10)</h5>
                     {getStatusInfo(studentData, 'recitation', curriculum).icon}
-                    <span className="text-sm text-gray-600">
+                    <span className={`text-sm ${getStatusInfo(studentData, 'recitation', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(studentData, 'recitation', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(studentData, 'recitation', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
                       ({getStatusInfo(studentData, 'recitation', curriculum).text})
                     </span>
-                    <span className="text-indigo-600 font-bold">
-                      {calculateCategoryScore(studentData.grades, 'quranRecitation', 'average')} / 10
-                    </span>
+                    <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(studentData.grades, 'quranRecitation', 'average')} / 10</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {studentData.grades.quranRecitation.slice(0, 5).map((grade, i) => (
-                      <div key={i} className="w-12 p-2 border border-gray-300 rounded-lg text-center bg-white text-gray-700">
+                      <div key={i} className="w-12 p-2 border border-gray-600 rounded-lg text-center bg-gray-800 text-gray-300">
                         {grade !== null ? grade : '--'}
                       </div>
                     ))}
@@ -233,18 +418,16 @@ function StudentView() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h5 className="font-medium text-gray-800">حفظ القرآن (5)</h5>
+                    <h5 className="font-medium text-gray-100">حفظ القرآن (5)</h5>
                     {getStatusInfo(studentData, 'memorization', curriculum).icon}
-                    <span className="text-sm text-gray-600">
+                    <span className={`text-sm ${getStatusInfo(studentData, 'memorization', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(studentData, 'memorization', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(studentData, 'memorization', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
                       ({getStatusInfo(studentData, 'memorization', curriculum).text})
                     </span>
-                    <span className="text-indigo-600 font-bold">
-                      {calculateCategoryScore(studentData.grades, 'quranMemorization', 'average')} / 5
-                    </span>
+                    <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(studentData.grades, 'quranMemorization', 'average')} / 5</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {studentData.grades.quranMemorization.slice(0, 5).map((grade, i) => (
-                      <div key={i} className="w-12 p-2 border border-gray-300 rounded-lg text-center bg-white text-gray-700">
+                      <div key={i} className="w-12 p-2 border border-gray-600 rounded-lg text-center bg-gray-800 text-gray-300">
                         {grade !== null ? grade : '--'}
                       </div>
                     ))}
@@ -253,22 +436,22 @@ function StudentView() {
               </div>
             </div>
 
-            <div className="col-span-full bg-yellow-50 p-5 rounded-xl shadow-md border border-yellow-200">
+            <div className="col-span-full bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <div className="flex justify-between items-center mb-3">
-                <h4 className="font-semibold text-lg flex items-center gap-2 text-gray-800">
-                  <FaStickyNote className="text-xl text-yellow-500" /> الملاحظات الأسبوعية
+                <h4 className="font-semibold text-xl flex items-center gap-2 text-gray-100">
+                  <FaStickyNote className="text-2xl text-yellow-400" /> الملاحظات الأسبوعية
                 </h4>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 max-h-96 overflow-y-auto">
                 {(studentData.grades.weeklyNotes || []).map((notes, weekIndex) => (
-                  <div key={weekIndex} className="bg-white p-3 rounded-lg border border-gray-300 min-h-[120px]">
-                    <h5 className="font-bold text-gray-700 mb-1 text-center">الأسبوع {weekIndex + 1}</h5>
-                    <div className="h-px bg-gray-300 mb-2"></div>
+                  <div key={weekIndex} className="bg-gray-800 p-3 rounded-lg border border-gray-600 min-h-[120px] relative">
+                    <h5 className="font-bold text-gray-200 mb-1 text-center">الأسبوع {weekIndex + 1}</h5>
+                    <div className="h-px bg-gray-600 mb-2"></div>
                     {notes && notes.length > 0 ? (
-                      <ul className="list-disc pr-4 text-gray-600 text-sm space-y-1">
+                      <ul className="list-none pr-0 text-gray-300 text-sm space-y-1">
                         {notes.map((note, noteIndex) => (
-                          <li key={noteIndex} className="pb-1">
-                            {note}
+                          <li key={noteIndex} className="pb-1 border-b border-gray-700 last:border-b-0">
+                            <span>{note}</span>
                           </li>
                         ))}
                       </ul>
@@ -285,6 +468,5 @@ function StudentView() {
     </div>
   );
 }
-
 
 export default StudentView;
