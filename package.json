@@ -5,6 +5,7 @@
   "dependencies": {
     "@fontsource/tajawal": "^5.2.6",
     "@supabase/supabase-js": "^2.56.0",
+    "browser-image-compression": "^2.0.2",
     "docx": "^9.5.1",
     "file-saver": "^2.0.5",
     "firebase": "^9.23.0",
