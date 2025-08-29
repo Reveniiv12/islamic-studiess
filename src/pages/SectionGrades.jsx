@@ -332,7 +332,7 @@ const updateStudentsData = async (updatedStudents) => {
                 weekly_notes: student.grades.weeklyNotes,
             },
             absences: student.absences,
-            book_absences: student.bookAbsences, // تم إضافة هذا السطر
+            // book_absences: student.bookAbsences, // تم إزالة هذا السطر المسبب للخطأ
             grade_level: gradeId,
             section: sectionId,
             teacher_id: teacherId,
@@ -1131,7 +1131,7 @@ const handleExportQRCodes = async () => {
     const doc = new Document({ sections });
 
     Packer.toBlob(doc).then((blob) => {
-      saveAs(blob, `بيانات_ودرجات_${gradeName}_${sectionId}.docx`);
+      saveAs(blob, `بيانات_ودرجات_${gradeId}_${sectionId}.docx`);
       handleDialog("نجاح", "تم تصدير الملف بنجاح!", "success");
     });
   } catch (error) {
@@ -1445,7 +1445,7 @@ const handleExportQRCodes = async () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {filteredStudents.map(student => (
-              <div key={student.id} className="bg-gray-700 p-4 rounded-lg shadow-md flex flex-col items-center transition-transform transform hover:scale-105">
+              <div key={student.id} onClick={() => handleQrClick(student)} className="bg-gray-700 p-4 rounded-lg shadow-md flex flex-col items-center transition-transform transform hover:scale-105">
                 <h4 className="text-lg font-bold text-blue-400 mb-2">{student.name}</h4>
                 <div className="flex items-center gap-1 mb-2">
                   <FaStar className="text-yellow-400" />
