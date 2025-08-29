@@ -24,6 +24,9 @@ import { getHijriToday } from '../utils/recitationUtils';
 import { supabase } from "../supabaseClient";
 import { gradesData } from "../data/mockData";
 
+// استيراد مكتبة ضغط الصور
+import imageCompression from 'browser-image-compression';
+
 import {
   FaFileExcel,
   FaDownload,
@@ -510,20 +513,35 @@ const updateStudentsData = async (updatedStudents) => {
     }
   };
 
-  const handleFileUpload = (e) => {
+  // بداية التعديل: تعديل دالة رفع الملفات لتشمل خطوة الضغط
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (editingStudent) {
-          setEditingStudent({ ...editingStudent, photo: reader.result });
-        } else if (showAddForm) {
-          setNewStudent({ ...newStudent, photo: reader.result });
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const options = {
+          maxSizeMB: 1,           // أقصى حجم للملف بعد الضغط (1 ميجابايت)
+          maxWidthOrHeight: 1920, // أقصى عرض أو ارتفاع للصورة
+          useWebWorker: true,     // استخدام Web Worker لتحسين الأداء
+        };
+
+        const compressedFile = await imageCompression(file, options);
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (editingStudent) {
+            setEditingStudent({ ...editingStudent, photo: reader.result });
+          } else if (showAddForm) {
+            setNewStudent({ ...newStudent, photo: reader.result });
+          }
+        };
+        reader.readAsDataURL(compressedFile); // قراءة الملف المضغوط
+      } catch (error) {
+        console.error("خطأ في ضغط الصورة:", error);
+        handleDialog("خطأ", "حدث خطأ أثناء معالجة الصورة.", "error");
+      }
     }
   };
+  // نهاية التعديل
 
   const exportToExcel = async () => {
     try {
