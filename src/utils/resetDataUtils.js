@@ -10,6 +10,11 @@ import { supabase } from '../supabaseClient';
  */
 export const resetStudentData = async (students, teacherId, handleDialog, refreshDataFunction) => {
   try {
+    if (students.length === 0) {
+      handleDialog("تحذير", "لا يوجد طلاب لحذف بياناتهم.", "warning");
+      return;
+    }
+
     // 1. Prepare student data to be reset
     const studentUpdates = students.map(student => {
       // Keep the existing student data (name, national_id, etc.)
@@ -34,22 +39,30 @@ export const resetStudentData = async (students, teacherId, handleDialog, refres
           oral_test: Array(5).fill(null),
           weekly_notes: Array(20).fill(null),
         },
-        // stars: 0,
-        // acquired_stars: 0,
-        // consumed_stars: 0,
-        // recitation_history: [],
-        // absences: []
+        stars: 0,
+        acquired_stars: 0,
+        consumed_stars: 0,
+        recitation_history: [],
+        absences: []
       };
 
       return { ...baseStudent, ...resetData };
     });
+    
+    // 2. Perform upsert operations in batches
+    const batchSize = 50; // يمكنك تغيير حجم الدفعة حسب الحاجة
+    for (let i = 0; i < studentUpdates.length; i += batchSize) {
+      const batch = studentUpdates.slice(i, i + batchSize);
+      const { error: studentsUpdateError } = await supabase
+        .from('students')
+        .upsert(batch);
 
-    if (studentUpdates.length === 0) {
-      handleDialog("تحذير", "لا يوجد طلاب لحذف بياناتهم.", "warning");
-      return;
+      if (studentsUpdateError) {
+        throw studentsUpdateError;
+      }
     }
 
-    // 2. Prepare curriculum data to be reset
+    // 3. Prepare and reset curriculum data
     // Get grade and section IDs from the first student in the list
     const gradeId = students[0].grade_level;
     const sectionId = students[0].section;
@@ -58,18 +71,9 @@ export const resetStudentData = async (students, teacherId, handleDialog, refres
         grade_id: gradeId,
         section_id: sectionId,
         teacher_id: teacherId,
-        recitation: [], // Set recitation to an empty array
-        homework: [] // Set homework to an empty array
+        recitation: [],
+        homework: []
     };
-    
-    // 3. Perform upsert operations for both students and curriculum in one transaction for better performance
-    const { error: studentsUpdateError } = await supabase
-      .from('students')
-      .upsert(studentUpdates);
-
-    if (studentsUpdateError) {
-      throw studentsUpdateError;
-    }
     
     const { error: curriculumUpdateError } = await supabase
       .from('curriculum')
