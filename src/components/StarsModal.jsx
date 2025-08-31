@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { FaStar, FaSave, FaTimes, FaGift, FaTrash, FaPlusCircle } from 'react-icons/fa';
+import { supabase } from "../supabaseClient";
 
-const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrizes }) => {
+const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrizes, teacherId }) => {
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [allStudentsSelected, setAllStudentsSelected] = useState(false);
   const [stars, setStars] = useState(1);
@@ -84,31 +85,59 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
     }
   };
 
-  const addPrize = () => {
+  const addPrize = async () => {
     if (!newPrizeName.trim() || newPrizeCost < 1) {
       setMessage({ text: "يرجى إدخال اسم وتكلفة صحيحة للجائزة.", type: "error" });
       return;
     }
+    if (!teacherId) {
+      setMessage({ text: "حدث خطأ: معرف المعلم غير متوفر.", type: "error" });
+      return;
+    }
+    
+    setIsSaving(true);
 
-    const newPrize = {
-      id: Date.now(),
-      name: newPrizeName.trim(),
-      cost: newPrizeCost
-    };
+    try {
+      const { data, error } = await supabase
+        .from('prizes')
+        .insert([{ name: newPrizeName.trim(), cost: newPrizeCost, teacher_id: teacherId }])
+        .select();
 
-    onUpdatePrizes([...prizes, newPrize]);
-    setNewPrizeName('');
-    setNewPrizeCost(1);
-    setMessage({ text: `تمت إضافة جائزة "${newPrize.name}".`, type: "success" });
+      if (error) throw error;
+      
+      onUpdatePrizes([...prizes, ...data]);
+      setNewPrizeName('');
+      setNewPrizeCost(1);
+      setMessage({ text: `تمت إضافة جائزة "${newPrizeName.trim()}" بنجاح.`, type: "success" });
+
+    } catch (error) {
+      setMessage({ text: `حدث خطأ في إضافة الجائزة: ${error.message}`, type: "error" });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const deletePrize = (prizeId) => {
-    const updatedPrizes = prizes.filter(p => p.id !== prizeId);
-    onUpdatePrizes(updatedPrizes);
-    setMessage({ text: "تم حذف الجائزة بنجاح.", type: "success" });
+  const deletePrize = async (prizeId) => {
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('prizes')
+        .delete()
+        .eq('id', prizeId);
+      
+      if (error) throw error;
+      
+      const updatedPrizes = prizes.filter(p => p.id !== prizeId);
+      onUpdatePrizes(updatedPrizes);
+      setMessage({ text: "تم حذف الجائزة بنجاح.", type: "success" });
+    } catch (error) {
+      setMessage({ text: `حدث خطأ في حذف الجائزة: ${error.message}`, type: "error" });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const redeemPrize = (studentId, prizeId) => {
+  const redeemPrize = async (studentId, prizeId) => {
     if (selectedStudents.length !== 1 || selectedStudents[0] !== studentId) {
       setMessage({ text: "يجب تحديد طالب واحد فقط لاستخدام الجائزة.", type: "error" });
       return;
@@ -119,6 +148,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
 
     if (student && prize) {
       if (student.stars >= prize.cost) {
+        setIsSaving(true);
         const updatedStudents = students.map(s => {
           if (s.id === studentId) {
             const newConsumedStars = (s.consumedStars || 0) + prize.cost;
@@ -131,12 +161,21 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
           return s;
         });
 
-        onSave(updatedStudents);
-        setMessage({ 
-          text: `تم استهلاك جائزة "${prize.name}" بنجاح للطالب ${student.name}.`, 
-          type: "success" 
-        });
-        setSelectedStudents([]);
+        try {
+          await onSave(updatedStudents);
+          setMessage({ 
+            text: `تم استهلاك جائزة "${prize.name}" بنجاح للطالب ${student.name}.`, 
+            type: "success" 
+          });
+          setSelectedStudents([]);
+        } catch (error) {
+          setMessage({ 
+            text: "حدث خطأ أثناء حفظ النجوم. يرجى المحاولة مرة أخرى.", 
+            type: "error" 
+          });
+        } finally {
+          setIsSaving(false);
+        }
       } else {
         setMessage({ 
           text: `لا يوجد لدى الطالب ${student.name} نجوم كافية لاستخدام هذه الجائزة.`, 
