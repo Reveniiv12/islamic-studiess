@@ -17,6 +17,7 @@ import BookAbsenceModal from "../components/BookAbsenceModal.jsx";
 import TroubledStudentsModal from "../components/TroubledStudentsModal.jsx";
 import CustomDialog from "../components/CustomDialog";
 import VerificationModal from "../components/VerificationModal.jsx";
+import CustomModal from "../components/CustomModal.jsx"; 
 import { QRCodeSVG } from 'qrcode.react';
 import { getHijriToday } from '../utils/recitationUtils';
 
@@ -169,6 +170,9 @@ const SectionGrades = () => {
   
   const [user, setUser] = useState(null);
   const [teacherId, setTeacherId] = useState(null);
+
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [showEditStudentModal, setShowEditStudentModal] = useState(false);
 
 
   const gradeName = getGradeNameById(gradeId);
@@ -513,35 +517,33 @@ const updateStudentsData = async (updatedStudents) => {
     }
   };
 
-  // بداية التعديل: تعديل دالة رفع الملفات لتشمل خطوة الضغط
-  const handleFileUpload = async (e) => {
+  const handleFileUpload = async (e, isNewStudent) => {
     const file = e.target.files[0];
     if (file) {
       try {
         const options = {
-          maxSizeMB: 1,           // أقصى حجم للملف بعد الضغط (1 ميجابايت)
-          maxWidthOrHeight: 1920, // أقصى عرض أو ارتفاع للصورة
-          useWebWorker: true,     // استخدام Web Worker لتحسين الأداء
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true,
         };
 
         const compressedFile = await imageCompression(file, options);
 
         const reader = new FileReader();
         reader.onloadend = () => {
-          if (editingStudent) {
-            setEditingStudent({ ...editingStudent, photo: reader.result });
-          } else if (showAddForm) {
+          if (isNewStudent) {
             setNewStudent({ ...newStudent, photo: reader.result });
+          } else {
+            setEditingStudent({ ...editingStudent, photo: reader.result });
           }
         };
-        reader.readAsDataURL(compressedFile); // قراءة الملف المضغوط
+        reader.readAsDataURL(compressedFile);
       } catch (error) {
         console.error("خطأ في ضغط الصورة:", error);
         handleDialog("خطأ", "حدث خطأ أثناء معالجة الصورة.", "error");
       }
     }
   };
-  // نهاية التعديل
 
   const exportToExcel = async () => {
     try {
@@ -761,7 +763,7 @@ const handleAddStudent = async () => {
 
       if (error) throw error;
 
-      setShowAddForm(false);
+      setShowAddStudentModal(false);
       setNewStudent({ name: "", nationalId: "", phone: "", parentPhone: "", photo: "" });
       handleDialog("نجاح", "تم إضافة الطالب بنجاح!", "success");
 
@@ -999,7 +1001,7 @@ const updateBookAbsenceData = async (updatedStudents) => {
       );
 
       await updateStudentsData(updatedStudents);
-      setShowEditForm(false);
+      setShowEditStudentModal(false);
       setEditingStudent(null);
       if (selectedStudent && selectedStudent.id === editingStudent.id) {
         setSelectedStudent({
@@ -1235,8 +1237,8 @@ const handleExportQRCodes = async () => {
 
       <div className="bg-gray-800 p-4 md:p-6 rounded-xl shadow-lg mb-4 md:mb-8 border border-gray-700">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3 md:gap-4">
-          <button onClick={() => setShowAddForm(!showAddForm)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-md text-xs md:text-sm">
-            <FaUserPlus /> {showAddForm ? "إلغاء إضافة" : "إضافة طالب"}
+          <button onClick={() => setShowAddStudentModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-md text-xs md:text-sm">
+            <FaUserPlus /> إضافة طالب
           </button>
           <button onClick={exportToExcel} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors shadow-md text-xs md:text-sm">
             <FaDownload /> تصدير Excel
@@ -1313,7 +1315,7 @@ const handleExportQRCodes = async () => {
             className="w-full md:w-64 p-2 pr-10 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right text-sm"
           />
         </div>
-        <div className="flex gap-4">
+        <div className="flex flex-grow-0 md:flex-grow flex-shrink-0 md:justify-end gap-4 overflow-x-auto whitespace-nowrap">
           <button
             onClick={() => {
               setShowGradeSheet(!showGradeSheet);
@@ -1321,7 +1323,7 @@ const handleExportQRCodes = async () => {
               setSelectedStudent(null);
               setShowQrList(false);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors shadow-md text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors shadow-md text-sm flex-shrink-0"
           >
             <FaTable /> {showGradeSheet ? "إخفاء الكشف" : "كشف الدرجات الشامل"}
           </button>
@@ -1332,17 +1334,17 @@ const handleExportQRCodes = async () => {
               setSelectedStudent(null);
               setShowQrList(false);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors shadow-md text-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors shadow-md text-sm flex-shrink-0"
           >
             <FaTable /> {showBriefSheet ? "إخفاء الكشف" : "كشف مختصر"}
           </button>
-          <button onClick={() => navigate(`/grades/${gradeId}`)} className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-sm">
+          <button onClick={() => navigate(`/grades/${gradeId}`)} className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-sm flex-shrink-0">
             <FaArrowLeft /> العودة للفصول
           </button>
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-sm">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-sm flex-shrink-0">
             <FaHome /> الصفحة الرئيسية
           </button>
-          <button onClick={fetchDataFromSupabase} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-sm">
+          <button onClick={fetchDataFromSupabase} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-sm flex-shrink-0">
             <FaSyncAlt className={isRefreshing ? "animate-spin" : ""} /> تحديث البيانات
           </button>
         </div>
@@ -1355,9 +1357,9 @@ const handleExportQRCodes = async () => {
         </div>
       )}
 
-      {showAddForm && (
-        <div className="mb-4 md:mb-8 p-4 md:p-6 rounded-xl bg-gray-800 shadow-lg max-w-full md:max-w-lg mx-auto border border-gray-700">
-          <h3 className="text-lg md:text-xl font-bold mb-4 text-blue-400 text-right">إضافة طالب جديد</h3>
+      {/* Add Student Modal */}
+      {showAddStudentModal && (
+        <CustomModal title="إضافة طالب جديد" onClose={() => { setShowAddStudentModal(false); setNewStudent({ name: "", nationalId: "", phone: "", parentPhone: "", photo: "" }); }}>
           <div className="flex items-center justify-center mb-4">
             <img src={newStudent.photo || '/images/1.webp'} alt="صورة الطالب" className="w-24 h-24 rounded-full object-cover border-2 border-gray-600" />
           </div>
@@ -1366,25 +1368,25 @@ const handleExportQRCodes = async () => {
           <input type="text" placeholder="رقم ولي الأمر" value={newStudent.parentPhone} onChange={(e) => setNewStudent({ ...newStudent, parentPhone: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <div className="flex flex-col gap-2 mb-4">
             <label className="block text-sm font-medium text-gray-300 text-right">إضافة صورة الطالب:</label>
-            <div className="flex gap-2">
-              <button onClick={() => newStudentFilePhotoInputRef.current.click()} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-sm" >
-                <FaUpload /> رفع صورة
-              </button>
-              <input type="file" ref={newStudentFilePhotoInputRef} accept="image/*" onChange={handleFileUpload} className="hidden" />
-              <button onClick={() => { setShowCamera(true); startCamera(); }} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-md text-sm" >
-                <FaCamera /> التقاط صورة
-              </button>
-            </div>
+            <button onClick={() => newStudentFilePhotoInputRef.current.click()} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-sm" >
+              <FaUpload /> رفع صورة
+            </button>
+            <input type="file" ref={newStudentFilePhotoInputRef} accept="image/*" onChange={(e) => handleFileUpload(e, true)} className="hidden" />
           </div>
-          <button onClick={handleAddStudent} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors w-full text-sm">
-            حفظ الطالب
-          </button>
-        </div>
+          <div className="flex gap-2">
+            <button onClick={handleAddStudent} className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm">
+              حفظ الطالب
+            </button>
+            <button onClick={() => setShowAddStudentModal(false)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-sm" >
+              إلغاء
+            </button>
+          </div>
+        </CustomModal>
       )}
 
-      {showEditForm && editingStudent && (
-        <div className="mb-4 md:mb-8 p-4 md:p-6 rounded-xl bg-gray-800 shadow-lg max-w-full md:max-w-lg mx-auto border border-gray-700">
-          <h3 className="text-lg md:text-xl font-bold mb-4 text-blue-400 text-right">تعديل بيانات الطالب</h3>
+      {/* Edit Student Modal */}
+      {showEditStudentModal && editingStudent && (
+        <CustomModal title="تعديل بيانات الطالب" onClose={() => { setShowEditStudentModal(false); setEditingStudent(null); }}>
           <div className="flex items-center justify-center mb-4">
             <img src={editingStudent.photo || '/images/1.webp'} alt="صورة الطالب" className="w-24 h-24 rounded-full object-cover border-2 border-gray-600" />
           </div>
@@ -1393,46 +1395,20 @@ const handleExportQRCodes = async () => {
           <input type="text" placeholder="رقم ولي الأمر" value={editingStudent.parentPhone || ''} onChange={(e) => setEditingStudent({ ...editingStudent, parentPhone: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <div className="flex flex-col gap-2 mb-4">
             <label className="block text-sm font-medium text-gray-300 text-right">تغيير صورة الطالب:</label>
-            <div className="flex gap-2">
-              <button onClick={() => filePhotoInputRef.current.click()} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-sm" >
-                <FaUpload /> رفع صورة
-              </button>
-              <input type="file" ref={filePhotoInputRef} accept="image/*" onChange={handleFileUpload} className="hidden" />
-              <button onClick={() => { setShowCamera(true); startCamera(); }} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-md text-sm" >
-                <FaCamera /> التقاط صورة
-              </button>
-            </div>
+            <button onClick={() => filePhotoInputRef.current.click()} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-sm" >
+              <FaUpload /> رفع صورة
+            </button>
+            <input type="file" ref={filePhotoInputRef} accept="image/*" onChange={(e) => handleFileUpload(e, false)} className="hidden" />
           </div>
           <div className="flex gap-2">
             <button onClick={handleEditStudent} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors shadow-md text-sm" >
               حفظ التغييرات
             </button>
-            <button onClick={() => { setShowEditForm(false); setEditingStudent(null); }} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-sm" >
+            <button onClick={() => { setShowEditStudentModal(false); setEditingStudent(null); }} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-sm" >
               إلغاء
             </button>
           </div>
-        </div>
-      )}
-
-      {showCamera && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" dir="rtl">
-          <div className="bg-gray-800 rounded-xl p-6 shadow-lg max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4 text-blue-400 text-right">التقاط صورة</h3>
-            <video ref={videoRef} autoPlay className="w-full h-auto rounded-lg mb-4 border border-gray-600"></video>
-            <canvas ref={canvasRef} className="hidden"></canvas>
-            <div className="flex justify-between gap-4 mt-4">
-               <button onClick={() => setFacingMode(prev => (prev === 'user' ? 'environment' : 'user'))} className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-sm" >
-                   تبديل الكاميرا
-               </button>
-              <button onClick={capturePhoto} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors shadow-md text-sm">
-                التقاط
-              </button>
-              <button onClick={() => { stopCamera(); setShowCamera(false); }} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-sm">
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
+        </CustomModal>
       )}
 
       {showQrList && (
@@ -1538,7 +1514,7 @@ const handleExportQRCodes = async () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           setEditingStudent(student);
-                          setShowEditForm(true);
+                          setShowEditStudentModal(true);
                         }}
                         className="text-yellow-400 hover:text-yellow-300 transition-colors"
                         title="تعديل بيانات الطالب"
