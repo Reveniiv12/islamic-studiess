@@ -84,6 +84,21 @@ import {
 import { getRecitationStatus } from "../utils/recitationUtils";
 import { resetStudentData } from '../utils/resetDataUtils';
 
+// دالة جديدة لتحويل الأرقام العربية إلى لاتينية
+const convertToEnglishNumbers = (input) => {
+  if (input === null || input === undefined) {
+    return null;
+  }
+  const arabicNumbers = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+  const englishNumbers = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+  let output = String(input);
+  for (let i = 0; i < arabicNumbers.length; i++) {
+    output = output.replace(new RegExp(arabicNumbers[i], "g"), englishNumbers[i]);
+  }
+  return output;
+};
+
+
 const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
   const sizes = {
     sm: 'text-sm',
@@ -775,7 +790,8 @@ const handleAddStudent = async () => {
   };
 
   const updateStudentGrade = async (studentId, category, index, value) => {
-    const numValue = value === '' ? null : Number(value);
+    const englishValue = convertToEnglishNumbers(value);
+    const numValue = englishValue === '' ? null : Number(englishValue);
     let maxLimit = 0;
     let errorMessage = '';
 
@@ -1627,7 +1643,7 @@ const handleExportQRCodes = async () => {
             </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.tests.slice(0, 2).map((grade, i) => (
-                  <input key={i} type="number" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  <input key={i} type="text" inputmode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
                 ))}
               </div>
             </div>
@@ -1638,7 +1654,7 @@ const handleExportQRCodes = async () => {
               </h4>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.oralTest.slice(0, 5).map((grade, i) => (
-                  <input key={i} type="number" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "oralTest", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
+                  <input key={i} type="text" inputmode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "oralTest", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
                 ))}
               </div>
             </div>
@@ -1659,7 +1675,7 @@ const handleExportQRCodes = async () => {
             </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.homework.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="number" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <input key={i} type="text" inputmode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 ))}
               </div>
             </div>
@@ -1682,7 +1698,8 @@ const handleExportQRCodes = async () => {
                 {selectedStudent.grades.performanceTasks.slice(0, 3).map((grade, i) => (
                   <input
                     key={i}
-                    type="number"
+                    type="text"
+                    inputmode="numeric"
                     placeholder="--"
                     value={grade === null ? '' : grade}
                     onChange={(e) => updateStudentGrade(selectedStudent.id, "performanceTasks", i, e.target.value)}
@@ -1698,7 +1715,7 @@ const handleExportQRCodes = async () => {
               </h4>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.participation.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="number" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  <input key={i} type="text" inputmode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                 ))}
               </div>
             </div>
@@ -1724,7 +1741,8 @@ const handleExportQRCodes = async () => {
                     {selectedStudent.grades.quranRecitation.slice(0, 5).map((grade, i) => (
                       <input
                         key={i}
-                        type="number"
+                        type="text"
+                        inputmode="numeric"
                         placeholder="--"
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranRecitation", i, e.target.value)}
@@ -1746,7 +1764,8 @@ const handleExportQRCodes = async () => {
                     {selectedStudent.grades.quranMemorization.slice(0, 5).map((grade, i) => (
                       <input
                         key={i}
-                        type="number"
+                        type="text"
+                        inputmode="numeric"
                         placeholder="--"
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranMemorization", i, e.target.value)}
