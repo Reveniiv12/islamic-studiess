@@ -16,7 +16,8 @@ import {
   FaCommentDots,
   FaArrowLeft,
   FaRegStar,
-  FaCoins
+  FaCoins,
+  FaGift
 } from "react-icons/fa";
 
 import {
@@ -28,6 +29,7 @@ import {
   taskStatusUtils,
 } from "../utils/gradeUtils";
 import { getRecitationStatus } from "../utils/recitationUtils";
+import PrizesModal from "../components/PrizesModal";
 
 const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
   const sizes = {
@@ -64,6 +66,8 @@ function StudentView() {
   const [teacherName, setTeacherName] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [currentSemester, setCurrentSemester] = useState("");
+  const [prizes, setPrizes] = useState([]);
+  const [isPrizesModalOpen, setIsPrizesModalOpen] = useState(false);
 
   const gradeName = getGradeNameById(studentData?.grade_level);
   const sectionName = getSectionNameById(studentData?.section);
@@ -80,9 +84,10 @@ function StudentView() {
         setLoading(true);
 
         // جلب بيانات الطالب من Supabase
+        // **التغيير هنا: استبدال select بـ '*, teacher_id'**
         const { data: student, error: studentError } = await supabase
           .from('students')
-          .select('*')
+          .select('*, teacher_id')
           .eq('id', studentId)
           .single();
 
@@ -90,13 +95,15 @@ function StudentView() {
           throw studentError;
         }
 
+        const teacherId = student.teacher_id;
+
         // جلب بيانات المنهج باستخدام teacher_id من بيانات الطالب
         const { data: curriculumData, error: curriculumError } = await supabase
           .from('curriculum')
           .select('*')
           .eq('grade_id', student.grade_level)
           .eq('section_id', student.section)
-          .eq('teacher_id', student.teacher_id)
+          .eq('teacher_id', teacherId)
           .single();
 
         if (curriculumError) {
@@ -127,6 +134,21 @@ function StudentView() {
           setTeacherName(settingsData.teacher_name || "");
           setSchoolName(settingsData.school_name || "");
           setCurrentSemester(settingsData.current_semester || "");
+        }
+        
+        // جلب الجوائز المرتبطة بالمعلم
+        if (teacherId) {
+          const { data: prizesData, error: prizesError } = await supabase
+            .from('prizes')
+            .select('*')
+            .eq('teacher_id', teacherId)
+            .order('cost', { ascending: true });
+            
+          if (prizesError) {
+            console.error("Error fetching prizes:", prizesError);
+          } else {
+            setPrizes(prizesData);
+          }
         }
 
         // معالجة بيانات الطالب
@@ -201,12 +223,6 @@ function StudentView() {
             الفصل الدراسي: {currentSemester}
           </p>
         </div>
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 px-6 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors shadow-md text-sm md:absolute md:top-6 md:left-6"
-        >
-          <FaArrowLeft /> العودة
-        </button>
       </header>
 
       <div className="max-w-6xl mx-auto bg-gray-800 shadow-xl rounded-2xl overflow-hidden border border-gray-700">
@@ -436,6 +452,21 @@ function StudentView() {
               </div>
             </div>
 
+            {/* تم إضافة هذا القسم لعرض زر المكافآت */}
+            <div className="col-span-full bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="font-semibold text-xl flex items-center gap-2 text-gray-100">
+                  <FaGift className="text-2xl text-purple-400" /> المكافآت المتاحة
+                </h4>
+                <button
+                  onClick={() => setIsPrizesModalOpen(true)}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-purple-700 transition-colors"
+                >
+                  <FaGift /> عرض المكافآت
+                </button>
+              </div>
+            </div>
+
             <div className="col-span-full bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <div className="flex justify-between items-center mb-3">
                 <h4 className="font-semibold text-xl flex items-center gap-2 text-gray-100">
@@ -465,6 +496,8 @@ function StudentView() {
           </div>
         </div>
       </div>
+      {/* تم إضافة هذا السطر لعرض المودال */}
+      {isPrizesModalOpen && <PrizesModal prizes={prizes} onClose={() => setIsPrizesModalOpen(false)} />}
     </div>
   );
 }
