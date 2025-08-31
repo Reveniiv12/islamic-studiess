@@ -25,9 +25,12 @@ export const resetStudentData = async (students, teacherId, handleDialog, refres
         phone: student.phone,
         parent_phone: student.parentPhone,
         photo: student.photo,
+        grade_level: student.grade_level,
+        section: student.section,
+        teacher_id: teacherId
       };
 
-      // Reset the grades and other non-essential data
+      // Reset the grades, stars, and recitation history
       const resetData = {
         grades: {
           tests: Array(2).fill(null),
@@ -43,14 +46,14 @@ export const resetStudentData = async (students, teacherId, handleDialog, refres
         acquired_stars: 0,
         consumed_stars: 0,
         recitation_history: [],
-        absences: []
       };
 
+      // Return the student object with old data and reset data combined.
       return { ...baseStudent, ...resetData };
     });
     
-    // 2. Perform upsert operations in batches
-    const batchSize = 50; // يمكنك تغيير حجم الدفعة حسب الحاجة
+    // 2. Perform upsert operations on students table in batches
+    const batchSize = 50;
     for (let i = 0; i < studentUpdates.length; i += batchSize) {
       const batch = studentUpdates.slice(i, i + batchSize);
       const { error: studentsUpdateError } = await supabase
@@ -61,8 +64,32 @@ export const resetStudentData = async (students, teacherId, handleDialog, refres
         throw studentsUpdateError;
       }
     }
+    
+    // 3. Delete absences and book absences from their separate tables
+    const studentIds = students.map(student => student.id);
+    
+    // Delete from absences table
+    const { error: absencesDeleteError } = await supabase
+      .from('absences')
+      .delete()
+      .in('student_id', studentIds);
+    
+    if (absencesDeleteError) {
+      throw absencesDeleteError;
+    }
+    
+    // Delete from book_absences table
+    const { error: bookAbsencesDeleteError } = await supabase
+      .from('book_absences')
+      .delete()
+      .in('student_id', studentIds);
+      
+    if (bookAbsencesDeleteError) {
+      throw bookAbsencesDeleteError;
+    }
 
-    // 3. Prepare and reset curriculum data
+
+    // 4. Prepare and reset curriculum data
     // Get grade and section IDs from the first student in the list
     const gradeId = students[0].grade_level;
     const sectionId = students[0].section;
