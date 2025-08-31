@@ -80,16 +80,22 @@ const NotesModal = ({ students = [], onClose, onSave, onConfirmNotesClear }) => 
       alert("يرجى اختيار الطلاب أولاً.");
       return;
     }
-    // استبدال window.confirm بالخاصية onConfirmNotesClear
     onConfirmNotesClear(() => {
-        // هذا الكود سيتم تنفيذه فقط بعد تأكيد المستخدم
         const updatedStudents = (students || []).map(student => {
             if (selectedStudents.includes(student.id)) {
+                // إنشاء نسخة من مصفوفة الملاحظات
+                const weeklyNotes = Array.isArray(student.grades?.weeklyNotes)
+                    ? [...student.grades.weeklyNotes]
+                    : Array(20).fill().map(() => []);
+                
+                // مسح ملاحظات الأسبوع الحالي فقط
+                weeklyNotes[currentWeek - 1] = [];
+
                 return {
                     ...student,
                     grades: {
                         ...student.grades,
-                        weeklyNotes: Array(20).fill().map(() => []),
+                        weeklyNotes: weeklyNotes
                     }
                 };
             }
