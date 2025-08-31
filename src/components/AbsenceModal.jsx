@@ -1,5 +1,4 @@
 // src/components/AbsenceModal.jsx
-
 import React, { useState, useMemo } from 'react';
 import {
   FaCalendarTimes,
@@ -7,29 +6,25 @@ import {
   FaTimes,
   FaSearch,
   FaChevronDown,
-  FaTimesCircle
+  FaTimesCircle,
+  FaTrash
 } from 'react-icons/fa';
 
-const AbsenceModal = ({ students, onClose, onSave }) => {
+const AbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
   const startDate = new Date('2024-09-01');
 
-  // دالة للحصول على التاريخ الهجري لليوم الحالي بتنسيق مختصر (يوم/شهر)
   const getHijriTodayShort = () => {
     const date = new Date();
-    // استخدام 'ar-SA-u-ca-islamic' للحصول على التاريخ الهجري
-    // ثم تقسيمه للحصول على اليوم والشهر
     const hijriDateParts = date.toLocaleDateString('ar-SA-u-ca-islamic', {
       day: 'numeric',
       month: 'numeric',
-      year: 'numeric' // نحتاج السنة للحصول على تاريخ صحيح ثم إزالتها
+      year: 'numeric'
     }).split('/');
     
-    // التأكد من أن اليوم والشهر موجودان
     if (hijriDateParts.length >= 2) {
-      // إرجاع اليوم/الشهر، ويمكنك التعديل هنا لترتيب مختلف (مثل الشهر/اليوم)
       return `${hijriDateParts[0]}/${hijriDateParts[1]}`;
     }
-    return ''; // أو أي قيمة افتراضية أخرى
+    return '';
   };
 
   const initialAbsences = {};
@@ -40,13 +35,11 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
           const [weekPart, dayPart] = dateString.split('-');
           const week = parseInt(weekPart.substring(1));
           const day = parseInt(dayPart.substring(1));
-          return { week, day, date: getHijriTodayShort() }; // حفظ التاريخ الفعلي المختصر
+          return { week, day, date: getHijriTodayShort() };
         } else {
-          // إذا كان التاريخ المحفوظ هو تاريخ ميلادي (YYYY-MM-DD)
           const date = new Date(dateString);
           if (isNaN(date.getTime())) return null;
 
-          // تحويل التاريخ الميلادي إلى هجري مختصر للعرض
           const hijriDateParts = date.toLocaleDateString('ar-SA-u-ca-islamic', {
             day: 'numeric',
             month: 'numeric',
@@ -70,7 +63,6 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
   const setCurrentSearch = (val) =>
     setSearchByView(prev => ({ ...prev, [selectedWeek]: val }));
   
-  // حالة جديدة للتحكم في شاشة التحميل
   const [isSaving, setIsSaving] = useState(false);
 
   const weeks = Array.from({ length: 20 }, (_, i) => i + 1);
@@ -84,21 +76,41 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
         ...prev,
         [studentId]: exists
           ? curr.filter(a => !(a.week === week && a.day === day))
-          : [...curr, { week, day, date: getHijriTodayShort() }] // حفظ التاريخ الفعلي المختصر هنا
+          : [...curr, { week, day, date: getHijriTodayShort() }]
       };
     });
   };
 
   const handleSaveAbsences = async () => {
-    setIsSaving(true); // إظهار شاشة التحميل
+    setIsSaving(true);
     const updatedStudents = students.map(student => {
       const newAbsences =
         absencesByStudent[student.id]?.map(a => `W${a.week}-D${a.day}`) || [];
       return { ...student, absences: newAbsences };
     });
     await onSave(updatedStudents);
-    setIsSaving(false); // إخفاء شاشة التحميل
+    setIsSaving(false);
     onClose();
+  };
+
+  const handleDeleteAllAbsences = () => {
+    onClose();
+    setTimeout(() => {
+        handleDialog(
+            "تأكيد الحذف",
+            "هل أنت متأكد من حذف جميع سجلات الغياب لكل الطلاب؟ لا يمكن التراجع عن هذا الإجراء.",
+            "confirm",
+            async () => {
+                setIsSaving(true);
+                const updatedStudents = students.map(student => ({
+                    ...student,
+                    absences: []
+                }));
+                await onSave(updatedStudents);
+                setIsSaving(false);
+            }
+        );
+    }, 100);
   };
 
   const getDayName = (i) => ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'][i];
@@ -270,7 +282,7 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
         <div className="p-4 border-t border-gray-700 flex justify-end gap-2 bg-gray-700">
           <button
             onClick={handleSaveAbsences}
-            disabled={isSaving} // تعطيل الزر أثناء الحفظ
+            disabled={isSaving}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? (
@@ -284,8 +296,16 @@ const AbsenceModal = ({ students, onClose, onSave }) => {
             {isSaving ? 'جارٍ الحفظ...' : 'حفظ الغياب'}
           </button>
           <button
+            onClick={handleDeleteAllAbsences}
+            disabled={isSaving}
+            className="bg-red-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-red-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FaTrash />
+            حذف الكل
+          </button>
+          <button
             onClick={onClose}
-            disabled={isSaving} // تعطيل الزر أثناء الحفظ
+            disabled={isSaving}
             className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FaTimes />
