@@ -17,6 +17,7 @@ const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, hand
     const [transferSearchQuery, setTransferSearchQuery] = useState("");
     const [showTransferOptions, setShowTransferOptions] = useState(false);
     const [selectedTransferSection, setSelectedTransferSection] = useState(null);
+    const [allStudentsSelected, setAllStudentsSelected] = useState(false); // New state for "Select All"
 
     // Get the current grade sections from the mock data
     const currentGrade = gradesData.find(g => g.id === gradeId);
@@ -27,10 +28,17 @@ const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, hand
         if (!show) {
             setSelectedStudents([]);
             setTransferSearchQuery("");
+            setAllStudentsSelected(false); // Reset "Select All" state
             setShowTransferOptions(false);
             setSelectedTransferSection(null);
         }
     }, [show]);
+
+    // Sync "Select All" checkbox state with the selected students list
+    useEffect(() => {
+        const areAllStudentsSelected = students.length > 0 && selectedStudents.length === students.length;
+        setAllStudentsSelected(areAllStudentsSelected);
+    }, [selectedStudents, students]);
 
     if (!show) {
         return null;
@@ -154,6 +162,15 @@ const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, hand
                 : [...prev, studentId]
         );
     };
+    
+    // New function to handle "Select All" toggle
+    const toggleSelectAll = () => {
+        if (allStudentsSelected) {
+            setSelectedStudents([]);
+        } else {
+            setSelectedStudents(students.map(s => s.id));
+        }
+    };
 
     const filteredTransferStudents = students.filter(student =>
         student.name.toLowerCase().includes(transferSearchQuery.toLowerCase())
@@ -173,6 +190,18 @@ const TransferDeleteModal = ({ show, onClose, students, updateStudentsData, hand
                             onChange={(e) => setTransferSearchQuery(e.target.value)}
                             className="w-full p-2 pr-10 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right text-sm"
                         />
+                    </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={allStudentsSelected}
+                          onChange={toggleSelectAll}
+                          className="form-checkbox h-5 w-5 text-blue-600 bg-gray-900 border-gray-500 rounded focus:ring-blue-500 cursor-pointer"
+                        />
+                        <span className="text-sm font-medium text-gray-200">تحديد الكل</span>
+                      </div>
+                      <span className="text-sm text-gray-400">{selectedStudents.length} طالب محدد</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-60 overflow-y-auto border border-gray-700 p-2 rounded-lg">
                         {filteredTransferStudents.map(student => (
