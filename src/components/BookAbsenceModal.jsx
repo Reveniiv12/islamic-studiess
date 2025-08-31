@@ -7,13 +7,13 @@ import {
   FaTimes,
   FaSearch,
   FaChevronDown,
-  FaTimesCircle
+  FaTimesCircle,
+  FaTrash
 } from 'react-icons/fa';
 
-const BookAbsenceModal = ({ students, onClose, onSave }) => {
+const BookAbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
   const startDate = new Date('2024-09-01');
 
-  // دالة للحصول على التاريخ الهجري لليوم الحالي بتنسيق مختصر (يوم/شهر)
   const getHijriTodayShort = () => {
     const date = new Date();
     const hijriDateParts = date.toLocaleDateString('ar-SA-u-ca-islamic', {
@@ -36,13 +36,11 @@ const BookAbsenceModal = ({ students, onClose, onSave }) => {
           const [weekPart, dayPart] = dateString.split('-');
           const week = parseInt(weekPart.substring(1));
           const day = parseInt(dayPart.substring(1));
-          return { week, day, date: getHijriTodayShort() }; // حفظ التاريخ الفعلي المختصر
+          return { week, day, date: getHijriTodayShort() };
         } else {
-          // إذا كان التاريخ المحفوظ هو تاريخ ميلادي (YYYY-MM-DD)
           const date = new Date(dateString);
           if (isNaN(date.getTime())) return null;
 
-          // تحويل التاريخ الميلادي إلى هجري مختصر للعرض
           const hijriDateParts = date.toLocaleDateString('ar-SA-u-ca-islamic', {
             day: 'numeric',
             month: 'numeric',
@@ -66,7 +64,6 @@ const BookAbsenceModal = ({ students, onClose, onSave }) => {
   const setCurrentSearch = (val) =>
     setSearchByView(prev => ({ ...prev, [selectedWeek]: val }));
 
-  // حالة جديدة للتحكم في شاشة التحميل
   const [isSaving, setIsSaving] = useState(false);
 
   const weeks = Array.from({ length: 20 }, (_, i) => i + 1);
@@ -80,13 +77,13 @@ const BookAbsenceModal = ({ students, onClose, onSave }) => {
         ...prev,
         [studentId]: exists
           ? curr.filter(a => !(a.week === week && a.day === day))
-          : [...curr, { week, day, date: getHijriTodayShort() }] // حفظ التاريخ الفعلي المختصر هنا
+          : [...curr, { week, day, date: getHijriTodayShort() }]
       };
     });
   };
 
 const handleSaveBookAbsences = async () => {
-    setIsSaving(true); // إظهار شاشة التحميل
+    setIsSaving(true);
     const updatedStudents = students.map(student => {
       const newBookAbsences = bookAbsencesByStudent[student.id]?.map(a => `W${a.week}-D${a.day}`) || [];
       return { ...student, bookAbsences: newBookAbsences };
@@ -94,9 +91,29 @@ const handleSaveBookAbsences = async () => {
     
     await onSave(updatedStudents);
     
-    setIsSaving(false); // إخفاء شاشة التحميل
+    setIsSaving(false);
     onClose();
 };
+
+const handleDeleteAllBookAbsences = () => {
+    onClose();
+    setTimeout(() => {
+        handleDialog(
+            "تأكيد الحذف",
+            "هل أنت متأكد من حذف جميع سجلات عدم إحضار الكتاب لكل الطلاب؟ لا يمكن التراجع عن هذا الإجراء.",
+            "confirm",
+            async () => {
+                setIsSaving(true);
+                const updatedStudents = students.map(student => ({
+                    ...student,
+                    bookAbsences: []
+                }));
+                await onSave(updatedStudents);
+                setIsSaving(false);
+            }
+        );
+    }, 100);
+  };
 
   const getDayName = (i) => ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس'][i];
 
@@ -267,7 +284,7 @@ const handleSaveBookAbsences = async () => {
         <div className="p-4 border-t border-gray-700 flex justify-end gap-2 bg-gray-700">
           <button
             onClick={handleSaveBookAbsences}
-            disabled={isSaving} // تعطيل الزر أثناء الحفظ
+            disabled={isSaving}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-blue-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? (
@@ -281,8 +298,16 @@ const handleSaveBookAbsences = async () => {
             {isSaving ? 'جارٍ الحفظ...' : 'حفظ البيانات'}
           </button>
           <button
+            onClick={handleDeleteAllBookAbsences}
+            disabled={isSaving}
+            className="bg-red-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-red-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <FaTrash />
+            حذف الكل
+          </button>
+          <button
             onClick={onClose}
-            disabled={isSaving} // تعطيل الزر أثناء الحفظ
+            disabled={isSaving}
             className="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FaTimes />
