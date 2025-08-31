@@ -24,7 +24,7 @@ export default function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* الصفحة الرئيسية الجديدة - لوحة تحكم المعلم */}
+            {/* الصفحة الرئيسية الجديدة - لوحة تحكم المعلم (مسار محمي) */}
             <Route
               path="/"
               element={
@@ -43,7 +43,7 @@ export default function App() {
             {/* صفحة درجات الطالب العامة (بدون حماية) */}
             <Route path="/student-grades/:id" element={<StudentGradesPublic />} />
 
-            {/* مسار الصفوف */}
+            {/* مسار الصفوف (مسار محمي) */}
             <Route
               path="/grades/:gradeId"
               element={
@@ -53,7 +53,7 @@ export default function App() {
               }
             />
             
-            {/* مسار صفحة درجات الفصل */}
+            {/* مسار صفحة درجات الفصل (مسار محمي) */}
             <Route
               path="/grades/:gradeId/sections/:sectionId"
               element={
@@ -63,7 +63,7 @@ export default function App() {
               }
             />
 
-            {/* لوحة تحكم الطالب */}
+            {/* لوحة تحكم الطالب (مسار محمي) */}
             <Route
               path="/dashboard"
               element={
@@ -73,7 +73,7 @@ export default function App() {
               }
             />
 
-            {/* عرض قائمة الطلاب لفصل معين */}
+            {/* عرض قائمة الطلاب لفصل معين (مسار محمي) */}
             <Route
               path="/grades/:gradeId/sections/:sectionId/students"
               element={
@@ -83,14 +83,10 @@ export default function App() {
               }
             />
 
-            {/* عرض درجات طالب معين */}
+            {/* عرض درجات طالب معين (مسار عام لروابط الـ QR) - تم إزالة ProtectedRoute منه */}
             <Route
               path="/grades/:gradeId/sections/:sectionId/students/:studentId"
-              element={
-                <ProtectedRoute>
-                  <StudentView />
-                </ProtectedRoute>
-              }
+              element={<StudentView />}
             />
 
             {/* مسار ملف الإنجاز المحمي */}
@@ -106,7 +102,7 @@ export default function App() {
             {/* مسار ملف الإنجاز العام (بدون حماية) */}
             <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
 
-            {/* إعادة توجيه أي مسار غير معروف إلى لوحة تحكم المعلم */}
+            {/* إعادة توجيه أي مسار غير معروف. تم تعديلها لتوجيه المستخدمين إلى المسار المحمي "/" */}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </Router>
