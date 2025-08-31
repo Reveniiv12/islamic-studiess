@@ -88,8 +88,17 @@ export const resetStudentData = async (students, teacherId, handleDialog, refres
       throw bookAbsencesDeleteError;
     }
 
+    // 4. Delete all prizes for the current teacher
+    const { error: prizesDeleteError } = await supabase
+      .from('prizes')
+      .delete()
+      .eq('teacher_id', teacherId);
 
-    // 4. Prepare and reset curriculum data
+    if (prizesDeleteError) {
+      throw prizesDeleteError;
+    }
+
+    // 5. Prepare and reset curriculum data
     // Get grade and section IDs from the first student in the list
     const gradeId = students[0].grade_level;
     const sectionId = students[0].section;
@@ -110,7 +119,7 @@ export const resetStudentData = async (students, teacherId, handleDialog, refres
       throw curriculumUpdateError;
     }
 
-    handleDialog("نجاح", "تم حذف جميع الدرجات والملاحظات والمناهج بنجاح.", "success");
+    handleDialog("نجاح", "تم حذف جميع الدرجات والملاحظات والمناهج والمكافآت بنجاح.", "success");
     refreshDataFunction();
   } catch (error) {
     console.error("Error resetting data:", error);
