@@ -1511,7 +1511,7 @@ const handleExportQRCodes = async () => {
                     <img src={student.photo || '/images/1.webp'} alt={student.name} className="w-16 h-16 rounded-full object-cover border-2 border-gray-600" />
                   </div>
                   <div className="flex-grow text-right">
-                    <h4 className="font-bold text-lg text-white truncate">{student.name}</h4>
+                    <h4 className="font-bold text-white truncate" style={{ fontSize: "clamp(0.875rem, 4vw, 1.125rem)" }}>{student.name}</h4>
                     <p className="text-sm text-gray-400 truncate">السجل: {student.nationalId}</p>
                     <div className="flex items-center justify-between mt-1">
                       {student.parentPhone && (
