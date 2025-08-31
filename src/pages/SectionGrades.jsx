@@ -17,7 +17,7 @@ import BookAbsenceModal from "../components/BookAbsenceModal.jsx";
 import TroubledStudentsModal from "../components/TroubledStudentsModal.jsx";
 import CustomDialog from "../components/CustomDialog";
 import VerificationModal from "../components/VerificationModal.jsx";
-import CustomModal from "../components/CustomModal.jsx"; 
+import CustomModal from "../components/CustomModal.jsx";
 import { QRCodeSVG } from 'qrcode.react';
 import { getHijriToday } from '../utils/recitationUtils';
 
@@ -99,7 +99,7 @@ const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
         {Array.from({ length: max }).map((_, index) => (
           <FaStar
             key={index}
-            className={`${sizes[size]} ${index < count ? `text-${color}-400` : 'text-gray-600'}`}
+            className={`${sizes[size]} ${index < count ? 'text-${color}-400' : 'text-gray-600'}`}
           />
         ))}
       </div>
@@ -1268,7 +1268,10 @@ const handleExportQRCodes = async () => {
           <button onClick={() => setShowGradesModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors shadow-md text-xs md:text-sm">
             <FaTable /> إدارة الدرجات
           </button>
-          <button onClick={() => setShowQrList(!showQrList)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 transition-colors shadow-md text-xs md:text-sm">
+          <button
+            onClick={() => setShowQrList(!showQrList)}
+            className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 transition-colors shadow-md text-xs md:text-sm"
+          >
             <FaQrcode /> {showQrList ? "إخفاء QR" : "عرض QR"}
           </button>
           <button
@@ -1315,7 +1318,8 @@ const handleExportQRCodes = async () => {
             className="w-full md:w-64 p-2 pr-10 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right text-sm"
           />
         </div>
-        <div className="flex flex-grow-0 md:flex-grow flex-shrink-0 md:justify-end gap-4 overflow-x-auto whitespace-nowrap">
+        {/* الحاوية الجديدة مع التنسيق المقترح */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-6 md:justify-end md:gap-4 md:flex-grow">
           <button
             onClick={() => {
               setShowGradeSheet(!showGradeSheet);
@@ -1323,7 +1327,7 @@ const handleExportQRCodes = async () => {
               setSelectedStudent(null);
               setShowQrList(false);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors shadow-md text-sm flex-shrink-0"
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors shadow-md text-xs sm:text-sm"
           >
             <FaTable /> {showGradeSheet ? "إخفاء الكشف" : "كشف الدرجات الشامل"}
           </button>
@@ -1334,17 +1338,17 @@ const handleExportQRCodes = async () => {
               setSelectedStudent(null);
               setShowQrList(false);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors shadow-md text-sm flex-shrink-0"
+            className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors shadow-md text-xs sm:text-sm"
           >
             <FaTable /> {showBriefSheet ? "إخفاء الكشف" : "كشف مختصر"}
           </button>
-          <button onClick={() => navigate(`/grades/${gradeId}`)} className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-sm flex-shrink-0">
+          <button onClick={() => navigate(`/grades/${gradeId}`)} className="flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-xs sm:text-sm">
             <FaArrowLeft /> العودة للفصول
           </button>
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-sm flex-shrink-0">
+          <button onClick={() => navigate('/')} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-xs sm:text-sm">
             <FaHome /> الصفحة الرئيسية
           </button>
-          <button onClick={fetchDataFromSupabase} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-sm flex-shrink-0">
+          <button onClick={fetchDataFromSupabase} className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-xs sm:text-sm">
             <FaSyncAlt className={isRefreshing ? "animate-spin" : ""} /> تحديث البيانات
           </button>
         </div>
