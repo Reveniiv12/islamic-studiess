@@ -142,8 +142,9 @@ const Portfolio = () => {
 
     for (const file of uploadedFiles) {
       const fileId = uuidv4();
-      const encodedFileName = encodeURIComponent(file.name);
-      const filePath = `${user.id}/${fileId}-${encodedFileName}`;
+      const fileExtension = file.name.split('.').pop();
+      const newFileName = `${fileId}.${fileExtension}`;
+      const filePath = `${user.id}/${newFileName}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('portfolio-files')
