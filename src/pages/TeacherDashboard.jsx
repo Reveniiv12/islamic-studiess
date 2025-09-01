@@ -20,8 +20,13 @@ const TeacherDashboard = () => {
   const [schoolName, setSchoolName] = useState("");
   const [currentSemester, setCurrentSemester] = useState("");
 
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isBackupOptionModalOpen, setIsBackupOptionModalOpen] = useState(false);
+  const [isBackupTitleModalOpen, setIsBackupTitleModalOpen] = useState(false);
+  const [isDeleteConfirmationModalOpen, setIsDeleteConfirmationModalOpen] = useState(false);
+
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [modalMessage, setModalMessage] = useState("");
@@ -32,17 +37,42 @@ const TeacherDashboard = () => {
 
   const [backups, setBackups] = useState([]);
   const [selectedBackupKey, setSelectedBackupKey] = useState(null);
-  const BACKUP_LIST_KEY = "grades_backup_list";
+  
+  const [backupTitle, setBackupTitle] = useState("");
 
-  const [customDialog, setCustomDialog] = useState({
+  // حالة جديدة لإدارة نافذة الحوار المخصصة
+  const [customDialogState, setCustomDialogState] = useState({
     isOpen: false,
     title: '',
     message: '',
+    inputs: {},
     onConfirm: () => {},
     onCancel: () => {},
-    onClose: () => {},
-    inputs: {},
   });
+  
+  // الدالة الحقيقية لإظهار وإخفاء نافذة الحوار
+  const setCustomDialog = (dialogProps) => {
+    setCustomDialogState(dialogProps);
+  };
+
+  const loadBackups = async () => {
+    if (!teacherId) {
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('backups')
+        .select('id, created_at, title')
+        .eq('teacher_id', teacherId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setBackups(data || []);
+    } catch (err) {
+      console.error("Failed to load backups:", err);
+      setBackups([]);
+    }
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -163,28 +193,10 @@ const TeacherDashboard = () => {
       }
     };
 
-    const loadBackups = async () => {
-      if (!teacherId) {
-        return;
-      }
-      try {
-        const { data, error } = await supabase
-          .from('backups')
-          .select('id, created_at, title')
-          .eq('teacher_id', teacherId)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setBackups(data || []);
-      } catch (err) {
-        console.error("Failed to load backups:", err);
-        setBackups([]);
-      }
-    };
-
     if (teacherId) {
       fetchAndCalculateData();
       fetchSettings();
+      // استدعاء الدالة من مكانها الجديد
       loadBackups();
     }
   }, [teacherId]);
@@ -194,6 +206,10 @@ const TeacherDashboard = () => {
   };
 
   const handleUpdateTeacherInfo = () => {
+    setModalError("");
+    setModalMessage("");
+    setIsAuthModalOpen(false);
+    
     setCustomDialog({
       isOpen: true,
       title: "تعديل بيانات المعلم",
@@ -224,14 +240,14 @@ const TeacherDashboard = () => {
           setSchoolName(inputs.schoolName);
           setCurrentSemester(inputs.currentSemester);
           setTeacherPhoto(inputs.teacherPhoto);
-          setCustomDialog({ ...customDialog, isOpen: false });
+          setCustomDialog({ isOpen: false });
         } catch (err) {
           console.error("Error updating settings:", err);
           setModalError("فشل تحديث البيانات. يرجى المحاولة مرة أخرى.");
         }
       },
-      onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
-      onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
+      onCancel: () => setCustomDialog({ isOpen: false }),
+      onClose: () => setCustomDialog({ isOpen: false }),
     });
   };
 
@@ -240,21 +256,11 @@ const TeacherDashboard = () => {
     setModalMessage("");
     setEmail("");
     setPassword("");
-    setIsResetModalOpen(true);
+    setIsAuthModalOpen(true);
     setIsMenuOpen(false);
   };
 
-  const handleRestoreData = () => {
-    setModalError("");
-    setModalMessage("");
-    setEmail("");
-    setPassword("");
-    setSelectedBackupKey(null);
-    setIsRestoreModalOpen(true);
-    setIsMenuOpen(false);
-  };
-
-  const handleResetConfirm = async (e) => {
+  const handleAuthConfirm = async (e) => {
     e.preventDefault();
     setModalError("");
     setModalMessage("");
@@ -279,63 +285,109 @@ const TeacherDashboard = () => {
     }
 
     if (data.user && data.user.id === user.id) {
-      setIsResetModalOpen(false);
-      setCustomDialog({
-        isOpen: true,
-        title: "أخذ نسخة احتياطية قبل الحذف",
-        message: "هل ترغب في أخذ نسخة احتياطية من البيانات الحالية قبل حذفها؟",
-        onConfirm: () => {
-          handleBackupData(() => {
-            setCustomDialog({ ...customDialog, isOpen: false });
-            showResetConfirmation();
-          });
-        },
-        onCancel: () => {
-          setCustomDialog({ ...customDialog, isOpen: false });
-          showResetConfirmation();
-        },
-        onClose: () => setCustomDialog({ ...customDialog, isOpen: false })
-      });
+      setIsAuthModalOpen(false);
+      setIsBackupOptionModalOpen(true);
     } else {
       setModalError("البريد الإلكتروني الذي أدخلته لا يتطابق مع المستخدم الحالي.");
     }
   };
 
-  const showResetConfirmation = () => {
-    setCustomDialog({
-      isOpen: true,
-      title: "تأكيد الحذف النهائي",
-      message: "هل أنت متأكد من حذف كافة بيانات الطلاب؟ هذا الإجراء لا يمكن التراجع عنه.",
-      onConfirm: async () => {
-        try {
-          const { error: deleteGradesError } = await supabase
-            .from('grades')
-            .delete()
-            .eq('teacher_id', teacherId);
+  const handleRestoreData = () => {
+    setModalError("");
+    setModalMessage("");
+    setEmail("");
+    setPassword("");
+    setSelectedBackupKey(null);
+    setIsRestoreModalOpen(true);
+    setIsMenuOpen(false);
+  };
+  
+  const performBackup = async () => {
+    setModalMessage("جاري حفظ النسخة الاحتياطية...");
+    setModalError("");
 
-          const { error: deleteStudentsError } = await supabase
-            .from('students')
-            .delete()
-            .eq('teacher_id', teacherId);
+    try {
+      const title = backupTitle || `نسخة احتياطية بتاريخ: ${new Date().toLocaleString('ar-EG')}`;
 
-          if (deleteGradesError || deleteStudentsError) {
-            throw new Error("فشل حذف البيانات");
-          }
+      // هنا تم تصحيح الطريقة لاستخدام .eq() بشكل صحيح
+      const { data: studentsData, error: studentsError } = await supabase.from('students').select('*').eq('teacher_id', teacherId);
+      const { data: gradesData, error: gradesError } = await supabase.from('grades').select('*').eq('teacher_id', teacherId);
+      const { data: curriculumData, error: curriculumError } = await supabase.from('curriculum').select('*').eq('teacher_id', teacherId);
+      const { data: announcementsData, error: announcementsError } = await supabase.from('announcements').select('*').eq('teacher_id', teacherId);
+      const { data: prizesData, error: prizesError } = await supabase.from('prizes').select('*').eq('teacher_id', teacherId);
+      const { data: absencesData, error: absencesError } = await supabase.from('absences').select('*').eq('teacher_id', teacherId);
+      const { data: bookAbsencesData, error: bookAbsencesError } = await supabase.from('book_absences').select('*').eq('teacher_id', teacherId);
+      const { data: sectionsData, error: sectionsError } = await supabase.from('sections').select('*').eq('teacher_id', teacherId);
+      const { data: settingsData, error: settingsError } = await supabase.from('settings').select('*').eq('id', 'general');
 
-          setModalMessage("تم حذف بيانات الطلاب بنجاح.");
-          setTimeout(() => {
-            setCustomDialog({ ...customDialog, isOpen: false });
-            window.location.reload();
-          }, 2000);
-        } catch (err) {
-          setCustomDialog({ ...customDialog, isOpen: false });
-          setModalError("فشل حذف البيانات. يرجى المحاولة مرة أخرى.");
-          console.error("Error deleting data:", err);
-        }
-      },
-      onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
-      onClose: () => setCustomDialog({ ...customDialog, isOpen: false })
-    });
+      if (studentsError || gradesError || curriculumError || announcementsError || prizesError || absencesError || bookAbsencesError || sectionsError || settingsError) {
+        throw new Error("فشل جلب البيانات لحفظ النسخة الاحتياطية.");
+      }
+      
+      const backupData = {
+        students: studentsData,
+        grades: gradesData,
+        curriculum: curriculumData,
+        announcements: announcementsData,
+        prizes: prizesData,
+        absences: absencesData,
+        book_absences: bookAbsencesData,
+        sections: sectionsData,
+        settings: settingsData
+      };
+
+      const { error: insertError } = await supabase
+        .from('backups')
+        .insert([{ teacher_id: teacherId, title: title, data: backupData }]);
+
+      if (insertError) {
+        throw insertError;
+      }
+      
+      await loadBackups();
+      setModalMessage("تم حفظ النسخة الاحتياطية بنجاح.");
+      return true;
+
+    } catch (err) {
+      setModalError("فشل حفظ النسخة الاحتياطية. يرجى المحاولة مرة أخرى.");
+      console.error("Error creating backup:", err);
+      return false;
+    }
+  };
+
+  const showDeleteConfirmation = async (takeBackup = false) => {
+    if (takeBackup) {
+      const backupSuccess = await performBackup();
+      if (!backupSuccess) {
+        return;
+      }
+    }
+
+    setIsDeleteConfirmationModalOpen(true);
+  };
+  
+  const handleFinalDeleteConfirm = async () => {
+    try {
+      await supabase.from('grades').delete().eq('teacher_id', teacherId);
+      await supabase.from('students').delete().eq('teacher_id', teacherId);
+      await supabase.from('curriculum').delete().eq('teacher_id', teacherId);
+      await supabase.from('announcements').delete().eq('teacher_id', teacherId);
+      await supabase.from('prizes').delete().eq('teacher_id', teacherId);
+      await supabase.from('absences').delete().eq('teacher_id', teacherId);
+      await supabase.from('book_absences').delete().eq('teacher_id', teacherId);
+      await supabase.from('sections').delete().eq('teacher_id', teacherId);
+      await supabase.from('settings').delete().eq('id', 'general');
+
+      setModalMessage("تم حذف بيانات الطلاب بنجاح.");
+      setIsDeleteConfirmationModalOpen(false);
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err) {
+      setModalError("فشل حذف البيانات. يرجى المحاولة مرة أخرى.");
+      setIsDeleteConfirmationModalOpen(false);
+      console.error("Error deleting data:", err);
+    }
   };
 
   const handleRestoreConfirm = async (e) => {
@@ -369,49 +421,53 @@ const TeacherDashboard = () => {
 
     if (data.user && data.user.id === user.id) {
       setIsRestoreModalOpen(false);
+      
+      const { data: backupData, error: fetchError } = await supabase
+        .from('backups')
+        .select('data')
+        .eq('id', selectedBackupKey)
+        .eq('teacher_id', teacherId)
+        .single();
+      
+      if (fetchError || !backupData || !backupData.data) {
+        setModalError("النسخة الاحتياطية المختارة غير موجودة أو فارغة.");
+        return;
+      }
+      
       try {
-        const { data: backupData, error: fetchError } = await supabase
-          .from('backups')
-          .select('data')
-          .eq('id', selectedBackupKey)
-          .eq('teacher_id', teacherId)
-          .single();
+        // حذف البيانات الحالية
+        await supabase.from('grades').delete().eq('teacher_id', teacherId);
+        await supabase.from('students').delete().eq('teacher_id', teacherId);
+        await supabase.from('curriculum').delete().eq('teacher_id', teacherId);
+        await supabase.from('announcements').delete().eq('teacher_id', teacherId);
+        await supabase.from('prizes').delete().eq('teacher_id', teacherId);
+        await supabase.from('absences').delete().eq('teacher_id', teacherId);
+        await supabase.from('book_absences').delete().eq('teacher_id', teacherId);
+        await supabase.from('sections').delete().eq('teacher_id', teacherId);
+        await supabase.from('settings').delete().eq('id', 'general');
 
-        if (fetchError || !backupData || !backupData.data) {
-          throw new Error("النسخة الاحتياطية المختارة غير موجودة أو فارغة.");
-        }
+        const parsedBackup = backupData.data;
 
-        setCustomDialog({
-          isOpen: true,
-          title: "تأكيد الاسترداد",
-          message: "هل أنت متأكد من استعادة البيانات؟ هذا الإجراء سيحل محل البيانات الحالية.",
-          onConfirm: async () => {
-            const parsedBackup = backupData.data;
+        // استعادة البيانات بالترتيب الصحيح
+        // أولاً: الجداول التي لا تعتمد على غيرها
+        await supabase.from('settings').insert(parsedBackup.settings);
+        await supabase.from('sections').insert(parsedBackup.sections);
+        await supabase.from('curriculum').insert(parsedBackup.curriculum);
+        await supabase.from('announcements').insert(parsedBackup.announcements);
+        await supabase.from('prizes').insert(parsedBackup.prizes);
 
-            await supabase.from('students').delete().eq('teacher_id', teacherId);
-            await supabase.from('grades').delete().eq('teacher_id', teacherId);
+        // ثانياً: الجداول التي تعتمد على الجداول السابقة
+        await supabase.from('students').insert(parsedBackup.students);
+        
+        // أخيراً: الجداول التي تعتمد على الطلاب
+        await supabase.from('grades').insert(parsedBackup.grades);
+        await supabase.from('absences').insert(parsedBackup.absences);
+        await supabase.from('book_absences').insert(parsedBackup.book_absences);
 
-            const { error: studentsInsertError } = await supabase
-              .from('students')
-              .insert(parsedBackup.students);
-            
-            const { error: gradesInsertError } = await supabase
-              .from('grades')
-              .insert(parsedBackup.grades);
-
-            if (studentsInsertError || gradesInsertError) {
-              throw new Error("فشل استعادة البيانات.");
-            }
-
-            setModalMessage("تم استعادة بيانات الطلاب بنجاح.");
-            setTimeout(() => {
-              setCustomDialog({ ...customDialog, isOpen: false });
-              window.location.reload();
-            }, 2000);
-          },
-          onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
-          onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
-        });
+        setModalMessage("تم استعادة بيانات الطلاب بنجاح.");
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       } catch (err) {
         setModalError("حدث خطأ أثناء استعادة البيانات.");
         console.error("Restore error:", err);
@@ -421,193 +477,110 @@ const TeacherDashboard = () => {
     }
   };
 
-  const handleBackupData = async (callback = () => {}) => {
-    if (!user || !teacherId) {
-      setModalError("يجب أن تكون مسجلاً للدخول لحفظ نسخة احتياطية.");
-      return;
-    }
-
-    setCustomDialog({
-      isOpen: true,
-      title: "حفظ نسخة احتياطية",
-      message: "أدخل عنوانًا لهذه النسخة الاحتياطية (اختياري).",
-      inputs: {
-        backupTitle: { label: "عنوان النسخة الاحتياطية", value: "" },
-      },
-      onConfirm: async (inputs) => {
-        try {
-          const title = inputs.backupTitle || `نسخة احتياطية بتاريخ: ${new Date().toLocaleString('ar-EG')}`;
-          const { data: studentsData, error: studentsError } = await supabase
-            .from('students')
-            .select('*')
-            .eq('teacher_id', teacherId);
-          
-          const { data: gradesData, error: gradesError } = await supabase
-            .from('grades')
-            .select('*')
-            .eq('teacher_id', teacherId);
-
-          if (studentsError || gradesError) {
-            throw new Error("فشل جلب البيانات لحفظ النسخة الاحتياطية.");
-          }
-
-          if (studentsData.length === 0) {
-            setCustomDialog({
-              isOpen: true,
-              title: "لا يمكن الحفظ",
-              message: "لا توجد بيانات طلاب لحفظها.",
-              onConfirm: () => setCustomDialog({ ...customDialog, isOpen: false }),
-              onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
-            });
-            return;
-          }
-
-          const backupData = {
-            students: studentsData,
-            grades: gradesData,
-          };
-
-          const { error: insertError } = await supabase
-            .from('backups')
-            .insert([{ teacher_id: teacherId, title: title, data: backupData }]);
-
-          if (insertError) {
-            throw insertError;
-          }
-
-          setCustomDialog({
-            isOpen: true,
-            title: "تم بنجاح",
-            message: "تم حفظ نسخة احتياطية من بيانات الطلاب بنجاح.",
-            onConfirm: () => {
-              setCustomDialog({ ...customDialog, isOpen: false });
-              callback();
-            },
-            onClose: () => {
-              setCustomDialog({ ...customDialog, isOpen: false });
-              callback();
-            },
-          });
-
-        } catch (err) {
-          console.error("Error creating backup:", err);
-          setModalError("فشل حفظ النسخة الاحتياطية.");
-        }
-      },
-      onCancel: () => setCustomDialog({ ...customDialog, isOpen: false }),
-      onClose: () => setCustomDialog({ ...customDialog, isOpen: false }),
-    });
-  };
-
-  const handleDeleteBackup = (backupId) => {
+  const handleDeleteBackup = async (backupId) => {
     setIsRestoreModalOpen(false);
 
-    setCustomDialog({
-      isOpen: true,
-      title: "تأكيد الحذف",
-      message: "هل أنت متأكد من حذف هذه النسخة الاحتياطية؟",
-      onConfirm: async () => {
-        try {
-          const { error } = await supabase
-            .from('backups')
-            .delete()
-            .eq('id', backupId)
-            .eq('teacher_id', teacherId);
+    try {
+      await supabase
+        .from('backups')
+        .delete()
+        .eq('id', backupId)
+        .eq('teacher_id', teacherId);
 
-          if (error) {
-            throw error;
-          }
-
-          const updatedBackups = backups.filter(backup => backup.id !== backupId);
-          setBackups(updatedBackups);
-          setCustomDialog({ ...customDialog, isOpen: false });
-          setTimeout(() => setIsRestoreModalOpen(true), 300);
-        } catch (err) {
-          console.error("Error deleting backup:", err);
-          setModalError("فشل حذف النسخة الاحتياطية.");
-          setCustomDialog({ ...customDialog, isOpen: false });
-          setTimeout(() => setIsRestoreModalOpen(true), 300);
-        }
-      },
-      onCancel: () => {
-        setCustomDialog({ ...customDialog, isOpen: false });
-        setTimeout(() => setIsRestoreModalOpen(true), 300);
-      },
-      onClose: () => {
-        setCustomDialog({ ...customDialog, isOpen: false });
-        setTimeout(() => setIsRestoreModalOpen(true), 300);
-      },
-    });
+      await loadBackups();
+      setModalMessage("تم حذف النسخة الاحتياطية بنجاح.");
+      setTimeout(() => setModalMessage(""), 2000);
+      
+    } catch (err) {
+      console.error("Error deleting backup:", err);
+      setModalError("فشل حذف النسخة الاحتياطية.");
+    }
+    setTimeout(() => setIsRestoreModalOpen(true), 300);
   };
-
-  const CustomDialog = ({ isOpen, title, message, inputs, onConfirm, onCancel, onClose }) => {
-    const [inputValues, setInputValues] = useState(inputs ? Object.fromEntries(Object.keys(inputs).map(key => [key, inputs[key].value])) : {});
-
-    const handleInputChange = (e) => {
-      const { name, value } = e.target;
-      setInputValues(prev => ({ ...prev, [name]: value }));
-    };
-
-    if (!isOpen) return null;
-
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
-        <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
-          <h3 className="text-xl font-bold text-blue-400 mb-4">{title}</h3>
-          <p className="text-gray-300 mb-6">{message}</p>
-
-          {inputs && (
-            <div className="space-y-4 mb-6 text-right">
-              {Object.keys(inputs).map(key => (
-                <div key={key}>
-                  <label className="block text-gray-400 text-sm mb-1">{inputs[key].label}</label>
-                  <input
-                    type="text"
-                    name={key}
-                    value={inputValues[key]}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex justify-between items-center mt-6">
-            {onCancel && (
-              <button
-                type="button"
-                onClick={onCancel}
-                className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition"
-              >
-                إلغاء
-              </button>
-            )}
-            {onConfirm && (
-              <button
-                type="button"
-                onClick={() => onConfirm(inputValues)}
-                className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
-              >
-                تأكيد
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+  
+  const handleStandaloneBackup = () => {
+    setIsBackupTitleModalOpen(true);
+    setBackupTitle("");
   };
-
-  const handleNavigateToPortfolio = () => {
-    navigate("/portfolio");
-    setIsMenuOpen(false);
-  };
-
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-['Noto_Sans_Arabic',sans-serif]">
       <Navbar />
-      <CustomDialog {...customDialog} />
+
+      {/* Main Authentication Modal */}
+      {isAuthModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
+            <h3 className="text-xl font-bold text-red-400 mb-4">تأكيد المصادقة</h3>
+            <p className="text-gray-300 mb-6">للمتابعة، يرجى إدخال بياناتك:</p>
+            {modalError && <p className="text-red-500 mb-4">{modalError}</p>}
+            <form onSubmit={handleAuthConfirm} className="space-y-4">
+              <input type="email" placeholder="البريد الإلكتروني" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="password" placeholder="كلمة المرور" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="flex justify-between items-center mt-6">
+                <button type="button" onClick={() => setIsAuthModalOpen(false)} className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition">إلغاء</button>
+                <button type="submit" className="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition">تأكيد</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Backup Option Modal */}
+      {isBackupOptionModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
+            <h3 className="text-xl font-bold text-blue-400 mb-4">أخذ نسخة احتياطية قبل الحذف</h3>
+            <p className="text-gray-300 mb-6">هل ترغب في أخذ نسخة احتياطية من البيانات الحالية قبل حذفها؟</p>
+            <div className="flex justify-between items-center mt-6">
+              <button onClick={() => { setIsBackupOptionModalOpen(false); setIsDeleteConfirmationModalOpen(true); }} className="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition">لا، احذف مباشرة</button>
+              <button onClick={() => { setIsBackupOptionModalOpen(false); setIsBackupTitleModalOpen(true); }} className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">نعم، احفظ واحذف</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backup Title Modal */}
+      {isBackupTitleModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
+            <h3 className="text-xl font-bold text-blue-400 mb-4">حفظ نسخة احتياطية</h3>
+            <p className="text-gray-300 mb-6">أدخل عنوانًا لهذه النسخة الاحتياطية (اختياري).</p>
+            <div className="space-y-4 mb-6 text-right">
+              <div>
+                <label className="block text-gray-400 text-sm mb-1">عنوان النسخة الاحتياطية</label>
+                <input type="text" value={backupTitle} onChange={(e) => setBackupTitle(e.target.value)} className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="مثال: بيانات الفصل الدراسي الأول" />
+              </div>
+            </div>
+            <div className="flex justify-between items-center mt-6">
+              <button onClick={() => { setIsBackupTitleModalOpen(false); }} className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition">إلغاء</button>
+              <button onClick={async () => { 
+                setIsBackupTitleModalOpen(false); 
+                setModalMessage("جاري حفظ النسخة الاحتياطية، يرجى الانتظار...");
+                const success = await performBackup();
+                if (success) {
+                  // بعد نجاح النسخ الاحتياطي، ننتقل إلى نافذة تأكيد الحذف النهائية
+                  setIsDeleteConfirmationModalOpen(true);
+                }
+              }} className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">تأكيد</button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Final Delete Confirmation Modal */}
+      {isDeleteConfirmationModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
+            <h3 className="text-xl font-bold text-red-400 mb-4">تأكيد الحذف النهائي</h3>
+            <p className="text-gray-300 mb-6">هل أنت متأكد من حذف كافة بيانات الطلاب؟ هذا الإجراء لا يمكن التراجع عنه.</p>
+            <div className="flex justify-between items-center mt-6">
+              <button onClick={() => setIsDeleteConfirmationModalOpen(false)} className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition">إلغاء</button>
+              <button onClick={handleFinalDeleteConfirm} className="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition">تأكيد الحذف</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button
         onClick={toggleMenu}
@@ -640,7 +613,7 @@ const TeacherDashboard = () => {
           </div>
 
           <div className="space-y-4">
-            <button onClick={handleNavigateToPortfolio} className="w-full py-3 bg-blue-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-blue-700 transition">
+            <button onClick={() => navigate("/portfolio")} className="w-full py-3 bg-blue-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-blue-700 transition">
               <FaFolderOpen /> ملف الإنجاز
             </button>
             <button onClick={handleResetData} className="w-full py-3 bg-red-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-red-700 transition">
@@ -649,7 +622,7 @@ const TeacherDashboard = () => {
             <button onClick={handleRestoreData} className="w-full py-3 bg-green-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-green-700 transition">
               <FaDownload /> استرداد
             </button>
-            <button onClick={() => handleBackupData()} className="w-full py-3 bg-gray-700 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-gray-600 transition">
+            <button onClick={handleStandaloneBackup} className="w-full py-3 bg-gray-700 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-gray-600 transition">
               <FaDownload /> حفظ نسخة احتياطية
             </button>
           </div>
@@ -662,46 +635,15 @@ const TeacherDashboard = () => {
           className="fixed inset-0 bg-black opacity-50 z-30"
         ></div>
       )}
-
-      {isResetModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
-          <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
-            <h3 className="text-xl font-bold text-red-400 mb-4">تأكيد إعادة التعيين</h3>
-            <p className="text-gray-300 mb-6">لإعادة تعيين بيانات الطلاب، يرجى إدخال بياناتك للمصادقة:</p>
-            {modalError && <p className="text-red-500 mb-4">{modalError}</p>}
-            {modalMessage && <p className="text-green-500 mb-4">{modalMessage}</p>}
-            <form onSubmit={handleResetConfirm} className="space-y-4">
-              <input
-                type="email"
-                placeholder="البريد الإلكتروني"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="password"
-                placeholder="كلمة المرور"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <div className="flex justify-between items-center mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsResetModalOpen(false)}
-                  className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
-                >
-                  تأكيد الحذف
-                </button>
-              </div>
-            </form>
-          </div>
+      
+      {modalMessage && (
+        <div className="fixed top-4 right-4 z-[200] bg-green-500 text-white px-4 py-2 rounded shadow-lg transition-opacity duration-300">
+          {modalMessage}
+        </div>
+      )}
+      {modalError && (
+        <div className="fixed top-4 right-4 z-[200] bg-red-500 text-white px-4 py-2 rounded shadow-lg transition-opacity duration-300">
+          {modalError}
         </div>
       )}
 
@@ -710,44 +652,18 @@ const TeacherDashboard = () => {
           <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
             <h3 className="text-xl font-bold text-green-400 mb-4">اختيار نسخة للاسترداد</h3>
             <p className="text-gray-300 mb-6">للاسترداد، يرجى إدخال بياناتك للمصادقة:</p>
-            {modalError && <p className="text-red-500 mb-4">{modalError}</p>}
-            {modalMessage && <p className="text-green-500 mb-4">{modalMessage}</p>}
             <form onSubmit={handleRestoreConfirm} className="space-y-4">
-              <input
-                type="email"
-                placeholder="البريد الإلكتروني"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="password"
-                placeholder="كلمة المرور"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <input type="email" placeholder="البريد الإلكتروني" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="password" placeholder="كلمة المرور" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               {backups.length > 0 ? (
                 <ul className="text-right space-y-2 mb-6 max-h-60 overflow-y-auto">
                   {backups.map((backup) => (
-                    <li
-                      key={backup.id}
-                      className={`flex justify-between items-center p-3 rounded-lg cursor-pointer transition-colors duration-200
-                                 ${selectedBackupKey === backup.id ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}
-                      onClick={() => setSelectedBackupKey(backup.id)}
-                    >
+                    <li key={backup.id} className={`flex justify-between items-center p-3 rounded-lg cursor-pointer transition-colors duration-200 ${selectedBackupKey === backup.id ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => setSelectedBackupKey(backup.id)}>
                       <div className="flex flex-col items-start">
                         <span className="font-semibold">{backup.title}</span>
-                        <span className="text-sm text-gray-400">
-                          بتاريخ: {new Date(backup.created_at).toLocaleString("ar-EG", {
-                            year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                          })}
-                        </span>
+                        <span className="text-sm text-gray-400">بتاريخ: {new Date(backup.created_at).toLocaleString("ar-EG", { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                       </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDeleteBackup(backup.id); }}
-                        className="text-red-400 hover:text-red-200"
-                      >
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteBackup(backup.id); }} className="text-red-400 hover:text-red-200">
                         <FaTrash />
                       </button>
                     </li>
@@ -758,22 +674,40 @@ const TeacherDashboard = () => {
               )}
 
               <div className="flex justify-between items-center mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsRestoreModalOpen(false)}
-                  className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  disabled={!selectedBackupKey}
-                  className={`px-6 py-2 rounded-lg bg-green-600 text-white transition ${!selectedBackupKey ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700'}`}
-                >
-                  تأكيد الاسترداد
-                </button>
+                <button type="button" onClick={() => setIsRestoreModalOpen(false)} className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition">إلغاء</button>
+                <button type="submit" disabled={!selectedBackupKey} className={`px-6 py-2 rounded-lg bg-green-600 text-white transition ${!selectedBackupKey ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-700'}`}>تأكيد الاسترداد</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      
+      {/* نافذة الحوار المخصصة */}
+      {customDialogState.isOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
+          <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
+            <h3 className="text-xl font-bold text-blue-400 mb-4">{customDialogState.title}</h3>
+            <p className="text-gray-300 mb-6">{customDialogState.message}</p>
+            <div className="space-y-4 mb-6 text-right">
+              {Object.entries(customDialogState.inputs).map(([key, input]) => (
+                <div key={key}>
+                  <label htmlFor={key} className="block text-gray-400 text-sm mb-1">{input.label}</label>
+                  <input id={key} type="text" defaultValue={input.value} 
+                    className="w-full px-4 py-2 rounded-md bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                    placeholder={input.label} 
+                    onChange={(e) => customDialogState.inputs[key].value = e.target.value} 
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-between items-center mt-6">
+              <button onClick={() => setCustomDialogState({ ...customDialogState, isOpen: false })} className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition">إلغاء</button>
+              <button onClick={() => customDialogState.onConfirm(
+                Object.fromEntries(
+                  Object.entries(customDialogState.inputs).map(([key, input]) => [key, input.value])
+                )
+              )} className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">تأكيد</button>
+            </div>
           </div>
         </div>
       )}
@@ -781,11 +715,7 @@ const TeacherDashboard = () => {
       <div className={`p-4 md:p-8 max-w-7xl mx-auto transition-all duration-300 ${isMenuOpen ? 'md:mr-64' : ''}`}>
         <div className="text-center mb-16">
           <div className="flex justify-center items-center gap-4 mb-4">
-            <img
-              src="/images/moe_logo_white.png"
-              alt="شعار وزارة التعليم"
-              className="h-24 md:h-32"
-            />
+            <img src="/images/moe_logo_white.png" alt="شعار وزارة التعليم" className="h-24 md:h-32" />
           </div>
           <h1 className="text-3xl md:text-5xl font-extrabold text-blue-400 leading-tight">{schoolName}</h1>
           <p className="mt-2 text-md md:text-xl text-gray-300">لوحة تحكم المعلم لإدارة الفصول</p>

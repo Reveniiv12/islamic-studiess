@@ -18,6 +18,7 @@ import TroubledStudentsModal from "../components/TroubledStudentsModal.jsx";
 import CustomDialog from "../components/CustomDialog";
 import VerificationModal from "../components/VerificationModal.jsx";
 import CustomModal from "../components/CustomModal.jsx";
+import AnnouncementsModal from "../components/AnnouncementsModal"; 
 import { QRCodeSVG } from 'qrcode.react';
 import { getHijriToday } from '../utils/recitationUtils';
 
@@ -84,7 +85,6 @@ import {
 import { getRecitationStatus } from "../utils/recitationUtils";
 import { resetStudentData } from '../utils/resetDataUtils';
 
-// دالة جديدة لتحويل الأرقام العربية إلى لاتينية
 const convertToEnglishNumbers = (input) => {
   if (input === null || input === undefined) {
     return null;
@@ -189,7 +189,9 @@ const SectionGrades = () => {
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [showEditStudentModal, setShowEditStudentModal] = useState(false);
 
-
+  const [showAnnouncementsModal, setShowAnnouncementsModal] = useState(false);
+  const [announcements, setAnnouncements] = useState([]);
+  
   const gradeName = getGradeNameById(gradeId);
   const sectionName = getSectionNameById(sectionId);
 
@@ -261,6 +263,21 @@ const SectionGrades = () => {
 
       if (prizesError) throw prizesError;
       setPrizes(prizesData);
+
+      // Fetch announcements directly using gradeId and sectionId from URL
+      const { data: announcementsData, error: announcementsError } = await supabase
+        .from('announcements')
+        .select('*')
+        .eq('grade_id', gradeId)
+        .eq('section_id', sectionId)
+        .eq('teacher_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (announcementsError) {
+        console.error("Error fetching announcements:", announcementsError);
+      } else {
+        setAnnouncements(announcementsData || []);
+      }
 
       let savedTeacherName = "المعلم الافتراضي";
       let savedSchoolName = "مدرسة متوسطة الطرف";
@@ -335,6 +352,10 @@ const SectionGrades = () => {
     }
   };
 
+  useEffect(() => {
+    fetchDataFromSupabase();
+  }, [gradeId, sectionId]);
+
 const updateStudentsData = async (updatedStudents) => {
     if (!teacherId) {
       handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
@@ -363,7 +384,6 @@ const updateStudentsData = async (updatedStudents) => {
                 weekly_notes: student.grades.weeklyNotes,
             },
             absences: student.absences,
-            // book_absences: student.bookAbsences, // تم إزالة هذا السطر المسبب للخطأ
             grade_level: gradeId,
             section: sectionId,
             teacher_id: teacherId,
@@ -490,9 +510,6 @@ const updateStudentsData = async (updatedStudents) => {
     );
   };
 
-  useEffect(() => {
-    fetchDataFromSupabase();
-  }, [gradeId, sectionId]);
 
   const handleSelectStudent = (student) => {
     setSelectedStudent(student);
@@ -1324,6 +1341,12 @@ const handleExportQRCodes = async () => {
             <FaExclamationTriangle /> كشف المتعثرين
           </button>
           <button
+            onClick={() => setShowAnnouncementsModal(true)} // New Button
+            className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-xs md:text-sm"
+          >
+            <FaStickyNote /> إعلانات هامة
+          </button>
+          <button
             onClick={handleResetDataClick}
             className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-red-800 text-white rounded-lg hover:bg-red-700 transition-colors shadow-md text-xs md:text-sm"
           >
@@ -1341,6 +1364,7 @@ const handleExportQRCodes = async () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full md:w-64 p-2 pr-10 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right text-sm"
+            inputMode="text"
           />
         </div>
         {/* الحاوية الجديدة مع التنسيق المقترح */}
@@ -1468,15 +1492,9 @@ const handleExportQRCodes = async () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {filteredStudents.map(student => (
-              <div key={student.id} onClick={() => handleQrClick(student)} className="bg-gray-700 p-4 rounded-lg shadow-md flex flex-col items-center transition-transform transform hover:scale-105">
+              <div key={student.id} onClick={() => handleQrClick(student)} className="bg-gray-700 p-4 rounded-lg shadow-md flex flex-col items-center transition-transform transform hover:scale-105 cursor-pointer">
                 <h4 className="text-lg font-bold text-blue-400 mb-2">{student.name}</h4>
-                <div className="flex items-center gap-1 mb-2">
-                  <FaStar className="text-yellow-400" />
-                  <span className="text-yellow-400 font-bold">{student.stars || 0}</span>
-                </div>
-                <Link to={`/grades/${gradeId}/sections/${sectionId}/students/${student.id}`} target="_blank" rel="noopener noreferrer">
-                  <StudentQrCode viewKey={`/grades/${gradeId}/sections/${sectionId}/students/${student.id}`} size={150} />
-                </Link>
+                <StudentQrCode viewKey={`/grades/${gradeId}/sections/${sectionId}/students/${student.id}`} size={150} />
                 <span className="mt-2 text-sm text-gray-400">{student.nationalId}</span>
                 <span className="text-sm text-gray-300">{gradeName} - {sectionName}</span>
                 <div className="flex gap-2 mt-2">
@@ -1652,18 +1670,18 @@ const handleExportQRCodes = async () => {
             </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.tests.slice(0, 2).map((grade, i) => (
-                  <input key={i} type="text" inputmode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
                 ))}
               </div>
             </div>
 
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
-                <FaMicrophone className="text-3xl text-yellow-400" /> الاختبار الشفوي (5) <span className="text-yellow-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'oralTest', 'best')} / 5</span>
+                <FaMicrophone className="text-3xl text-yellow-400" /> الاختبار الشفوي  <span className="text-yellow-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'oralTest', 'best')} / 5</span>
               </h4>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.oralTest.slice(0, 5).map((grade, i) => (
-                  <input key={i} type="text" inputmode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "oralTest", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "oralTest", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
                 ))}
               </div>
             </div>
@@ -1684,7 +1702,7 @@ const handleExportQRCodes = async () => {
             </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.homework.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="text" inputmode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 ))}
               </div>
             </div>
@@ -1708,7 +1726,7 @@ const handleExportQRCodes = async () => {
                   <input
                     key={i}
                     type="text"
-                    inputmode="numeric"
+                    inputMode="numeric"
                     placeholder="--"
                     value={grade === null ? '' : grade}
                     onChange={(e) => updateStudentGrade(selectedStudent.id, "performanceTasks", i, e.target.value)}
@@ -1720,11 +1738,11 @@ const handleExportQRCodes = async () => {
 
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
-                <FaCommentDots className="text-3xl text-cyan-400" /> المشاركة (10) <span className="text-cyan-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'participation', 'sum')} / 10</span>
+                <FaCommentDots className="text-3xl text-cyan-400" /> المشاركة  <span className="text-cyan-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'participation', 'sum')} / 10</span>
               </h4>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.participation.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="text" inputmode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                 ))}
               </div>
             </div>
@@ -1739,7 +1757,7 @@ const handleExportQRCodes = async () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h5 className="font-medium text-gray-100">تلاوة القرآن (10)</h5>
+                    <h5 className="font-medium text-gray-100">تلاوة القرآن </h5>
                     {getStatusInfo(selectedStudent, 'recitation', curriculum).icon}
                     <span className={`text-sm ${getStatusInfo(selectedStudent, 'recitation', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(selectedStudent, 'recitation', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(selectedStudent, 'recitation', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
                       ({getStatusInfo(selectedStudent, 'recitation', curriculum).text})
@@ -1751,7 +1769,7 @@ const handleExportQRCodes = async () => {
                       <input
                         key={i}
                         type="text"
-                        inputmode="numeric"
+                        inputMode="numeric"
                         placeholder="--"
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranRecitation", i, e.target.value)}
@@ -1762,7 +1780,7 @@ const handleExportQRCodes = async () => {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h5 className="font-medium text-gray-100">حفظ القرآن (5)</h5>
+                    <h5 className="font-medium text-gray-100">حفظ القرآن </h5>
                     {getStatusInfo(selectedStudent, 'memorization', curriculum).icon}
                     <span className={`text-sm ${getStatusInfo(selectedStudent, 'memorization', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(selectedStudent, 'memorization', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(selectedStudent, 'memorization', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
                       ({getStatusInfo(selectedStudent, 'memorization', curriculum).text})
@@ -1774,7 +1792,7 @@ const handleExportQRCodes = async () => {
                       <input
                         key={i}
                         type="text"
-                        inputmode="numeric"
+                        inputMode="numeric"
                         placeholder="--"
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranMemorization", i, e.target.value)}
@@ -1910,7 +1928,7 @@ const handleExportQRCodes = async () => {
           teacherName={teacherName}
           currentSemester={currentSemester}
           testCalculationMethod={testCalculationMethod}
-          handleTestCalculationMethodChange={handleTestCalculationMethodChange}
+          onTestCalculationMethodChange={handleTestCalculationMethodChange}
           updateStudentGrade={updateStudentGrade}
           getRecitationStatus={getRecitationStatus}
           taskStatusUtils={taskStatusUtils}
@@ -1957,28 +1975,29 @@ const handleExportQRCodes = async () => {
         />
       )}
 
-      {showAbsenceModal && (
-        <AbsenceModal
-          students={students}
-          onClose={() => {
+{showAbsenceModal && (
+    <AbsenceModal
+        students={students}
+        onClose={() => {
             setShowAbsenceModal(false);
             fetchDataFromSupabase();
-          }}
-          onSave={updateAbsenceData}
-        />
-      )}
+        }}
+        onSave={updateAbsenceData}
+        handleDialog={handleDialog} // <--- أضف هذا السطر
+    />
+)}
 
-      {showBookAbsenceModal && (
-        <BookAbsenceModal
-          students={students}
-          onClose={() => {
+{showBookAbsenceModal && (
+    <BookAbsenceModal
+        students={students}
+        onClose={() => {
             setShowBookAbsenceModal(false);
             fetchDataFromSupabase();
-          }}
-          onSave={updateBookAbsenceData}
-        />
-      )}
-
+        }}
+        onSave={updateBookAbsenceData}
+        handleDialog={handleDialog} // <--- أضف هذا السطر
+    />
+)}
       {showTroubledStudentsModal && (
         <TroubledStudentsModal
           students={students}
@@ -2015,6 +2034,20 @@ const handleExportQRCodes = async () => {
           teacherId={teacherId}
         />
       )}
+      
+      {/* New Modal for Announcements */}
+      {showAnnouncementsModal && (
+        <AnnouncementsModal
+          announcements={announcements}
+          onClose={() => setShowAnnouncementsModal(false)}
+          gradeId={gradeId}
+          sectionId={sectionId}
+          teacherId={teacherId}
+          onSave={setAnnouncements}
+          handleDialog={handleDialog}
+        />
+      )}
+
     </div>
   );
 };

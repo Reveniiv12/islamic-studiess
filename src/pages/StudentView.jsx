@@ -17,7 +17,8 @@ import {
   FaArrowLeft,
   FaRegStar,
   FaCoins,
-  FaGift
+  FaGift,
+  FaSyncAlt,
 } from "react-icons/fa";
 
 import {
@@ -68,7 +69,9 @@ function StudentView() {
   const [currentSemester, setCurrentSemester] = useState("");
   const [prizes, setPrizes] = useState([]);
   const [isPrizesModalOpen, setIsPrizesModalOpen] = useState(false);
-
+  
+  const [announcements, setAnnouncements] = useState([]);
+  
   const gradeName = getGradeNameById(studentData?.grade_level);
   const sectionName = getSectionNameById(studentData?.section);
 
@@ -83,8 +86,6 @@ function StudentView() {
       try {
         setLoading(true);
 
-        // جلب بيانات الطالب من Supabase
-        // **التغيير هنا: استبدال select بـ '*, teacher_id'**
         const { data: student, error: studentError } = await supabase
           .from('students')
           .select('*, teacher_id')
@@ -97,7 +98,6 @@ function StudentView() {
 
         const teacherId = student.teacher_id;
 
-        // جلب بيانات المنهج باستخدام teacher_id من بيانات الطالب
         const { data: curriculumData, error: curriculumError } = await supabase
           .from('curriculum')
           .select('*')
@@ -118,7 +118,6 @@ function StudentView() {
           setHomeworkCurriculum(curriculumData.homework || []);
         }
 
-        // جلب إعدادات المعلم والمدرسة
         const { data: settingsData, error: settingsError } = await supabase
           .from('settings')
           .select('test_method, teacher_name, school_name, current_semester')
@@ -136,7 +135,6 @@ function StudentView() {
           setCurrentSemester(settingsData.current_semester || "");
         }
         
-        // جلب الجوائز المرتبطة بالمعلم
         if (teacherId) {
           const { data: prizesData, error: prizesError } = await supabase
             .from('prizes')
@@ -151,7 +149,20 @@ function StudentView() {
           }
         }
 
-        // معالجة بيانات الطالب
+        const { data: announcementsData, error: announcementsError } = await supabase
+          .from('announcements')
+          .select('*')
+          .eq('grade_id', student.grade_level)
+          .eq('section_id', student.section)
+          .eq('teacher_id', teacherId)
+          .order('created_at', { ascending: false });
+
+        if (announcementsError) {
+          console.error("Error fetching announcements:", announcementsError);
+        } else {
+          setAnnouncements(announcementsData || []);
+        }
+
         const processedStudentData = {
           ...student,
           grades: {
@@ -213,15 +224,21 @@ function StudentView() {
           <h1 className="text-lg md:text-2xl font-extrabold text-white">
             سجل متابعة مادة القرآن الكريم والدراسات الإسلامية
           </h1>
-          <p className="text-sm md:text-md font-medium text-gray-400">
-            المدرسة: {schoolName}
-          </p>
-          <p className="text-sm md:text-md font-medium text-gray-400">
-            معلم المادة:  {teacherName}
-          </p>
-          <p className="text-sm md:text-md font-medium text-gray-400">
-            الفصل الدراسي: {currentSemester}
-          </p>
+          {schoolName && (
+            <p className="text-sm md:text-md font-medium text-gray-400">
+              المدرسة: {schoolName}
+            </p>
+          )}
+          {teacherName && (
+            <p className="text-sm md:text-md font-medium text-gray-400">
+              معلم المادة:  {teacherName}
+            </p>
+          )}
+          {currentSemester && (
+            <p className="text-sm md:text-md font-medium text-gray-400">
+              الفصل الدراسي: {currentSemester}
+            </p>
+          )}
         </div>
       </header>
 
@@ -240,6 +257,34 @@ function StudentView() {
               )}
             </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8">
+            {/* Important Announcements Section */}
+            <div className="md:col-span-2 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold text-xl flex items-center gap-2 text-gray-100 mb-4">
+                <FaCommentDots className="text-3xl text-yellow-400" /> إعلانات هامة
+              </h4>
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {announcements.length > 0 ? (
+                  announcements.map((ann, index) => (
+                    <div key={index} className="bg-gray-800 p-3 rounded-lg border border-gray-600">
+                      <p className="text-sm text-gray-300">{ann.content}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {new Date(ann.created_at).toLocaleDateString('ar-SA', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-400 text-sm text-center">لا توجد إعلانات حاليًا.</p>
+                )}
+              </div>
+            </div>
+          </div>
+
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8">
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
@@ -264,7 +309,7 @@ function StudentView() {
                     <span className="text-lg font-bold text-yellow-400">({studentData.stars || 0})</span>
                   </div>
                   <div className="flex items-center flex-wrap justify-center gap-1">
-                    {[...Array(10)].map((_, i) => (
+                    {Array.from({ length: 10 }).map((_, i) => (
                       <FaStar
                         key={`total-${i}`}
                         className={`text-xl ${i < (studentData.stars || 0) ? 'text-yellow-400' : 'text-gray-400'}`}
@@ -279,7 +324,7 @@ function StudentView() {
                     <span className="text-lg font-bold text-green-400">({studentData.acquiredStars || 0})</span>
                   </div>
                   <div className="flex items-center flex-wrap justify-center gap-1">
-                    {[...Array(10)].map((_, i) => (
+                    {Array.from({ length: 10 }).map((_, i) => (
                       <FaStar
                         key={`acquired-${i}`}
                         className={`text-xl ${i < (studentData.acquiredStars || 0) ? 'text-green-400' : 'text-gray-400'}`}
@@ -294,7 +339,7 @@ function StudentView() {
                     <span className="text-lg font-bold text-red-400">({studentData.consumedStars || 0})</span>
                   </div>
                   <div className="flex items-center flex-wrap justify-center gap-1">
-                    {[...Array(10)].map((_, i) => (
+                    {Array.from({ length: 10 }).map((_, i) => (
                       <FaStar
                         key={`consumed-${i}`}
                         className={`text-xl ${i < (studentData.consumedStars || 0) ? 'text-red-400' : 'text-gray-400'}`}
@@ -330,7 +375,7 @@ function StudentView() {
 
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
-                <FaMicrophone className="text-3xl text-yellow-400" /> الاختبار الشفوي (5)
+                <FaMicrophone className="text-3xl text-yellow-400" /> الاختبار الشفوي
                 <span className="text-yellow-400 font-bold text-2xl">
                   {calculateCategoryScore(studentData.grades, 'oralTest', 'best')} / 5
                 </span>
@@ -371,7 +416,7 @@ function StudentView() {
               <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
                 <FaPencilAlt className="text-3xl text-purple-400" /> المهام الأدائية
                 <span className="text-purple-400 font-bold mr-2 text-2xl">
-                  {calculateCategoryScore(studentData.grades, 'performanceTasks', 'best')} / 10
+                  {calculateCategoryScore(studentData.grades, 'performanceTasks', 'best')} / 5
                 </span>
               </h4>
               <div className="flex items-center gap-2 mb-2">
@@ -392,7 +437,7 @@ function StudentView() {
 
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
-                <FaCommentDots className="text-3xl text-cyan-400" /> المشاركة (10)
+                <FaCommentDots className="text-3xl text-cyan-400" /> المشاركة 
                 <span className="text-cyan-400 font-bold text-2xl">
                   {calculateCategoryScore(studentData.grades, 'participation', 'sum')} / 10
                 </span>
@@ -417,7 +462,7 @@ function StudentView() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h5 className="font-medium text-gray-100">تلاوة القرآن (10)</h5>
+                    <h5 className="font-medium text-gray-100">تلاوة القرآن</h5>
                     {getStatusInfo(studentData, 'recitation', curriculum).icon}
                     <span className={`text-sm ${getStatusInfo(studentData, 'recitation', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(studentData, 'recitation', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(studentData, 'recitation', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
                       ({getStatusInfo(studentData, 'recitation', curriculum).text})
@@ -434,7 +479,7 @@ function StudentView() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h5 className="font-medium text-gray-100">حفظ القرآن (5)</h5>
+                    <h5 className="font-medium text-gray-100">حفظ القرآن </h5>
                     {getStatusInfo(studentData, 'memorization', curriculum).icon}
                     <span className={`text-sm ${getStatusInfo(studentData, 'memorization', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(studentData, 'memorization', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(studentData, 'memorization', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
                       ({getStatusInfo(studentData, 'memorization', curriculum).text})
@@ -496,7 +541,6 @@ function StudentView() {
           </div>
         </div>
       </div>
-      {/* تم إضافة هذا السطر لعرض المودال */}
       {isPrizesModalOpen && <PrizesModal prizes={prizes} onClose={() => setIsPrizesModalOpen(false)} />}
     </div>
   );

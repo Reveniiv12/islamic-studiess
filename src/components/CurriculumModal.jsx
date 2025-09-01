@@ -165,7 +165,7 @@ const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
           <>
             <div className="grid md:grid-cols-2 gap-4 mb-6 bg-gray-700 p-4 rounded-lg">
               <div className="flex flex-col">
-                <label className="text-sm text-gray-300 mb-1">بداية الجزء:</label>
+                <label className="text-sm text-gray-300 mb-1">اسم السورة :</label>
                 <input
                   type="text"
                   value={newPart.start}
@@ -175,13 +175,13 @@ const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
                 />
               </div>
               <div className="flex flex-col">
-                <label className="text-sm text-gray-300 mb-1">نهاية الجزء:</label>
+                <label className="text-sm text-gray-300 mb-1">من كم الى كم :</label>
                 <input
                   type="text"
                   value={newPart.end}
                   onChange={(e) => setNewPart({ ...newPart, end: e.target.value })}
                   className="p-2 rounded-lg bg-gray-900 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right"
-                  placeholder="مثال: سورة الناس"
+                  placeholder="مثال: 1 الى 5 "
                 />
               </div>
               <div className="flex flex-col">
