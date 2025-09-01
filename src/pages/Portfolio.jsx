@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabaseClient'; // تأكد من وجود هذا الملف
+import { supabase } from '../supabaseClient';
 import { FaUpload, FaTrash, FaQrcode, FaFilePdf, FaArrowRight, FaUserEdit } from 'react-icons/fa';
 import { QRCodeSVG } from 'qrcode.react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import FileViewer from '../components/FileViewer';
-import { v4 as uuidv4 } from 'uuid'; // لتوليد معرفات فريدة للملفات
+import { v4 as uuidv4 } from 'uuid';
 
 const ItemTypes = {
   FILE: 'file',
@@ -52,7 +52,7 @@ const DraggableFile = ({ file, index, moveFile, onRemove, onClick }) => {
       data-handler-id={handlerId}
       onClick={() => onClick(index)}
     >
-      <button onClick={(e) => { e.stopPropagation(); onRemove(file.id, file.url); }} className="absolute top-2 left-2 text-red-500 hover:text-red-300 transition-colors z-10 p-1">
+      <button onClick={(e) => { e.stopPropagation(); onRemove(file.id); }} className="absolute top-2 left-2 text-red-500 hover:text-red-300 transition-colors z-10 p-1">
         <FaTrash />
       </button>
       <div className="flex items-center justify-center w-full h-48 mb-4">
@@ -123,7 +123,7 @@ const Portfolio = () => {
       .eq('user_id', userId)
       .single();
     
-    if (teacherInfoError && teacherInfoError.code !== 'PGRST116') { // ignore 'no rows found' error
+    if (teacherInfoError && teacherInfoError.code !== 'PGRST116') {
       console.error('Error fetching teacher info:', teacherInfoError);
     } else if (teacherInfoData) {
       setTeacherInfo(teacherInfoData);
@@ -132,7 +132,8 @@ const Portfolio = () => {
 
   const handleFileUpload = async (event) => {
     const uploadedFiles = Array.from(event.target.files);
-    const user = supabase.auth.currentUser;
+    
+    const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
       alert('يجب تسجيل الدخول لرفع الملفات.');
@@ -165,14 +166,13 @@ const Portfolio = () => {
             url: publicURLData.publicUrl,
             type: file.type,
             size: file.size,
-            storage_path: filePath // لحذف الملف لاحقًا
+            storage_path: filePath
           },
         ]);
 
       if (insertError) {
         console.error('Error saving file data to database:', insertError);
       } else {
-        // تحديث حالة الملفات
         fetchData(user.id);
       }
     }
@@ -182,7 +182,6 @@ const Portfolio = () => {
     const fileToRemove = files.find(f => f.id === id);
     if (!fileToRemove) return;
 
-    // حذف الملف من Storage
     const { error: storageError } = await supabase.storage
       .from('portfolio-files')
       .remove([fileToRemove.storage_path]);
@@ -192,7 +191,6 @@ const Portfolio = () => {
       return;
     }
 
-    // حذف البيانات من قاعدة البيانات
     const { error: dbError } = await supabase
       .from('files')
       .delete()
@@ -210,11 +208,10 @@ const Portfolio = () => {
     const [draggedItem] = updatedFiles.splice(dragIndex, 1);
     updatedFiles.splice(hoverIndex, 0, draggedItem);
     setFiles(updatedFiles);
-    // يمكنك إضافة منطق لتحديث الترتيب في قاعدة البيانات إذا لزم الأمر
   };
   
   const saveTeacherInfo = async () => {
-    const user = supabase.auth.currentUser;
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
     const { error } = await supabase
