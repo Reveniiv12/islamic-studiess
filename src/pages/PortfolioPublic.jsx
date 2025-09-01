@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { supabase } from '../supabaseClient'; // تأكد من وجود هذا الملف
 import { FaFilePdf } from 'react-icons/fa';
 import FileViewer from '../components/FileViewer';
 
@@ -13,22 +14,50 @@ const PortfolioPublic = () => {
   const [teacherInfo, setTeacherInfo] = useState({});
   
   useEffect(() => {
-    setLoading(true);
-    try {
-      const savedFiles = JSON.parse(localStorage.getItem(`portfolioFiles-${userId}`)) || [];
-      if (savedFiles.length === 0) {
-        setError("لا توجد ملفات في ملف الإنجاز هذا.");
+    const fetchData = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        // جلب الملفات
+        const { data: filesData, error: filesError } = await supabase
+          .from('files')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: true });
+          
+        if (filesError) throw filesError;
+        setFiles(filesData);
+        
+        if (filesData.length === 0) {
+          setError("لا توجد ملفات في ملف الإنجاز هذا.");
+        }
+        
+        // جلب بيانات المعلم
+        const { data: teacherInfoData, error: teacherInfoError } = await supabase
+          .from('teacher_info')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+          
+        if (teacherInfoError && teacherInfoError.code !== 'PGRST116') { // ignore 'no rows found' error
+          throw teacherInfoError;
+        }
+        setTeacherInfo(teacherInfoData || {});
+        
+      } catch (e) {
+        setError("حدث خطأ أثناء تحميل الملفات.");
+        console.error("Error loading data from Supabase:", e);
+      } finally {
+        setLoading(false);
       }
-      setFiles(savedFiles);
-      
-      const savedInfo = JSON.parse(localStorage.getItem(`portfolioTeacherInfo-${userId}`)) || {};
-      setTeacherInfo(savedInfo);
+    };
 
-    } catch (e) {
-      setError("حدث خطأ أثناء تحميل الملفات.");
-      console.error("Error loading files from local storage:", e);
+    if (userId) {
+      fetchData();
+    } else {
+      setLoading(false);
+      setError("معرف المستخدم غير متوفر.");
     }
-    setLoading(false);
   }, [userId]);
   
   const openViewer = (index) => {
