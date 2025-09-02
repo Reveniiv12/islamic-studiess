@@ -503,6 +503,19 @@ const TeacherDashboard = () => {
     setBackupTitle("");
   };
 
+  // --- التعديل هنا ---
+  const handleConfirmBackupTitle = async () => {
+    setIsBackupTitleModalOpen(false);
+    setModalMessage("جاري حفظ النسخة الاحتياطية، يرجى الانتظار...");
+    const success = await performBackup();
+    if (success) {
+      setModalMessage("تم حفظ النسخة الاحتياطية بنجاح.");
+    }
+    // لا يوجد استدعاء لـ showDeleteConfirmation هنا
+  };
+  // ------------------
+
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-['Noto_Sans_Arabic',sans-serif]">
       <Navbar />
@@ -554,15 +567,9 @@ const TeacherDashboard = () => {
             </div>
             <div className="flex justify-between items-center mt-6">
               <button onClick={() => { setIsBackupTitleModalOpen(false); }} className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition">إلغاء</button>
-              <button onClick={async () => { 
-                setIsBackupTitleModalOpen(false); 
-                setModalMessage("جاري حفظ النسخة الاحتياطية، يرجى الانتظار...");
-                const success = await performBackup();
-                if (success) {
-                  // بعد نجاح النسخ الاحتياطي، ننتقل إلى نافذة تأكيد الحذف النهائية
-                  setIsDeleteConfirmationModalOpen(true);
-                }
-              }} className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">تأكيد</button>
+              {/* --- التعديل هنا --- */}
+              <button onClick={handleConfirmBackupTitle} className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">تأكيد</button>
+              {/* ------------------ */}
             </div>
           </div>
         </div>
@@ -592,7 +599,7 @@ const TeacherDashboard = () => {
 
       <div
         className={`fixed inset-y-0 right-0 z-40 w-64 bg-gray-800 shadow-xl transform transition-transform duration-300 ease-in-out
-                   ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                    ${isMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="p-6">
           <div className="flex justify-between items-center mb-8">
@@ -736,7 +743,7 @@ const TeacherDashboard = () => {
               key={grade.id}
               onClick={() => navigate(`/grades/${grade.id}`)}
               className="relative rounded-3xl shadow-lg overflow-hidden transform transition-all duration-300 hover:scale-105 hover:shadow-2xl cursor-pointer
-                         bg-gray-800 border border-gray-700 hover:border-blue-500"
+                          bg-gray-800 border border-gray-700 hover:border-blue-500"
             >
               <div className="p-8 text-center flex flex-col items-center">
                 <div className="flex items-center justify-center h-20 w-20 rounded-full bg-gray-700 text-blue-400 mx-auto mb-6">
