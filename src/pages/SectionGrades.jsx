@@ -1290,13 +1290,13 @@ const handleExportQRCodes = async () => {
             <input type="file" ref={fileInputRef} onChange={handleFileImport} accept=".xlsx, .xls" className="hidden" />
           </button>
           <button onClick={() => setShowCurriculumModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-500 transition-colors shadow-md text-xs md:text-sm">
-            <FaQuran /> منهج التلاوة
+            <FaQuran /> منهج القران الكريم
           </button>
           <button onClick={() => setShowRecitationModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-500 transition-colors shadow-md text-xs md:text-sm">
             <FaMicrophone /> كشف التسميع
           </button>
           <button onClick={() => setShowHomeworkCurriculumModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-500 transition-colors shadow-md text-xs md:text-sm">
-            <FaTasks /> الواجبات والمهام
+            <FaTasks /> الواجبات و المهام و الاختبارات
           </button>
 <button onClick={() => setShowHomeworkModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-xs md:text-sm">
   <FaPencilAlt /> كشف الواجبات
@@ -2051,5 +2051,6 @@ const handleExportQRCodes = async () => {
     </div>
   );
 };
+
 
 export default SectionGrades;
