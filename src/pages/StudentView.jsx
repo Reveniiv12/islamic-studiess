@@ -118,11 +118,10 @@ function StudentView() {
           setHomeworkCurriculum(curriculumData.homework || []);
         }
 
-        // Fetch settings using the teacher_id to make them specific and always available
         const { data: settingsData, error: settingsError } = await supabase
           .from('settings')
           .select('test_method, teacher_name, school_name, current_semester')
-          .eq('teacher_id', teacherId)
+          .eq('id', 'general')
           .single();
 
         if (settingsError) {
