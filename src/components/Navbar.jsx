@@ -37,11 +37,6 @@ const Navbar = () => {
             {/* الجزء الأيمن الفارغ لدفع العناصر */}
             <div className="flex-1"></div>
 
-            {/* الجزء الأوسط - اسم المدرسة والمعلم (في المنتصف) */}
-            <div className="flex flex-col text-center">
-                <span className="text-xl font-bold text-blue-400">{schoolName}</span>
-                <span className="text-sm font-medium text-gray-400">{teacherName}</span>
-            </div>
 
             {/* الجزء الأيسر - الروابط والأزرار */}
             <div className="flex-1 flex justify-end items-center gap-4">
