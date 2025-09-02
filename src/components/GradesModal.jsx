@@ -1,4 +1,3 @@
-// src/components/GradesModal.jsx
 import React, { useState, useEffect } from "react";
 
 const GradesModal = ({
@@ -588,7 +587,7 @@ const applyBatchGrade = () => {
                         onChange={(e) => setPerformanceTaskIndex(Number(e.target.value))}
                         className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
                     >
-                        {[...Array(5)].map((_, i) => (
+                        {[...Array(3)].map((_, i) => ( // تم التغيير إلى 3
                             <option key={i} value={i}>{i + 1}</option>
                         ))}
                     </select>
@@ -623,7 +622,7 @@ const applyBatchGrade = () => {
                                     <span className="font-semibold text-gray-100">اسم الطالب</span>
                                 </div>
                             </th>
-                            {[...Array(5)].map((_, i) => (
+                            {[...Array(3)].map((_, i) => ( // تم التغيير إلى 3
                                 <th key={`pt_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600">مهمة {i + 1}</th>
                             ))}
                             <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400">المجموع</th>
@@ -643,7 +642,7 @@ const applyBatchGrade = () => {
                                         <span className="truncate text-gray-100">{student.name}</span>
                                     </div>
                                 </td>
-                                {[...Array(5)].map((_, i) => (
+                                {[...Array(3)].map((_, i) => ( // تم التغيير إلى 3
                                     <td key={`pt_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
                                         <input
                                             type="text"
