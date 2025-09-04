@@ -2071,3 +2071,4 @@ const handleExportQRCodes = async () => {
 
 
 export default SectionGrades;
+
