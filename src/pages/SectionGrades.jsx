@@ -1876,7 +1876,7 @@ const handleExportQRCodes = async () => {
         <NotesModal
           students={students}
           onClose={() => setShowNotesModal(false)}
-          onSave={updateNotesData}
+          onSave={updateStudentsData}
           onConfirmNotesClear={(action) => handleDialog("تأكيد الحذف", "هل أنت متأكد من حذف الملاحظات الأسبوعية للطلاب المحددين؟", "confirm", action)}
         />
       )}
