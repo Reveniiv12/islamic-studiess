@@ -317,7 +317,7 @@ const SectionGrades = () => {
           quranRecitation: ensureArraySize(student.grades?.quran_recitation, 5),
           quranMemorization: ensureArraySize(student.grades?.quran_memorization, 5),
           oralTest: ensureArraySize(student.grades?.oral_test, 5),
-          weeklyNotes: ensureArraySize(student.grades?.weeklyNotes, 20),
+          weeklyNotes: ensureArraySize(student.grades?.weekly_notes, 20), // تم التعديل هنا
         };
 
         const studentWithStars = {
@@ -386,7 +386,7 @@ const SectionGrades = () => {
                 quran_recitation: student.grades.quranRecitation,
                 quran_memorization: student.grades.quranMemorization,
                 oral_test: student.grades.oralTest,
-                // تأكد من استخدام weekly_notes هنا
+                // هذا هو السطر الذي تم تعديله ليتناسب مع اسم الحقل في Supabase
                 weekly_notes: student.grades.weeklyNotes,
             },
             absences: student.absences,
@@ -406,8 +406,7 @@ const SectionGrades = () => {
             // إعادة جلب البيانات الصحيحة من DB في حالة الفشل
             fetchDataFromSupabase();
         } else {
-            // يمكن إزالة هذه الرسالة إذا أردت لأن التغيير سيظهر مباشرة
-            // handleDialog("نجاح", "تم حفظ البيانات بنجاح!", "success");
+            console.log("Students data saved successfully!");
         }
     } catch (error) {
         console.error("Error updating students data:", error);
