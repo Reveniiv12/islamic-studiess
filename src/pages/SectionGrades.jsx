@@ -18,7 +18,7 @@ import TroubledStudentsModal from "../components/TroubledStudentsModal.jsx";
 import CustomDialog from "../components/CustomDialog";
 import VerificationModal from "../components/VerificationModal.jsx";
 import CustomModal from "../components/CustomModal.jsx";
-import AnnouncementsModal from "../components/AnnouncementsModal"; 
+import AnnouncementsModal from "../components/AnnouncementsModal"; 
 import { QRCodeSVG } from 'qrcode.react';
 import { getHijriToday } from '../utils/recitationUtils';
 
@@ -356,12 +356,17 @@ const SectionGrades = () => {
     fetchDataFromSupabase();
   }, [gradeId, sectionId]);
 
-const updateStudentsData = async (updatedStudents) => {
+  const updateStudentsData = async (updatedStudents) => {
     if (!teacherId) {
       handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
       return;
     }
     try {
+        // الخطوة 1: تحديث الحالة المحلية على الفور
+        const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+        setStudents(sortedStudents);
+
+        // الخطوة 2: إعداد البيانات للحفظ في Supabase
         const studentsToUpdate = updatedStudents.map(student => ({
             ...(student.id ? { id: student.id } : {}),
             name: student.name,
@@ -381,6 +386,7 @@ const updateStudentsData = async (updatedStudents) => {
                 quran_recitation: student.grades.quranRecitation,
                 quran_memorization: student.grades.quranMemorization,
                 oral_test: student.grades.oralTest,
+                // تأكد من استخدام weekly_notes هنا
                 weekly_notes: student.grades.weeklyNotes,
             },
             absences: student.absences,
@@ -389,19 +395,25 @@ const updateStudentsData = async (updatedStudents) => {
             teacher_id: teacherId,
         }));
 
+        // الخطوة 3: حفظ البيانات في Supabase
         const { error } = await supabase
             .from('students')
             .upsert(studentsToUpdate, { onConflict: 'national_id' });
 
-        if (error) throw error;
-
-        const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-        setStudents(sortedStudents);
+        if (error) {
+            console.error("Error updating students data:", error);
+            handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات في قاعدة البيانات", "error");
+            // إعادة جلب البيانات الصحيحة من DB في حالة الفشل
+            fetchDataFromSupabase();
+        } else {
+            // يمكن إزالة هذه الرسالة إذا أردت لأن التغيير سيظهر مباشرة
+            // handleDialog("نجاح", "تم حفظ البيانات بنجاح!", "success");
+        }
     } catch (error) {
         console.error("Error updating students data:", error);
         handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات في قاعدة البيانات", "error");
     }
-};
+  };
 
   const updateCurriculumData = async (updatedCurriculum) => {
     if (!teacherId) {
@@ -915,7 +927,12 @@ const handleAddStudent = async () => {
 
   const updateNotesData = async (updatedStudents) => {
     try {
+      // قم بتحديث الحالة المحلية أولاً
+      setStudents(updatedStudents);
+      
+      // ثم قم بحفظ البيانات في قاعدة البيانات
       await updateStudentsData(updatedStudents);
+      
       const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent?.id);
       if (updatedSelectedStudent) { setSelectedStudent(updatedSelectedStudent); }
     } catch (error) {
@@ -923,6 +940,7 @@ const handleAddStudent = async () => {
       handleDialog("خطأ", "حدث خطأ أثناء تحديث الملاحظات", "error");
     }
   };
+
 
 const updateAbsenceData = async (updatedStudents) => {
     if (!teacherId) {
@@ -1483,8 +1501,8 @@ const handleExportQRCodes = async () => {
                      <option value={12}>12</option>
                  </select>
                  <button
-                   onClick={() => handleExportQRCodes()}
-                   className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-md text-xs md:text-sm"
+                    onClick={() => handleExportQRCodes()}
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors shadow-md text-xs md:text-sm"
                  >
                    <FaFileWord /> تصدير QR كملف Word
                  </button>
@@ -1654,20 +1672,20 @@ const handleExportQRCodes = async () => {
               </div>
             </div>
 
-          <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-            <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
-              <FaBookOpen className="text-3xl text-red-400" /> الاختبارات
-              <span className="text-red-400 font-bold mr-2 text-2xl">
-                {calculateCategoryScore(selectedStudent.grades, 'tests', testCalculationMethod)} / 15
-              </span>
-            </h4>
-                        <div className="flex items-center gap-2 mb-2">
-              <h5 className="font-medium text-gray-100">حالة الاختبارات</h5>
-              {taskStatusUtils(selectedStudent, homeworkCurriculum, 'test').icon}
-              <span className="text-sm text-gray-400">
-                ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'test').text})
-              </span>
-            </div>
+            <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
+                <FaBookOpen className="text-3xl text-red-400" /> الاختبارات
+                <span className="text-red-400 font-bold mr-2 text-2xl">
+                  {calculateCategoryScore(selectedStudent.grades, 'tests', testCalculationMethod)} / 15
+                </span>
+              </h4>
+                          <div className="flex items-center gap-2 mb-2">
+                <h5 className="font-medium text-gray-100">حالة الاختبارات</h5>
+                {taskStatusUtils(selectedStudent, homeworkCurriculum, 'test').icon}
+                <span className="text-sm text-gray-400">
+                  ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'test').text})
+                </span>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.tests.slice(0, 2).map((grade, i) => (
                   <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
@@ -1686,20 +1704,20 @@ const handleExportQRCodes = async () => {
               </div>
             </div>
 
-          <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-            <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
-              <FaTasks className="text-3xl text-green-400" /> الواجبات
-              <span className="text-green-400 font-bold mr-2 text-2xl">
-                {calculateCategoryScore(selectedStudent.grades, 'homework', 'sum')} / 10
-              </span>
-            </h4>
-            <div className="flex items-center gap-2 mb-2">
-              <h5 className="font-medium text-gray-100">حالة الواجبات</h5>
-              {taskStatusUtils(selectedStudent, homeworkCurriculum, 'homework').icon}
-              <span className="text-sm text-gray-400">
-                ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'homework').text})
-              </span>
-            </div>
+            <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
+                <FaTasks className="text-3xl text-green-400" /> الواجبات
+                <span className="text-green-400 font-bold mr-2 text-2xl">
+                  {calculateCategoryScore(selectedStudent.grades, 'homework', 'sum')} / 10
+                </span>
+              </h4>
+              <div className="flex items-center gap-2 mb-2">
+                <h5 className="font-medium text-gray-100">حالة الواجبات</h5>
+                {taskStatusUtils(selectedStudent, homeworkCurriculum, 'homework').icon}
+                <span className="text-sm text-gray-400">
+                  ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'homework').text})
+                </span>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.homework.slice(0, 10).map((grade, i) => (
                   <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
@@ -1707,20 +1725,20 @@ const handleExportQRCodes = async () => {
               </div>
             </div>
 
-          <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-            <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
-              <FaPencilAlt className="text-3xl text-purple-400" /> المهام الأدائية
-              <span className="text-purple-400 font-bold mr-2 text-2xl">
-                {calculateCategoryScore(selectedStudent.grades, 'performanceTasks', 'best')} / 5
-              </span>
-            </h4>
-            <div className="flex items-center gap-2 mb-2">
-              <h5 className="font-medium text-gray-100">حالة المهام</h5>
-              {taskStatusUtils(selectedStudent, homeworkCurriculum, 'performanceTask').icon}
-              <span className="text-sm text-gray-400">
-                ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'performanceTask').text})
-              </span>
-            </div>
+            <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
+                <FaPencilAlt className="text-3xl text-purple-400" /> المهام الأدائية
+                <span className="text-purple-400 font-bold mr-2 text-2xl">
+                  {calculateCategoryScore(selectedStudent.grades, 'performanceTasks', 'best')} / 5
+                </span>
+              </h4>
+              <div className="flex items-center gap-2 mb-2">
+                <h5 className="font-medium text-gray-100">حالة المهام</h5>
+                {taskStatusUtils(selectedStudent, homeworkCurriculum, 'performanceTask').icon}
+                <span className="text-sm text-gray-400">
+                  ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'performanceTask').text})
+                </span>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {selectedStudent.grades.performanceTasks.slice(0, 3).map((grade, i) => (
                   <input
@@ -1859,7 +1877,7 @@ const handleExportQRCodes = async () => {
         <NotesModal
           students={students}
           onClose={() => setShowNotesModal(false)}
-          onSave={updateStudentsData}
+          onSave={updateNotesData}
           onConfirmNotesClear={(action) => handleDialog("تأكيد الحذف", "هل أنت متأكد من حذف الملاحظات الأسبوعية للطلاب المحددين؟", "confirm", action)}
         />
       )}
@@ -2007,7 +2025,7 @@ const handleExportQRCodes = async () => {
           getTroubledStudents={getTroubledStudents}
         />
       )}
-            {showTroubledStudentsModal && (
+          {showTroubledStudentsModal && (
         <TroubledStudentsModal
           students={students}
           onClose={() => setShowTroubledStudentsModal(false)}
