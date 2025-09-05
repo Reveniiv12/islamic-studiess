@@ -46,7 +46,7 @@ const BriefSheet = ({
                 tableRows.push(new TableRow({
                     children: [
                         new TableCell({ children: [new Paragraph({ text: (student.stars || 0).toString(), alignment: "center" })] }),
-                        new TableCell({ children: [new Paragraph({ text: calculateTotalScore(student.grades).toString(), alignment: "center" })] }),
+                        new TableCell({ children: [new Paragraph({ text: calculateTotalScore(student.grades, testCalculationMethod).toString(), alignment: "center" })] }),
                         new TableCell({ children: [new Paragraph({ text: quranTotal, alignment: "center" })] }),
                         new TableCell({ children: [new Paragraph({ text: calculateCategoryScore(student.grades, 'performanceTasks', 'best').toString(), alignment: "center" })] }),
                         new TableCell({ children: [new Paragraph({ text: calculateCategoryScore(student.grades, 'participation', 'sum').toString(), alignment: "center" })] }),
@@ -166,7 +166,7 @@ const BriefSheet = ({
                                     {(parseFloat(calculateCategoryScore(student.grades, 'quranRecitation', 'average')) + parseFloat(calculateCategoryScore(student.grades, 'quranMemorization', 'average'))).toFixed(2)}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-green-400">
-                                    {calculateTotalScore(student.grades)}
+                                    {calculateTotalScore(student.grades, testCalculationMethod)}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center">
                                     <div className="flex gap-1 text-yellow-400 justify-center">
