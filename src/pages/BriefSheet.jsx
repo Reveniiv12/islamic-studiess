@@ -34,7 +34,7 @@ const BriefSheet = ({
                     new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "المهام الأدائية (5)", bold: true })], alignment: "center" })] }),
                     new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "المشاركات (10)", bold: true })], alignment: "center" })] }),
                     new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "الواجبات (10)", bold: true })], alignment: "center" })] }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "الشفوي (5)", bold: true })], alignment: "center" })] }),
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "الاختبار الشفوي (5)", bold: true })], alignment: "center" })] }),
                     new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "الاختبارات (15)", bold: true })], alignment: "center" })] }),
                     new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "اسم الطالب", bold: true })], alignment: "center" })] }),
                 ],
@@ -52,7 +52,7 @@ const BriefSheet = ({
                         new TableCell({ children: [new Paragraph({ text: calculateCategoryScore(student.grades, 'participation', 'sum').toString(), alignment: "center" })] }),
                         new TableCell({ children: [new Paragraph({ text: calculateCategoryScore(student.grades, 'homework', 'sum').toString(), alignment: "center" })] }),
                         new TableCell({ children: [new Paragraph({ text: calculateCategoryScore(student.grades, 'oralTest', 'best').toString(), alignment: "center" })] }),
-                        new TableCell({ children: [new Paragraph({ text: calculateCategoryScore(student.grades, 'tests', 'test').toString(), alignment: "center" })] }),
+                        new TableCell({ children: [new Paragraph({ text: calculateCategoryScore(student.grades, 'tests', testCalculationMethod).toString(), alignment: "center" })] }),
                         new TableCell({ children: [new Paragraph({ text: student.name, alignment: "right" })] }),
                     ],
                 }));
@@ -117,7 +117,7 @@ const BriefSheet = ({
                                 الاختبارات (15)
                             </th>
                             <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">
-                                الشفوي (5)
+                                الاختبار الشفوي (5)
                             </th>
                             <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">
                                 الواجبات (10)
@@ -148,7 +148,7 @@ const BriefSheet = ({
                                     {student.name}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-200">
-                                    {calculateCategoryScore(student.grades, 'tests', 'test')}
+                                    {calculateCategoryScore(student.grades, 'tests', testCalculationMethod)}
                                 </td>
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center text-gray-200">
                                     {calculateCategoryScore(student.grades, 'oralTest', 'best')}
