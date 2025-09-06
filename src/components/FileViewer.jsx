@@ -1,7 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FaTimes, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+
+// Set the worker source for react-pdf.
+// This is required for the library to function correctly.
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
+  const [numPages, setNumPages] = useState(null);
+  const [pageNumber, setPageNumber] = useState(1);
+
   if (!files || files.length === 0 || currentIndex === null) {
     return null;
   }
@@ -10,13 +20,31 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
   const isImage = currentFile.type.startsWith('image/');
   const isPDF = currentFile.type === 'application/pdf';
 
+  function onDocumentLoadSuccess({ numPages }) {
+    setNumPages(numPages);
+    setPageNumber(1); // Reset to the first page when a new PDF is loaded
+  }
+
+  const goToNextPage = () => {
+    if (pageNumber < numPages) {
+      setPageNumber(prevPageNumber => prevPageNumber + 1);
+    }
+  };
+
+  const goToPrevPage = () => {
+    if (pageNumber > 1) {
+      setPageNumber(prevPageNumber => prevPageNumber - 1);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+      {/* Close Button */}
       <button onClick={onClose} className="absolute top-4 right-4 text-white text-3xl hover:text-gray-400 transition-colors z-50">
         <FaTimes />
       </button>
 
-      {/* Navigation - Previous */}
+      {/* Main Navigation (between files) */}
       <button 
         onClick={onPrev}
         className="absolute left-4 md:left-8 text-white text-4xl p-2 rounded-full bg-gray-700 bg-opacity-50 hover:bg-opacity-80 transition-colors z-40"
@@ -26,7 +54,6 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
         <FaArrowRight />
       </button>
 
-      {/* Navigation - Next */}
       <button 
         onClick={onNext}
         className="absolute right-4 md:right-8 text-white text-4xl p-2 rounded-full bg-gray-700 bg-opacity-50 hover:bg-opacity-80 transition-colors z-40"
@@ -36,18 +63,37 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
         <FaArrowLeft />
       </button>
 
+      {/* File Content Area */}
       <div className="flex flex-col items-center justify-center h-full w-full max-w-5xl p-8">
         <div className="w-full h-full flex items-center justify-center relative">
           {isImage ? (
             <img src={currentFile.url} alt={currentFile.name} className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
           ) : isPDF ? (
-            // استخدام iframe لعرض ملف PDF بشكل موثوق
-            <iframe 
-              src={currentFile.url} 
-              title={currentFile.name} 
-              className="w-full h-full border-none shadow-lg rounded-lg"
-              style={{ minHeight: '500px' }}
-            ></iframe>
+            <div className="w-full h-full flex flex-col items-center justify-center">
+              <Document
+                file={currentFile.url}
+                onLoadSuccess={onDocumentLoadSuccess}
+                className="w-full h-full flex flex-col items-center overflow-auto"
+              >
+                <Page
+                  pageNumber={pageNumber}
+                  renderAnnotationLayer={false}
+                  renderTextLayer={false}
+                  className="shadow-lg rounded-lg"
+                />
+              </Document>
+              {numPages > 1 && (
+                <div className="flex justify-center items-center mt-4 text-white gap-4">
+                  <button onClick={goToPrevPage} disabled={pageNumber <= 1} className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500">
+                    <FaArrowRight />
+                  </button>
+                  <span>{pageNumber} / {numPages}</span>
+                  <button onClick={goToNextPage} disabled={pageNumber >= numPages} className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500">
+                    <FaArrowLeft />
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="text-white text-center">
               <p>نوع الملف غير مدعوم للعرض.</p>
@@ -56,6 +102,8 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
           )}
         </div>
       </div>
+
+      {/* File Index Counter */}
       <div className="absolute bottom-4 left-0 w-full text-center text-white text-lg">
         {currentIndex + 1} / {files.length}
       </div>
