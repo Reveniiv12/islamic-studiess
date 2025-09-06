@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { FaTimes, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/cjs/Page/AnnotationLayer.css';
-import 'react-pdf/dist/cjs/Page/TextLayer.css';
 
 // Set the worker source for react-pdf.
 // This is required for the library to function correctly.
@@ -112,4 +110,5 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
 };
 
 export default FileViewer;
+
 
