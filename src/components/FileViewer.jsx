@@ -4,10 +4,13 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/cjs/Page/AnnotationLayer.css';
 import 'react-pdf/dist/cjs/Page/TextLayer.css';
 
-// This is the final and correct way to set the worker source.
-// It uses a local import directly from the installed package.
-import workerSrc from 'react-pdf/dist/cjs/pdf.worker.min.js';
-pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+// هذا هو الحل النهائي لمشكلة مسار ملف العامل.
+// يستخدم `URL` و `import.meta.url` لإنشاء مسار صحيح وآمن
+// يتجنب مشاكل المسارات المطلقة والمشكلات المتعلقة بالبناء
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.js',
+  import.meta.url,
+).toString();
 
 const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
   const [numPages, setNumPages] = useState(null);
