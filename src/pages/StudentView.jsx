@@ -216,14 +216,19 @@ function StudentView() {
     );
   }
   
-  const processedNotes = (studentData.grades.weeklyNotes || []).reduce((acc, notes, weekIndex) => {
+  // الكود المعدل هنا
+  const processedNotes = (studentData.grades.weeklyNotes || [])
+  .reduce((acc, notes, weekIndex) => {
     if (notes && notes.length > 0) {
       notes.forEach(note => {
+        // نربط الملاحظة برقم الأسبوع الذي تم إدخالها فيه
         acc.push({ note, weekIndex });
       });
     }
     return acc;
-  }, []).reverse().slice(0, 5);
+  }, [])
+  .sort((a, b) => b.weekIndex - a.weekIndex) // الفرز حسب رقم الأسبوع بشكل تنازلي
+  .slice(0, 5); // أخذ آخر 5 ملاحظات فقط
 
   return (
     <div className="p-4 md:p-8 bg-gray-900 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100" dir="rtl">
