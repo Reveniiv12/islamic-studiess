@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FaBookOpen, FaSave, FaTimes, FaCheckCircle, FaTimesCircle, FaClock, FaQuestionCircle, FaPencilAlt, FaTasks, FaStickyNote } from 'react-icons/fa';
 import { taskStatusUtils } from '../utils/gradeUtils';
-import { getHijriToday } from '../utils/recitationUtils';
+// تم إزالة استيراد getHijriToday لأنه لم يعد مستخدماً
+// import { getHijriToday } from '../utils/recitationUtils';
 
 // This StudentList component is defined here to keep the file self-contained.
 const StudentList = ({ title, color, students, selectedStudents, toggleSelect, onSelectAll, taskType, homeworkCurriculum }) => {
@@ -159,7 +160,13 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
             return;
         }
 
-        const today = getHijriToday();
+        // تم استبدال getHijriToday() بالطريقة الجديدة
+        const today = new Date();
+        const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        }).format(today);
         
         const updatedStudents = students.map(student => {
             if (selectedStudents.includes(student.id)) {
@@ -170,7 +177,7 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
 
                     if (!noteText.trim()) return student;
 
-                    const formattedNote = `(${today}): ${noteText.trim()}`;
+                    const formattedNote = `(${hijriDate}): ${noteText.trim()}`;
                     const updatedWeeklyNotes = [...(student.grades.weeklyNotes || Array(20).fill(null).map(() => []))];
                     if (!Array.isArray(updatedWeeklyNotes[weekIndex])) {
                         updatedWeeklyNotes[weekIndex] = [];
