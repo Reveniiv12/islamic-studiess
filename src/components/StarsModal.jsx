@@ -1,7 +1,7 @@
 // src/components/StarsModal.jsx
 
 import React, { useState, useEffect } from 'react';
-import { FaStar, FaSave, FaTimes, FaGift, FaTrash, FaPlusCircle } from 'react-icons/fa';
+import { FaStar, FaSave, FaTimes, FaGift, FaTrash, FaPlusCircle, FaMinusCircle } from 'react-icons/fa';
 import { supabase } from "../supabaseClient";
 
 const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrizes, teacherId }) => {
@@ -36,9 +36,9 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
   };
 
   const toggleStudent = (studentId) => {
-    setSelectedStudents(prev => 
-      prev.includes(studentId) 
-        ? prev.filter(id => id !== studentId) 
+    setSelectedStudents(prev =>
+      prev.includes(studentId)
+        ? prev.filter(id => id !== studentId)
         : [...prev, studentId]
     );
   };
@@ -69,16 +69,72 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
 
     try {
       await onSave(updatedStudents);
-      setMessage({ 
-        text: `تم منح ${stars} نجمة للطلاب المحددين بنجاح!`, 
-        type: "success" 
+      setMessage({
+        text: `تم منح ${stars} نجمة للطلاب المحددين بنجاح!`,
+        type: "success"
       });
       setSelectedStudents([]);
       setStars(1);
     } catch (error) {
-      setMessage({ 
-        text: "حدث خطأ أثناء حفظ النجوم. يرجى المحاولة مرة أخرى.", 
-        type: "error" 
+      setMessage({
+        text: "حدث خطأ أثناء حفظ النجوم. يرجى المحاولة مرة أخرى.",
+        type: "error"
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const removeStars = async () => {
+    if (selectedStudents.length === 0) {
+      setMessage({ text: "يرجى اختيار الطلاب أولاً.", type: "error" });
+      return;
+    }
+    if (stars < 1 || stars > 10) {
+      setMessage({ text: "عدد النجوم يجب أن يكون بين 1 و 10.", type: "error" });
+      return;
+    }
+
+    setIsSaving(true);
+
+    const studentsWithSufficientStars = selectedStudents.filter(studentId => {
+      const student = students.find(s => s.id === studentId);
+      return student && student.stars >= stars;
+    });
+
+    if (studentsWithSufficientStars.length !== selectedStudents.length) {
+      setMessage({
+        text: "لا يمكن إزالة النجوم. بعض الطلاب ليس لديهم رصيد كافٍ من النجوم.",
+        type: "error"
+      });
+      setIsSaving(false);
+      return;
+    }
+
+    const updatedStudents = students.map(student => {
+      if (selectedStudents.includes(student.id)) {
+        const newAcquiredStars = Math.max(0, (student.acquiredStars || 0) - stars);
+        return {
+          ...student,
+          acquiredStars: newAcquiredStars,
+          stars: newAcquiredStars - (student.consumedStars || 0)
+        };
+      }
+      return student;
+    });
+
+    try {
+      await onSave(updatedStudents);
+      setMessage({
+        text: `تم إزالة ${stars} نجمة من الطلاب المحددين بنجاح.`,
+        type: "success"
+      });
+      setSelectedStudents([]);
+      setStars(1);
+    } catch (error) {
+      setMessage({
+        text: "حدث خطأ أثناء إزالة النجوم. يرجى المحاولة مرة أخرى.",
+        type: "error"
       });
     } finally {
       setIsSaving(false);
@@ -94,7 +150,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
       setMessage({ text: "حدث خطأ: معرف المعلم غير متوفر.", type: "error" });
       return;
     }
-    
+
     setIsSaving(true);
 
     try {
@@ -104,7 +160,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
         .select();
 
       if (error) throw error;
-      
+
       onUpdatePrizes([...prizes, ...data]);
       setNewPrizeName('');
       setNewPrizeCost(1);
@@ -124,9 +180,9 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
         .from('prizes')
         .delete()
         .eq('id', prizeId);
-      
+
       if (error) throw error;
-      
+
       const updatedPrizes = prizes.filter(p => p.id !== prizeId);
       onUpdatePrizes(updatedPrizes);
       setMessage({ text: "تم حذف الجائزة بنجاح.", type: "success" });
@@ -142,7 +198,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
       setMessage({ text: "يجب تحديد طالب واحد فقط لاستخدام الجائزة.", type: "error" });
       return;
     }
-    
+
     const student = students.find(s => s.id === studentId);
     const prize = prizes.find(p => p.id === prizeId);
 
@@ -163,29 +219,30 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
 
         try {
           await onSave(updatedStudents);
-          setMessage({ 
-            text: `تم استهلاك جائزة "${prize.name}" بنجاح للطالب ${student.name}.`, 
-            type: "success" 
+          setMessage({
+            text: `تم استهلاك جائزة "${prize.name}" بنجاح للطالب ${student.name}.`,
+            type: "success"
           });
           setSelectedStudents([]);
         } catch (error) {
-          setMessage({ 
-            text: "حدث خطأ أثناء حفظ النجوم. يرجى المحاولة مرة أخرى.", 
-            type: "error" 
+          setMessage({
+            text: "حدث خطأ أثناء حفظ النجوم. يرجى المحاولة مرة أخرى.",
+            type: "error"
           });
         } finally {
           setIsSaving(false);
         }
       } else {
-        setMessage({ 
-          text: `لا يوجد لدى الطالب ${student.name} نجوم كافية لاستخدام هذه الجائزة.`, 
-          type: "error" 
+        setMessage({
+          text: `لا يوجد لدى الطالب ${student.name} نجوم كافية لاستخدام هذه الجائزة.`,
+          type: "error"
         });
       }
     }
   };
 
   const isSaveDisabled = selectedStudents.length === 0 || stars < 1 || isSaving;
+  const isRemoveDisabled = selectedStudents.length === 0 || stars < 1 || isSaving;
 
   return (
     <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
@@ -195,8 +252,8 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
           <h3 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
             <FaStar className="text-yellow-400" /> إدارة النجوم
           </h3>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors"
             disabled={isSaving}
           >
@@ -218,7 +275,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
           <div className="mb-8 p-6 bg-gray-900 rounded-xl border border-gray-700">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
               <h4 className="text-xl md:text-2xl font-bold text-blue-400 flex items-center gap-2">
-                <FaStar className="text-xl" /> منح النجوم
+                <FaStar className="text-xl" /> منح/إزالة النجوم
               </h4>
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 text-lg">
@@ -237,16 +294,33 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
                   onClick={saveStars}
                   disabled={isSaveDisabled}
                   className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-lg transition-colors ${
-                    isSaveDisabled 
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    isSaveDisabled
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
                   }`}
                 >
                   {isSaving ? (
                     <span className="animate-spin">↻</span>
                   ) : (
                     <>
-                      <FaSave /> حفظ
+                      <FaPlusCircle /> منح
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={removeStars}
+                  disabled={isRemoveDisabled}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-lg transition-colors ${
+                    isRemoveDisabled
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-red-600 hover:bg-red-700 text-white'
+                  }`}
+                >
+                  {isSaving ? (
+                    <span className="animate-spin">↻</span>
+                  ) : (
+                    <>
+                      <FaMinusCircle /> إزالة
                     </>
                   )}
                 </button>
@@ -275,8 +349,8 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
                     key={student.id}
                     onClick={() => !isSaving && toggleStudent(student.id)}
                     className={`bg-gray-700 p-4 rounded-xl flex items-center justify-between cursor-pointer transition-colors border-2 ${
-                      selectedStudents.includes(student.id) 
-                        ? 'border-blue-500 ring-2 ring-blue-500' 
+                      selectedStudents.includes(student.id)
+                        ? 'border-blue-500 ring-2 ring-blue-500'
                         : 'border-gray-600 hover:bg-gray-600'
                     } ${
                       message.type === 'success' && selectedStudents.includes(student.id)
@@ -322,7 +396,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
             <h4 className="text-xl md:text-2xl font-bold text-purple-400 flex items-center gap-2 mb-6">
               <FaGift className="text-xl" /> الجوائز والمكافآت
             </h4>
-            
+
             {/* Add New Prize Form */}
             <div className="flex flex-col md:flex-row items-center gap-4 mb-6 p-4 bg-gray-800 rounded-lg">
               <div className="flex-grow flex flex-col md:flex-row gap-4 w-full">
@@ -359,7 +433,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
                 <FaPlusCircle /> إضافة جائزة
               </button>
             </div>
-            
+
             {/* Prizes List */}
             <div className="space-y-4">
               {prizes.length === 0 ? (
@@ -421,8 +495,8 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
 
         {/* Modal Footer */}
         <div className="p-4 border-t border-gray-700 flex justify-end bg-gray-900">
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             disabled={isSaving}
             className={`bg-gray-600 text-white px-6 py-2 rounded-xl font-semibold text-lg transition-colors ${
               isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-500'
