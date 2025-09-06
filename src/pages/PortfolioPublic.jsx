@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient'; // تأكد من وجود هذا الملف
 import { FaFilePdf } from 'react-icons/fa';
-import FileViewer from '../components/FileViewer';
+import FileViewer from '../components/FileViewer'; // هذا هو الاستيراد الصحيح
 
 const PortfolioPublic = () => {
   const { userId } = useParams();
@@ -39,7 +39,7 @@ const PortfolioPublic = () => {
           .eq('user_id', userId)
           .single();
           
-        if (teacherInfoError && teacherInfoError.code !== 'PGRST116') {
+        if (teacherInfoError && teacherInfoError.code !== 'PGRST116') { // ignore 'no rows found' error
           throw teacherInfoError;
         }
         setTeacherInfo(teacherInfoData || {});
