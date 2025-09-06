@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FaBookOpen, FaSave, FaTimes, FaCheckCircle, FaTimesCircle, FaClock, FaQuestionCircle, FaPencilAlt, FaTasks, FaStickyNote } from 'react-icons/fa';
 import { taskStatusUtils } from '../utils/gradeUtils';
-// تم إزالة استيراد getHijriToday لأنه لم يعد مستخدماً
-// import { getHijriToday } from '../utils/recitationUtils';
 
 // This StudentList component is defined here to keep the file self-contained.
 const StudentList = ({ title, color, students, selectedStudents, toggleSelect, onSelectAll, taskType, homeworkCurriculum }) => {
@@ -59,10 +57,9 @@ const StudentList = ({ title, color, students, selectedStudents, toggleSelect, o
 };
 
 const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
-    const [mode, setMode] = useState('grading'); // 'grading' or 'note'
+    const [mode, setMode] = useState('note'); // تم تعديل الوضع الافتراضي إلى 'note'
     const [taskType, setTaskType] = useState('homework'); 
-    const [noteType, setNoteType] = useState('custom'); // 'custom' or 'template'
-    const [gradeValue, setGradeValue] = useState(1);
+    const [noteType, setNoteType] = useState('custom');
     
     // States for notes
     const [customNote, setCustomNote] = useState('');
@@ -87,22 +84,10 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
     ];
     
     // Derived state from new mode
-    const isGradingMode = mode === 'grading';
     const isNoteMode = mode === 'note';
 
     const getTitle = () => {
-        if (isNoteMode) return 'إدارة الملاحظات';
-        if (taskType === 'homework') return 'إدارة كشف الواجبات';
-        if (taskType === 'performanceTask') return 'إدارة كشف المهام الأدائية';
-        if (taskType === 'test') return 'إدارة كشف الاختبارات';
-        return '';
-    };
-
-    const getMaxGrade = () => {
-        if (taskType === 'homework') return 10;
-        if (taskType === 'performanceTask') return 5;
-        if (taskType === 'test') return 15;
-        return 10;
+        return 'إدارة الملاحظات';
     };
     
     useEffect(() => {
@@ -124,7 +109,7 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
         setFullyCompletedStudents(fullyCompleted);
         setNoneStudents(none);
         setSelectedStudents([]);
-    }, [taskType, students, homeworkCurriculum]); // Removed `mode` from dependencies
+    }, [taskType, students, homeworkCurriculum]);
 
     const handleToggleSelect = (studentId) => {
         setSelectedStudents(prev =>
@@ -160,7 +145,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
             return;
         }
 
-        // تم استبدال getHijriToday() بالطريقة الجديدة
         const today = new Date();
         const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
             day: 'numeric',
@@ -190,17 +174,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
                             weeklyNotes: updatedWeeklyNotes,
                         },
                     };
-                } else if (mode === 'grading') {
-                    const gradesKey = taskType === 'homework' ? 'homework' : taskType === 'performanceTask' ? 'performanceTasks' : 'tests';
-                    const gradesArray = [...(student.grades[gradesKey] || [])];
-                    
-                    const firstUncompletedIndex = gradesArray.findIndex(grade => grade === null);
-                    
-                    if (firstUncompletedIndex !== -1) {
-                        const updatedGrades = { ...student.grades, [gradesKey]: [...gradesArray] };
-                        updatedGrades[gradesKey][firstUncompletedIndex] = gradeValue;
-                        return { ...student, grades: updatedGrades };
-                    }
                 }
             }
             return student;
@@ -214,7 +187,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
         if (selectedStudents.length === 0) return true;
         if (mode === 'note' && noteType === 'custom' && !customNote.trim()) return true;
         if (mode === 'note' && noteType === 'template' && !selectedTemplate) return true;
-        if (mode === 'grading' && (gradeValue === null || gradeValue === undefined)) return true;
         return false;
     };
     
@@ -226,59 +198,7 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
                         <h3 className="text-xl font-bold text-gray-100">{getTitle()}</h3>
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-3xl leading-none font-semibold">&times;</button>
                     </div>
-                    <div className="flex flex-col md:flex-row gap-4 mb-6">
-                        <button
-                            onClick={() => {
-                                setMode('grading');
-                                setTaskType('homework');
-                            }}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                mode === 'grading' && taskType === 'homework'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                            }`}
-                        >
-                            <FaTasks />
-                            الواجبات
-                        </button>
-                        <button
-                            onClick={() => {
-                                setMode('grading');
-                                setTaskType('performanceTask');
-                            }}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                mode === 'grading' && taskType === 'performanceTask'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                            }`}
-                        >
-                            <FaBookOpen />
-                            المهام الأدائية
-                        </button>
-                        <button
-                            onClick={() => {
-                                setMode('grading');
-                                setTaskType('test');
-                            }}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                mode === 'grading' && taskType === 'test'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                            }`}
-                        >
-                            <FaPencilAlt />
-                            الاختبارات
-                        </button>
-                        <button
-                            onClick={() => setMode('note')}
-                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                mode === 'note' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                            }`}
-                        >
-                            <FaStickyNote />
-                            الملاحظات
-                        </button>
-                    </div>
+                    {/* تم إزالة أزرار تبديل المهام والاختبارات والملاحظات */}
                     {/* Student Status Display Section */}
                     <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 mb-6">
                         <h4 className="text-lg font-bold mb-4 text-gray-100">حال الطلاب في الواجب الحالي</h4>
@@ -365,90 +285,74 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum }) => {
                     </div>
                     {/* Action Section */}
                     <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-                        <h4 className="text-lg font-bold mb-4 text-gray-100">{isGradingMode ? 'تسجيل درجة' : 'إضافة ملاحظة'}</h4>
-                        {isGradingMode ? (
+                        <h4 className="text-lg font-bold mb-4 text-gray-100">إضافة ملاحظة</h4>
+                        <>
                             <div className="mb-4">
-                                <label className="block text-sm font-medium text-gray-300 mb-2">
-                                    الدرجة (0 - {getMaxGrade()})
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max={getMaxGrade()}
-                                    value={gradeValue}
-                                    onChange={(e) => setGradeValue(Number(e.target.value))}
-                                    className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                        ) : (
-                            <>
-                                <div className="mb-4">
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">نوع الملاحظة</label>
-                                    <div className="flex gap-4">
-                                        <label className="flex items-center text-gray-100">
-                                            <input
-                                                type="radio"
-                                                name="noteType"
-                                                value="custom"
-                                                checked={noteType === 'custom'}
-                                                onChange={() => setNoteType('custom')}
-                                                className="accent-blue-500 ml-2"
-                                            />
-                                            ملاحظة مخصصة
-                                        </label>
-                                        <label className="flex items-center text-gray-100">
-                                            <input
-                                                type="radio"
-                                                name="noteType"
-                                                value="template"
-                                                checked={noteType === 'template'}
-                                                onChange={() => setNoteType('template')}
-                                                className="accent-blue-500 ml-2"
-                                            />
-                                            قالب جاهز
-                                        </label>
-                                    </div>
+                                <label className="block text-sm font-medium text-gray-300 mb-2">نوع الملاحظة</label>
+                                <div className="flex gap-4">
+                                    <label className="flex items-center text-gray-100">
+                                        <input
+                                            type="radio"
+                                            name="noteType"
+                                            value="custom"
+                                            checked={noteType === 'custom'}
+                                            onChange={() => setNoteType('custom')}
+                                            className="accent-blue-500 ml-2"
+                                        />
+                                        ملاحظة مخصصة
+                                    </label>
+                                    <label className="flex items-center text-gray-100">
+                                        <input
+                                            type="radio"
+                                            name="noteType"
+                                            value="template"
+                                            checked={noteType === 'template'}
+                                            onChange={() => setNoteType('template')}
+                                            className="accent-blue-500 ml-2"
+                                        />
+                                        قالب جاهز
+                                    </label>
                                 </div>
-                                {noteType === 'custom' ? (
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-gray-300 mb-2">ملاحظة مخصصة</label>
-                                        <textarea
-                                            value={customNote}
-                                            onChange={(e) => setCustomNote(e.target.value)}
-                                            placeholder="اكتب ملاحظة..."
-                                            rows="4"
-                                            className="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        ></textarea>
-                                    </div>
-                                ) : (
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-gray-300 mb-2">قالب ملاحظة جاهز</label>
-                                        <select
-                                            value={selectedTemplate}
-                                            onChange={(e) => setSelectedTemplate(e.target.value)}
-                                            className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        >
-                                            <option value="">اختر قالباً...</option>
-                                            {noteTemplates.map(t => (
-                                                <option key={t.id} value={t.id}>{t.text}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
+                            </div>
+                            {noteType === 'custom' ? (
                                 <div className="mb-4">
-                                    <label className="block text-sm font-medium text-gray-300 mb-2">الأسبوع</label>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">ملاحظة مخصصة</label>
+                                    <textarea
+                                        value={customNote}
+                                        onChange={(e) => setCustomNote(e.target.value)}
+                                        placeholder="اكتب ملاحظة..."
+                                        rows="4"
+                                        className="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    ></textarea>
+                                </div>
+                            ) : (
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">قالب ملاحظة جاهز</label>
                                     <select
-                                        value={weekIndex}
-                                        onChange={(e) => setWeekIndex(Number(e.target.value))}
+                                        value={selectedTemplate}
+                                        onChange={(e) => setSelectedTemplate(e.target.value)}
                                         className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     >
-                                        {Array(20).fill().map((_, i) => (
-                                            <option key={i} value={i}>الأسبوع {i + 1}</option>
+                                        <option value="">اختر قالباً...</option>
+                                        {noteTemplates.map(t => (
+                                            <option key={t.id} value={t.id}>{t.text}</option>
                                         ))}
                                     </select>
                                 </div>
-                            </>
-                        )}
+                            )}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-300 mb-2">الأسبوع</label>
+                                <select
+                                    value={weekIndex}
+                                    onChange={(e) => setWeekIndex(Number(e.target.value))}
+                                    className="w-full p-2 border border-gray-600 rounded-lg bg-gray-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    {Array(20).fill().map((_, i) => (
+                                        <option key={i} value={i}>الأسبوع {i + 1}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </>
                         <div className="flex gap-2 justify-end">
                             <button
                                 onClick={handleSave}
