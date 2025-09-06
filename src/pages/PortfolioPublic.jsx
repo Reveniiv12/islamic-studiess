@@ -58,7 +58,6 @@ const PortfolioPublic = () => {
     }
   }, [userId]);
   
-  // تم تعديل هذه الدالة لفتح جميع الملفات داخل الـ FileViewer
   const openViewer = (index) => {
     setCurrentFileIndex(index);
     setIsViewerOpen(true);
