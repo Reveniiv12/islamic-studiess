@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { FaTimes, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
-import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
-import 'react-pdf/dist/esm/Page/TextLayer.css';
+import 'react-pdf/dist/umd/Page/AnnotationLayer.css';
+import 'react-pdf/dist/umd/Page/TextLayer.css';
 
 // تأكد من تحديث هذا المسار ليناسب مشروعك
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
