@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { FaTimes, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/cjs/Page/AnnotationLayer.css';
-import 'react-pdf/dist/cjs/Page/TextLayer.css';
+
 
 // هذا هو الحل النهائي لمشكلة مسار ملف العامل.
 // يستخدم `URL` و `import.meta.url` لإنشاء مسار صحيح وآمن
@@ -116,3 +115,4 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
 };
 
 export default FileViewer;
+
