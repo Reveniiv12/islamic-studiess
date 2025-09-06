@@ -1,116 +1,63 @@
-import React, { useState } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
-import { FaTimes, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
-// استورد ملفات CSS من المسار الجديد الذي نسخته فيه
-import '../styles/pdf-styles/AnnotationLayer.css';
-import '../styles/pdf-styles/TextLayer.css';
-
-// تأكد من أن هذا المسار لا يزال صحيحاً
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+import React from 'react';
+import { FaTimes, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 
 const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
-  const file = files[currentIndex];
-  const [numPages, setNumPages] = useState(null);
-  const [pageNumber, setPageNumber] = useState(1);
-
-  const onDocumentLoadSuccess = ({ numPages }) => {
-    setNumPages(numPages);
-    setPageNumber(1);
-  };
-
-  if (!file) {
+  if (!files || files.length === 0 || currentIndex === null) {
     return null;
   }
 
-  const isPDF = file.type === 'application/pdf';
+  const currentFile = files[currentIndex];
+  const isImage = currentFile.type.startsWith('image/');
+  const isPDF = currentFile.type === 'application/pdf';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-90 p-4" dir="rtl">
-      <div className="relative w-full h-full max-w-4xl max-h-screen bg-gray-800 rounded-lg shadow-xl flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <button onClick={onClose} className="text-white hover:text-red-400 transition-colors p-2 rounded-full bg-gray-700">
-            <FaTimes size={24} />
-          </button>
-          <h2 className="text-xl font-bold text-blue-400 truncate flex-1 text-center px-4">
-            {file.name}
-          </h2>
-          {isPDF && (
-            <div className="flex items-center gap-2 text-white">
-              <span className="text-sm">
-                صفحة {pageNumber} من {numPages}
-              </span>
+    <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
+      <button onClick={onClose} className="absolute top-4 right-4 text-white text-3xl hover:text-gray-400 transition-colors z-50">
+        <FaTimes />
+      </button>
+
+      {/* Navigation - Previous */}
+      <button 
+        onClick={onPrev}
+        className="absolute left-4 md:left-8 text-white text-4xl p-2 rounded-full bg-gray-700 bg-opacity-50 hover:bg-opacity-80 transition-colors z-40"
+        style={{ opacity: currentIndex > 0 ? 1 : 0.2 }}
+        disabled={currentIndex === 0}
+      >
+        <FaArrowRight />
+      </button>
+
+      {/* Navigation - Next */}
+      <button 
+        onClick={onNext}
+        className="absolute right-4 md:right-8 text-white text-4xl p-2 rounded-full bg-gray-700 bg-opacity-50 hover:bg-opacity-80 transition-colors z-40"
+        style={{ opacity: currentIndex < files.length - 1 ? 1 : 0.2 }}
+        disabled={currentIndex === files.length - 1}
+      >
+        <FaArrowLeft />
+      </button>
+
+      <div className="flex flex-col items-center justify-center h-full w-full max-w-5xl p-8">
+        <div className="w-full h-full flex items-center justify-center relative">
+          {isImage ? (
+            <img src={currentFile.url} alt={currentFile.name} className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
+          ) : isPDF ? (
+            // استخدام iframe لعرض ملف PDF بشكل موثوق
+            <iframe 
+              src={currentFile.url} 
+              title={currentFile.name} 
+              className="w-full h-full border-none shadow-lg rounded-lg"
+              style={{ minHeight: '500px' }}
+            ></iframe>
+          ) : (
+            <div className="text-white text-center">
+              <p>نوع الملف غير مدعوم للعرض.</p>
+              <p className="text-gray-400 mt-2">{currentFile.name}</p>
             </div>
           )}
         </div>
-
-        {/* Content Area */}
-        <div className="flex-1 overflow-auto p-4 flex items-center justify-center">
-          {isPDF ? (
-            <Document
-              file={file.url}
-              onLoadSuccess={onDocumentLoadSuccess}
-              className="w-full h-full flex flex-col items-center"
-            >
-              <Page
-                pageNumber={pageNumber}
-                renderTextLayer={false}
-                renderAnnotationLayer={false}
-                className="w-full h-full"
-              />
-            </Document>
-          ) : (
-            <img src={file.url} alt={file.name} className="max-w-full max-h-full object-contain rounded-lg" />
-          )}
-        </div>
-
-        {/* Navigation Controls */}
-        <div className="flex items-center justify-between p-4 border-t border-gray-700">
-          <button
-            onClick={() => onPrev()}
-            disabled={currentIndex === 0}
-            className={`p-3 rounded-full transition-colors ${
-              currentIndex === 0 ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            <FaChevronRight size={20} />
-          </button>
-
-          <div className="flex gap-2">
-            {isPDF && (
-              <>
-                <button
-                  onClick={() => setPageNumber(prevPage => prevPage - 1)}
-                  disabled={pageNumber <= 1}
-                  className={`p-2 rounded-lg transition-colors text-white ${
-                    pageNumber <= 1 ? 'bg-gray-700 cursor-not-allowed' : 'bg-gray-600 hover:bg-gray-500'
-                  }`}
-                >
-                  <FaChevronRight size={16} />
-                </button>
-                <button
-                  onClick={() => setPageNumber(prevPage => prevPage + 1)}
-                  disabled={pageNumber >= numPages}
-                  className={`p-2 rounded-lg transition-colors text-white ${
-                    pageNumber >= numPages ? 'bg-gray-700 cursor-not-allowed' : 'bg-gray-600 hover:bg-gray-500'
-                  }`}
-                >
-                  <FaChevronLeft size={16} />
-                </button>
-              </>
-            )}
-          </div>
-
-          <button
-            onClick={() => onNext()}
-            disabled={currentIndex === files.length - 1}
-            className={`p-3 rounded-full transition-colors ${
-              currentIndex === files.length - 1 ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
-          >
-            <FaChevronLeft size={20} />
-          </button>
-        </div>
+      </div>
+      <div className="absolute bottom-4 left-0 w-full text-center text-white text-lg">
+        {currentIndex + 1} / {files.length}
       </div>
     </div>
   );
