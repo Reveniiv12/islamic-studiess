@@ -4,7 +4,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 
 // Set the worker source for react-pdf.
 // This is required for the library to function correctly.
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js`;
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
   const [numPages, setNumPages] = useState(null);
@@ -110,6 +110,7 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
 };
 
 export default FileViewer;
+
 
 
 
