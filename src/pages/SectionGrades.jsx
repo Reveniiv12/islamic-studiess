@@ -1830,6 +1830,33 @@ const handleExportQRCodes = async () => {
       إدارة الملاحظات
     </button>
   </div>
+  {/* NEW: Last 5 Notes Section */}
+  <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
+    <h5 className="font-bold text-gray-200 mb-2">آخر الملاحظات</h5>
+    <div className="h-px bg-gray-600 mb-2"></div>
+    {selectedStudent.grades.weeklyNotes?.reduce((acc, notes, weekIndex) => {
+      notes?.forEach(note => {
+        acc.push({ note, weekIndex });
+      });
+      return acc;
+    }, []).reverse().slice(0, 5).length > 0 ? (
+      selectedStudent.grades.weeklyNotes.reduce((acc, notes, weekIndex) => {
+        notes?.forEach(note => {
+          acc.push({ note, weekIndex });
+        });
+        return acc;
+      }, []).reverse().slice(0, 5).map((item, index) => (
+        <div key={index} className="bg-gray-800 p-3 rounded-lg border border-gray-600">
+          <p className="text-sm text-gray-300">
+            <span className="font-bold">الأسبوع {item.weekIndex + 1}:</span> {item.note}
+          </p>
+        </div>
+      ))
+    ) : (
+      <p className="text-gray-400 text-sm text-center">لا توجد ملاحظات حاليًا.</p>
+    )}
+  </div>
+  {/* END OF NEW SECTION */}
   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 max-h-96 overflow-y-auto">
     {(selectedStudent.grades.weeklyNotes || []).map((notes, weekIndex) => (
       <div key={weekIndex} className="bg-gray-800 p-3 rounded-lg border border-gray-600 min-h-[120px] relative">
@@ -2071,4 +2098,3 @@ const handleExportQRCodes = async () => {
 
 
 export default SectionGrades;
-
