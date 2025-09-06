@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { FaTimes, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import { Document, Page, pdfjs } from 'react-pdf';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
+import 'react-pdf/dist/cjs/Page/AnnotationLayer.css';
+import 'react-pdf/dist/cjs/Page/TextLayer.css';
 
-// Fix for worker source issue.
-// This version uses a known working CDN link for a stable version of pdf.js.
-// It bypasses the common issues with unpkg and dynamic versioning.
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js`;
+// This is the final and correct way to set the worker source.
+// It uses a local import directly from the installed package.
+import workerSrc from 'react-pdf/dist/cjs/pdf.worker.min.js';
+pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
 const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
   const [numPages, setNumPages] = useState(null);
@@ -46,7 +46,7 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
       </button>
 
       {/* Main Navigation (between files) */}
-      <button 
+      <button
         onClick={onPrev}
         className="absolute left-4 md:left-8 text-white text-4xl p-2 rounded-full bg-gray-700 bg-opacity-50 hover:bg-opacity-80 transition-colors z-40"
         style={{ opacity: currentIndex > 0 ? 1 : 0.2 }}
@@ -55,7 +55,7 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
         <FaArrowRight />
       </button>
 
-      <button 
+      <button
         onClick={onNext}
         className="absolute right-4 md:right-8 text-white text-4xl p-2 rounded-full bg-gray-700 bg-opacity-50 hover:bg-opacity-80 transition-colors z-40"
         style={{ opacity: currentIndex < files.length - 1 ? 1 : 0.2 }}
