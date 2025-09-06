@@ -4,7 +4,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 
 // Fix for worker source issue
 // Use a reliable CDN that has lenient CORS policies and supports the pdfjs version
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+pdfjs.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL}/pdf.worker.min.js`;
 
 const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
   const [numPages, setNumPages] = useState(null);
@@ -110,3 +110,4 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
 };
 
 export default FileViewer;
+
