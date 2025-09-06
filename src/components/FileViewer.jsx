@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { FaTimes, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 
-// Fix for worker source issue
-// Use a reliable CDN that has lenient CORS policies and supports the pdfjs version
-pdfjs.GlobalWorkerOptions.workerSrc = `${process.env.PUBLIC_URL}/pdf.worker.min.js`;
+// Fix for worker source issue.
+// This version uses a known working CDN link for a stable version of pdf.js.
+// It bypasses the common issues with unpkg and dynamic versioning.
+pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js`;
 
 const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
   const [numPages, setNumPages] = useState(null);
@@ -110,4 +113,3 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
 };
 
 export default FileViewer;
-
