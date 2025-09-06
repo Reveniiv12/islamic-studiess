@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { FaTimes, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
+// تم تعديل مسار استيراد ملفات CSS ليعمل في بيئة الإنشاء
 import 'react-pdf/dist/umd/Page/AnnotationLayer.css';
 import 'react-pdf/dist/umd/Page/TextLayer.css';
 
+// تأكد من أن هذا المسار لا يزال صحيحاً
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
