@@ -41,18 +41,13 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
           {isImage ? (
             <img src={currentFile.url} alt={currentFile.name} className="max-w-full max-h-full object-contain shadow-lg rounded-lg" />
           ) : isPDF ? (
-            <div className="flex flex-col items-center justify-center text-center p-8 bg-gray-800 rounded-lg shadow-xl">
-              <FaFilePdf size={80} className="text-red-500 mb-4" />
-              <p className="text-lg text-white font-semibold mb-2">{currentFile.name}</p>
-              <a 
-                href={currentFile.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors mt-4"
-              >
-                فتح الملف في نافذة جديدة
-              </a>
-            </div>
+            // استخدام iframe لعرض ملف PDF بشكل موثوق
+            <iframe 
+              src={currentFile.url} 
+              title={currentFile.name} 
+              className="w-full h-full border-none shadow-lg rounded-lg"
+              style={{ minHeight: '500px' }}
+            ></iframe>
           ) : (
             <div className="text-white text-center">
               <p>نوع الملف غير مدعوم للعرض.</p>
