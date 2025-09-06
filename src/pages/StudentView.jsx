@@ -215,6 +215,15 @@ function StudentView() {
       </div>
     );
   }
+  
+  const processedNotes = (studentData.grades.weeklyNotes || []).reduce((acc, notes, weekIndex) => {
+    if (notes && notes.length > 0) {
+      notes.forEach(note => {
+        acc.push({ note, weekIndex });
+      });
+    }
+    return acc;
+  }, []).reverse().slice(0, 5);
 
   return (
     <div className="p-4 md:p-8 bg-gray-900 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100" dir="rtl">
@@ -280,6 +289,26 @@ function StudentView() {
                   ))
                 ) : (
                   <p className="text-gray-400 text-sm text-center">لا توجد إعلانات حاليًا.</p>
+                )}
+              </div>
+            </div>
+            
+            {/* New: Latest Notes Section */}
+            <div className="md:col-span-2 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+              <h4 className="font-semibold text-xl flex items-center gap-2 text-gray-100 mb-4">
+                <FaStickyNote className="text-3xl text-yellow-400" /> آخر الملاحظات
+              </h4>
+              <div className="space-y-3 max-h-48 overflow-y-auto">
+                {processedNotes.length > 0 ? (
+                  processedNotes.map((item, index) => (
+                    <div key={index} className="bg-gray-800 p-3 rounded-lg border border-gray-600">
+                      <p className="text-sm text-gray-300">
+                        <span className="font-bold">الأسبوع {item.weekIndex + 1}:</span> {item.note}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-400 text-sm text-center">لا توجد ملاحظات حاليًا.</p>
                 )}
               </div>
             </div>
