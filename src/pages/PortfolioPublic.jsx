@@ -58,16 +58,10 @@ const PortfolioPublic = () => {
     }
   }, [userId]);
   
+  // تم تعديل هذه الدالة لفتح جميع الملفات داخل الـ FileViewer
   const openViewer = (index) => {
-    const fileToView = files[index];
-    if (fileToView.type === 'application/pdf') {
-      // فتح ملف PDF في علامة تبويب جديدة مباشرة
-      window.open(fileToView.url, '_blank');
-    } else {
-      // فتح معاينة للملفات الأخرى داخل التطبيق
-      setCurrentFileIndex(index);
-      setIsViewerOpen(true);
-    }
+    setCurrentFileIndex(index);
+    setIsViewerOpen(true);
   };
 
   const closeViewer = () => {
