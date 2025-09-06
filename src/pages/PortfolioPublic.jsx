@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '../supabaseClient'; // تأكد من وجود هذا الملف
+import { supabase } from '../supabaseClient';
 import { FaFilePdf } from 'react-icons/fa';
 import FileViewer from '../components/FileViewer';
 
@@ -18,7 +18,6 @@ const PortfolioPublic = () => {
       setLoading(true);
       setError('');
       try {
-        // جلب الملفات
         const { data: filesData, error: filesError } = await supabase
           .from('files')
           .select('*')
@@ -32,14 +31,13 @@ const PortfolioPublic = () => {
           setError("لا توجد ملفات في ملف الإنجاز هذا.");
         }
         
-        // جلب بيانات المعلم
         const { data: teacherInfoData, error: teacherInfoError } = await supabase
           .from('teacher_info')
           .select('*')
           .eq('user_id', userId)
           .single();
           
-        if (teacherInfoError && teacherInfoError.code !== 'PGRST116') { // ignore 'no rows found' error
+        if (teacherInfoError && teacherInfoError.code !== 'PGRST116') {
           throw teacherInfoError;
         }
         setTeacherInfo(teacherInfoData || {});
@@ -61,8 +59,15 @@ const PortfolioPublic = () => {
   }, [userId]);
   
   const openViewer = (index) => {
-    setCurrentFileIndex(index);
-    setIsViewerOpen(true);
+    const fileToView = files[index];
+    if (fileToView.type === 'application/pdf') {
+      // فتح ملف PDF في علامة تبويب جديدة مباشرة
+      window.open(fileToView.url, '_blank');
+    } else {
+      // فتح معاينة للملفات الأخرى داخل التطبيق
+      setCurrentFileIndex(index);
+      setIsViewerOpen(true);
+    }
   };
 
   const closeViewer = () => {
