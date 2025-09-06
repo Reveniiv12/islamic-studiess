@@ -1,7 +1,7 @@
 // src/components/RecitationModal.jsx
 import React, { useState, useEffect } from 'react';
 import { FaBookOpen, FaStickyNote, FaSave, FaTimes, FaCheckCircle, FaTimesCircle, FaClock, FaQuestionCircle } from 'react-icons/fa';
-import { getRecitationStatus, getHijriToday, compareHijriDates } from '../utils/recitationUtils';
+import { getRecitationStatus } from '../utils/recitationUtils';
 
 const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
     const [mode, setMode] = useState('note'); // 'recitation' or 'note'
@@ -87,7 +87,13 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
             return;
         }
 
-        const today = getHijriToday();
+        // تم استبدال getHijriToday() بالطريقة الجديدة
+        const today = new Date();
+        const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        }).format(today);
         
         const updatedStudents = students.map(student => {
             if (selectedStudents.includes(student.id)) {
@@ -101,7 +107,7 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
 
                     if (!noteText.trim()) return student;
 
-                    const formattedNote = `(${today}): ${noteText.trim()}`;
+                    const formattedNote = `(${hijriDate}): ${noteText.trim()}`;
                     const updatedWeeklyNotes = [...(student.grades.weeklyNotes || Array(20).fill(null).map(() => []))];
                     if (!Array.isArray(updatedWeeklyNotes[weekIndex])) {
                         updatedWeeklyNotes[weekIndex] = [];
