@@ -220,15 +220,16 @@ function StudentView() {
   const processedNotes = (studentData.grades.weeklyNotes || [])
   .reduce((acc, notes, weekIndex) => {
     if (notes && notes.length > 0) {
+      // نستخدم forEach لإضافة كل ملاحظة إلى مصفوفة واحدة
       notes.forEach(note => {
-        // نربط الملاحظة برقم الأسبوع الذي تم إدخالها فيه
+        // نربط كل ملاحظة برقم الأسبوع الذي تم إدخالها فيه
         acc.push({ note, weekIndex });
       });
     }
     return acc;
   }, [])
-  .sort((a, b) => b.weekIndex - a.weekIndex) // الفرز حسب رقم الأسبوع بشكل تنازلي
-  .slice(0, 5); // أخذ آخر 5 ملاحظات فقط
+  .reverse() // نعكس ترتيب المصفوفة لتصبح الأحدث في الأعلى
+  .slice(0, 5); // نأخذ آخر 5 ملاحظات فقط
 
   return (
     <div className="p-4 md:p-8 bg-gray-900 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100" dir="rtl">
