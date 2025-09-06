@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; // تأكد من وجود هذا الملف
 import { FaFilePdf } from 'react-icons/fa';
-import FileViewer from '../components/FileViewer'; // هذا هو الاستيراد الصحيح
+import FileViewer from '../components/FileViewer';
 
 const PortfolioPublic = () => {
   const { userId } = useParams();
