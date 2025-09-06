@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient'; // تأكد من وجود هذا الملف
 import { FaFilePdf } from 'react-icons/fa';
 import FileViewer from '../components/FileViewer';
 
@@ -18,6 +18,7 @@ const PortfolioPublic = () => {
       setLoading(true);
       setError('');
       try {
+        // جلب الملفات
         const { data: filesData, error: filesError } = await supabase
           .from('files')
           .select('*')
@@ -31,13 +32,14 @@ const PortfolioPublic = () => {
           setError("لا توجد ملفات في ملف الإنجاز هذا.");
         }
         
+        // جلب بيانات المعلم
         const { data: teacherInfoData, error: teacherInfoError } = await supabase
           .from('teacher_info')
           .select('*')
           .eq('user_id', userId)
           .single();
           
-        if (teacherInfoError && teacherInfoError.code !== 'PGRST116') {
+        if (teacherInfoError && teacherInfoError.code !== 'PGRST116') { // ignore 'no rows found' error
           throw teacherInfoError;
         }
         setTeacherInfo(teacherInfoData || {});
