@@ -216,21 +216,19 @@ function StudentView() {
     );
   }
   
-  // الكود المعدل هنا
-  const processedNotes = (studentData.grades.weeklyNotes || [])
-  .reduce((acc, notes, weekIndex) => {
+  // الكود الجديد والمعدل
+  const allNotes = [];
+  (studentData.grades.weeklyNotes || []).forEach((notes, weekIndex) => {
     if (notes && notes.length > 0) {
-      // نستخدم forEach لإضافة كل ملاحظة إلى مصفوفة واحدة
       notes.forEach(note => {
-        // نربط كل ملاحظة برقم الأسبوع الذي تم إدخالها فيه
-        acc.push({ note, weekIndex });
+        allNotes.push({ note, weekIndex });
       });
     }
-    return acc;
-  }, [])
-  .reverse() // نعكس ترتيب المصفوفة لتصبح الأحدث في الأعلى
-  .slice(0, 5); // نأخذ آخر 5 ملاحظات فقط
+  });
 
+  // عكس المصفوفة للحصول على أحدث الملاحظات أولاً
+  const processedNotes = allNotes.reverse().slice(0, 5);
+  
   return (
     <div className="p-4 md:p-8 bg-gray-900 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100" dir="rtl">
       {/* الشريط العلوي الجديد */}
