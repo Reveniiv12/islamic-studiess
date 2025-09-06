@@ -44,24 +44,13 @@ const DraggableFile = ({ file, index, moveFile, onRemove, onClick }) => {
   
   const isPDF = file.type === 'application/pdf';
 
-  const handleClick = (e) => {
-    if (isPDF) {
-      // فتح ملف PDF في علامة تبويب جديدة مباشرة
-      e.stopPropagation();
-      window.open(file.url, '_blank');
-    } else {
-      // فتح معاينة للملفات الأخرى داخل التطبيق
-      onClick(index);
-    }
-  };
-
   return (
     <div
       ref={ref}
       style={{ opacity }}
-      className="relative flex flex-col items-center p-4 bg-gray-800 rounded-lg shadow-md overflow-hidden cursor-pointer transform transition-transform hover:scale-105 hover:shadow-xl"
+      className="relative flex flex-col items-center p-4 bg-gray-800 rounded-lg shadow-md overflow-hidden cursor-move transform transition-transform hover:scale-105 hover:shadow-xl"
       data-handler-id={handlerId}
-      onClick={handleClick}
+      onClick={() => onClick(index)}
     >
       <button onClick={(e) => { e.stopPropagation(); onRemove(file.id); }} className="absolute top-2 left-2 text-red-500 hover:text-red-300 transition-colors z-10 p-1">
         <FaTrash />
@@ -88,7 +77,7 @@ const Portfolio = () => {
   const [qrCodeData, setQrCodeData] = useState('');
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [currentFileIndex, setCurrentFileIndex] = useState(null);
-  const [isEditModalOpen, setIsEditModal] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [teacherInfo, setTeacherInfo] = useState({
     name: '',
     semester: '',
@@ -292,7 +281,7 @@ const Portfolio = () => {
                 multiple
                 accept=".pdf, image/*"
             />
-            <button onClick={() => setIsEditModal(true)} className="bg-gray-700 hover:bg-gray-600 text-white py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 w-full md:w-auto">
+            <button onClick={() => setIsEditModalOpen(true)} className="bg-gray-700 hover:bg-gray-600 text-white py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 w-full md:w-auto">
               <FaUserEdit />
               تعديل بيانات المعلم
             </button>
@@ -347,7 +336,7 @@ const Portfolio = () => {
       )}
       
       {/* Edit Teacher Info Modal */}
-      {isEditModal && (
+      {isEditModalOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-50 p-4" dir="rtl">
           <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-auto text-center">
             <h3 className="text-xl font-bold text-blue-400 mb-4">تعديل بيانات العرض العام</h3>
@@ -401,7 +390,7 @@ const Portfolio = () => {
             <div className="flex justify-between items-center mt-6">
               <button
                 type="button"
-                onClick={() => setIsEditModal(false)}
+                onClick={() => setIsEditModalOpen(false)}
                 className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition"
               >
                 إلغاء
