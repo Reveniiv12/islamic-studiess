@@ -76,6 +76,81 @@ function StudentView() {
   const sectionName = getSectionNameById(studentData?.section);
 
   useEffect(() => {
+    let visitStartTime = Date.now();
+    let visitId = null;
+
+    const logVisitStart = async (studentInfo) => {
+        // التحقق من وجود معرف طالب
+        if (!studentInfo || !studentInfo.id) {
+            console.error("معرف الطالب غير موجود، لا يمكن تسجيل الزيارة.");
+            return;
+        }
+
+        // Check if there is a logged-in user (teacher) to avoid logging their visits
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            console.log("المعلم مسجل دخوله، لا يتم تسجيل الزيارة.");
+            return;
+        }
+
+        // Prepare the visit data
+        const newVisitData = {
+            page_name: 'StudentView',
+            visitor_name: studentInfo.name || 'مجهول',
+            student_id: studentInfo.id,
+            visit_start_time: new Date(visitStartTime).toISOString(),
+            is_teacher: false,
+            teacher_id: studentInfo.teacher_id,
+        };
+
+        const { data, error } = await supabase
+            .from('page_visits')
+            .insert([newVisitData])
+            .select();
+
+        if (error) {
+            console.error("Error logging page visit start:", error);
+        } else {
+            visitId = data[0].id;
+            localStorage.setItem(`visitStartTime_${studentInfo.id}`, visitStartTime);
+            localStorage.setItem(`visitId_${studentInfo.id}`, visitId);
+        }
+    };
+
+    const logVisitEnd = async () => {
+        const storedVisitStartTime = localStorage.getItem(`visitStartTime_${studentId}`);
+        const storedVisitId = localStorage.getItem(`visitId_${studentId}`);
+
+        if (storedVisitId && storedVisitStartTime) {
+            const durationInSeconds = Math.floor((Date.now() - parseInt(storedVisitStartTime)) / 1000);
+            
+            const { error } = await supabase
+                .from('page_visits')
+                .update({ duration: durationInSeconds })
+                .eq('id', storedVisitId);
+
+            if (error) {
+                console.error("Error logging page visit end:", error);
+            }
+            
+            localStorage.removeItem(`visitStartTime_${studentId}`);
+            localStorage.removeItem(`visitId_${studentId}`);
+        }
+    };
+
+    const handleBeforeUnload = (event) => {
+        logVisitEnd();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+}, [studentId]);
+
+
+  useEffect(() => {
     const fetchData = async () => {
       if (!studentId) {
         setError("معرف الطالب مفقود.");
@@ -96,6 +171,31 @@ function StudentView() {
           throw studentError;
         }
 
+        // Log the start of the visit here, after fetching student data
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { // Only log if not a teacher
+          const { data: existingVisit } = await supabase
+              .from('page_visits')
+              .select('id')
+              .eq('student_id', student.id)
+              .eq('duration', null)
+              .single();
+
+          if (!existingVisit) {
+            // Only insert a new log if there isn't an ongoing one
+            await supabase.from('page_visits').insert([
+                {
+                    page_name: 'StudentView',
+                    visitor_name: student.name,
+                    student_id: studentId,
+                    visit_start_time: new Date().toISOString(),
+                    is_teacher: false,
+                    teacher_id: student.teacher_id,
+                }
+            ]);
+          }
+        }
+        
         const teacherId = student.teacher_id;
 
         const { data: curriculumData, error: curriculumError } = await supabase
@@ -195,6 +295,7 @@ function StudentView() {
 
     fetchData();
   }, [studentId]);
+
 
   if (loading) {
     return <div className="p-8 text-center text-blue-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">جاري تحميل بيانات الطالب...</div>;
