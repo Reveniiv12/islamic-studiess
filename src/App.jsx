@@ -9,7 +9,7 @@ import SectionsPage from "./pages/SectionsPage";
 import SectionGrades from "./pages/SectionGrades";
 import StudentList from "./pages/StudentList";
 import StudentView from "./pages/StudentView";
-import ConnectedUsersPage from "./pages/ConnectedUsersPage"; // تم إضافة هذا الاستيراد
+import ConnectedUsersPage from "./pages/ConnectedUsersPage";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { supabase } from "./supabaseClient"; 
@@ -24,56 +24,25 @@ export default function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* الصفحة الرئيسية الجديدة - لوحة تحكم المعلم (مسار محمي) */}
+            {/* المسارات العامة التي لا تتطلب تسجيل الدخول */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/student-grades/:id" element={<StudentGradesPublic />} />
+            <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
+            <Route 
+              path="/grades/:gradeId/sections/:sectionId/students/:studentId" 
+              element={<StudentView />} 
+            />
+
+            {/* المسارات المحمية التي تتطلب تسجيل الدخول */}
             <Route
-              path="/"
+              path="/teacher-dashboard"
               element={
                 <ProtectedRoute>
                   <TeacherDashboard />
                 </ProtectedRoute>
               }
             />
-
-            {/* صفحة تسجيل الدخول */}
-            <Route path="/login" element={<Login />} />
-
-            {/* صفحة إنشاء حساب جديد */}
-            <Route path="/register" element={<Register />} />
-
-            {/* صفحة درجات الطالب العامة (بدون حماية) */}
-            <Route path="/student-grades/:id" element={<StudentGradesPublic />} />
-
-            {/* مسار الصفوف (مسار محمي) */}
-            <Route
-              path="/grades/:gradeId"
-              element={
-                <ProtectedRoute>
-                  <SectionsPage />
-                </ProtectedRoute>
-              }
-            />
-            
-            {/* مسار صفحة درجات الفصل (مسار محمي) */}
-            <Route
-              path="/grades/:gradeId/sections/:sectionId"
-              element={
-                <ProtectedRoute>
-                  <SectionGrades />
-                </ProtectedRoute>
-              }
-            />
-            
-            {/* مسار صفحة المتصلين (مسار محمي) */}
-            <Route
-              path="/grades/:gradeId/sections/:sectionId/connected-users"
-              element={
-                <ProtectedRoute>
-                  <ConnectedUsersPage />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* لوحة تحكم الطالب (مسار محمي) */}
             <Route
               path="/dashboard"
               element={
@@ -82,8 +51,30 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-
-            {/* عرض قائمة الطلاب لفصل معين (مسار محمي) */}
+            <Route
+              path="/grades/:gradeId"
+              element={
+                <ProtectedRoute>
+                  <SectionsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/grades/:gradeId/sections/:sectionId"
+              element={
+                <ProtectedRoute>
+                  <SectionGrades />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/grades/:gradeId/sections/:sectionId/connected-users"
+              element={
+                <ProtectedRoute>
+                  <ConnectedUsersPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/grades/:gradeId/sections/:sectionId/students"
               element={
@@ -92,14 +83,6 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-
-            {/* عرض درجات طالب معين (مسار عام لروابط الـ QR) */}
-            <Route
-              path="/grades/:gradeId/sections/:sectionId/students/:studentId"
-              element={<StudentView />}
-            />
-
-            {/* مسار ملف الإنجاز المحمي */}
             <Route
               path="/portfolio"
               element={
@@ -109,11 +92,11 @@ export default function App() {
               }
             />
 
-            {/* مسار ملف الإنجاز العام (بدون حماية) */}
-            <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
-
-            {/* إعادة توجيه أي مسار غير معروف. تم تعديلها لتوجيه المستخدمين إلى المسار المحمي "/" */}
-            <Route path="*" element={<Navigate to="/" />} />
+            {/* المسار الافتراضي للموقع (عام) */}
+            <Route path="/" element={<Navigate to="/login" />} />
+            
+            {/* إعادة توجيه أي مسار غير معروف إلى صفحة تسجيل الدخول */}
+            <Route path="*" element={<Navigate to="/login" />} />
           </Routes>
         </Router>
       </AuthProvider>
