@@ -8,8 +8,8 @@ import StudentGradesPublic from "./pages/StudentGradesPublic";
 import SectionsPage from "./pages/SectionsPage";
 import SectionGrades from "./pages/SectionGrades";
 import StudentList from "./pages/StudentList";
-import StudentGrades from "./pages/StudentGrades";
 import StudentView from "./pages/StudentView";
+import ConnectedUsersPage from "./pages/ConnectedUsersPage"; // تم إضافة هذا الاستيراد
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { supabase } from "./supabaseClient"; 
@@ -62,6 +62,16 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            
+            {/* مسار صفحة المتصلين (مسار محمي) */}
+            <Route
+              path="/grades/:gradeId/sections/:sectionId/connected-users"
+              element={
+                <ProtectedRoute>
+                  <ConnectedUsersPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* لوحة تحكم الطالب (مسار محمي) */}
             <Route
@@ -83,7 +93,7 @@ export default function App() {
               }
             />
 
-            {/* عرض درجات طالب معين (مسار عام لروابط الـ QR) - تم إزالة ProtectedRoute منه */}
+            {/* عرض درجات طالب معين (مسار عام لروابط الـ QR) */}
             <Route
               path="/grades/:gradeId/sections/:sectionId/students/:studentId"
               element={<StudentView />}
