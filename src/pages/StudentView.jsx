@@ -657,6 +657,3 @@ export default function StudentView() {
     </div>
   );
 }
-
-export default StudentView;
-
