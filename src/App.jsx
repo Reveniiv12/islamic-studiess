@@ -28,15 +28,15 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/student-grades/:id" element={<StudentGradesPublic />} />
-            <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
             <Route 
               path="/grades/:gradeId/sections/:sectionId/students/:studentId" 
               element={<StudentView />} 
             />
+            <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
 
             {/* المسارات المحمية التي تتطلب تسجيل الدخول */}
             <Route
-              path="/teacher-dashboard"
+              path="/"
               element={
                 <ProtectedRoute>
                   <TeacherDashboard />
@@ -68,18 +68,18 @@ export default function App() {
               }
             />
             <Route
-              path="/grades/:gradeId/sections/:sectionId/connected-users"
-              element={
-                <ProtectedRoute>
-                  <ConnectedUsersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/grades/:gradeId/sections/:sectionId/students"
               element={
                 <ProtectedRoute>
                   <StudentList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/grades/:gradeId/sections/:sectionId/connected-users"
+              element={
+                <ProtectedRoute>
+                  <ConnectedUsersPage />
                 </ProtectedRoute>
               }
             />
@@ -92,9 +92,6 @@ export default function App() {
               }
             />
 
-            {/* المسار الافتراضي للموقع (عام) */}
-            <Route path="/" element={<Navigate to="/login" />} />
-            
             {/* إعادة توجيه أي مسار غير معروف إلى صفحة تسجيل الدخول */}
             <Route path="*" element={<Navigate to="/login" />} />
           </Routes>
