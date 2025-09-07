@@ -42,20 +42,20 @@ const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
 
   return (
     <div className="flex gap-1 items-center">
-      <span className={`${sizes[size]} font-bold mr-2 text-yellow-400`}>{count}/{max}</span>
-      {[...Array(max)].map((_, i) => (
-        <FaRegStar
-          key={i}
-          className={`${sizes[size]} ${
-            i < count ? `text-${color}-400` : "text-gray-600"
-          }`}
-        />
-      ))}
+      <span className={`${sizes[size]} font-bold mr-2 text-${color}-400`}>{count}</span>
+      <div className="flex gap-0.5">
+        {Array.from({ length: max }).map((_, index) => (
+          <FaStar
+            key={index}
+            className={`${sizes[size]} ${index < count ? `text-${color}-400` : 'text-gray-600'}`}
+          />
+        ))}
+      </div>
     </div>
   );
 };
 
-export default function StudentView() {
+function StudentView() {
   const { studentId } = useParams();
   const navigate = useNavigate();
   const [studentData, setStudentData] = useState(null);
@@ -76,77 +76,6 @@ export default function StudentView() {
   const sectionName = getSectionNameById(studentData?.section);
 
   useEffect(() => {
-    let visitId = null;
-
-    const logVisitStart = async (studentInfo) => {
-      if (!studentInfo || !studentInfo.id) {
-        console.error("معرف الطالب غير موجود، لا يمكن تسجيل الزيارة.");
-        return;
-      }
-
-      const { data: { user } } = await supabase.auth.getUser();
-      // إذا كان المستخدم مسجل دخوله (معلم)، لا تسجل الزيارة
-      if (user) {
-        console.log("المعلم مسجل دخوله، لا يتم تسجيل الزيارة.");
-        return;
-      }
-
-      const newVisitData = {
-        page_name: 'StudentView',
-        visitor_name: studentInfo.name || 'زائر',
-        student_id: studentInfo.id,
-        visit_start_time: new Date().toISOString(),
-        is_teacher: false,
-        teacher_id: studentInfo.teacher_id,
-      };
-
-      const { data, error } = await supabase
-        .from('page_visits')
-        .insert([newVisitData])
-        .select();
-
-      if (error) {
-        console.error("Error logging page visit start:", error);
-      } else {
-        visitId = data[0].id;
-        localStorage.setItem(`visitId_${studentInfo.id}`, visitId);
-      }
-    };
-
-    const logVisitEnd = async () => {
-      const storedVisitId = localStorage.getItem(`visitId_${studentId}`);
-      if (storedVisitId) {
-        // Find the visit start time from the database
-        const { data: visitData } = await supabase
-            .from('page_visits')
-            .select('visit_start_time')
-            .eq('id', storedVisitId)
-            .single();
-        
-        if (visitData) {
-            const visitStartTime = new Date(visitData.visit_start_time).getTime();
-            const durationInSeconds = Math.floor((Date.now() - visitStartTime) / 1000);
-            
-            const { error } = await supabase
-                .from('page_visits')
-                .update({ duration: durationInSeconds })
-                .eq('id', storedVisitId);
-
-            if (error) {
-                console.error("Error logging page visit end:", error);
-            }
-        }
-        localStorage.removeItem(`visitId_${studentId}`);
-      }
-    };
-
-    const handleBeforeUnload = () => {
-      logVisitEnd();
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    // Call logVisitStart only once after student data is fetched
     const fetchData = async () => {
       if (!studentId) {
         setError("معرف الطالب مفقود.");
@@ -167,9 +96,6 @@ export default function StudentView() {
           throw studentError;
         }
 
-        // Log the start of the visit here, after fetching student data
-        await logVisitStart(student);
-        
         const teacherId = student.teacher_id;
 
         const { data: curriculumData, error: curriculumError } = await supabase
@@ -266,14 +192,9 @@ export default function StudentView() {
         setLoading(false);
       }
     };
+
     fetchData();
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      logVisitEnd(); // Ensure visit duration is logged on unmount
-    };
   }, [studentId]);
-
 
   if (loading) {
     return <div className="p-8 text-center text-blue-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">جاري تحميل بيانات الطالب...</div>;
@@ -657,3 +578,5 @@ export default function StudentView() {
     </div>
   );
 }
+
+export default StudentView;
