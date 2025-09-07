@@ -18,7 +18,7 @@ import TroubledStudentsModal from "../components/TroubledStudentsModal.jsx";
 import CustomDialog from "../components/CustomDialog";
 import VerificationModal from "../components/VerificationModal.jsx";
 import CustomModal from "../components/CustomModal.jsx";
-import AnnouncementsModal from "../components/AnnouncementsModal";
+import AnnouncementsModal from "../components/AnnouncementsModal"; 
 import { QRCodeSVG } from 'qrcode.react';
 import { getHijriToday } from '../utils/recitationUtils';
 
@@ -64,8 +64,7 @@ import {
   FaRegStar,
   FaCalendarTimes,
   FaExclamationTriangle,
-  FaTimes,
-  FaRegUserCircle,
+  FaTimes
 } from "react-icons/fa";
 
 import {
@@ -338,7 +337,7 @@ const SectionGrades = () => {
         };
 
         if (!studentWithStars.viewKey) {
-          studentWithStars.viewKey = `/student-view/${student.id}`;
+          studentWithStars.viewKey = `/student-view/${student.id}-${Date.now()}`;
         }
         return studentWithStars;
       }).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
@@ -1364,13 +1363,6 @@ const handleExportQRCodes = async () => {
           >
             <FaStickyNote /> إعلانات هامة
           </button>
-          {/* NEW BUTTON FOR CONNECTED USERS PAGE */}
-          <button
-            onClick={() => navigate(`/grades/${gradeId}/sections/${sectionId}/connected-users`)}
-            className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-500 transition-colors shadow-md text-xs md:text-sm"
-          >
-            <FaRegUserCircle /> المتصلين
-          </button>
           <button
             onClick={handleResetDataClick}
             className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-red-800 text-white rounded-lg hover:bg-red-700 transition-colors shadow-md text-xs md:text-sm"
@@ -1519,14 +1511,14 @@ const handleExportQRCodes = async () => {
             {filteredStudents.map(student => (
               <div key={student.id} onClick={() => handleQrClick(student)} className="bg-gray-700 p-4 rounded-lg shadow-md flex flex-col items-center transition-transform transform hover:scale-105 cursor-pointer">
                 <h4 className="text-lg font-bold text-blue-400 mb-2">{student.name}</h4>
-                <StudentQrCode viewKey={`/student-view/${student.id}`} size={150} />
+                <StudentQrCode viewKey={`/grades/${gradeId}/sections/${sectionId}/students/${student.id}`} size={150} />
                 <span className="mt-2 text-sm text-gray-400">{student.nationalId}</span>
                 <span className="text-sm text-gray-300">{gradeName} - {sectionName}</span>
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      copyStudentLink(`/student-view/${student.id}`);
+                      copyStudentLink(`/grades/${gradeId}/sections/${sectionId}/students/${student.id}`);
                     }}
                     className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-xs"
                   >
