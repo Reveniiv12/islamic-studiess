@@ -8,8 +8,8 @@ import StudentGradesPublic from "./pages/StudentGradesPublic";
 import SectionsPage from "./pages/SectionsPage";
 import SectionGrades from "./pages/SectionGrades";
 import StudentList from "./pages/StudentList";
+import StudentGrades from "./pages/StudentGrades";
 import StudentView from "./pages/StudentView";
-import ConnectedUsersPage from "./pages/ConnectedUsersPage";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { supabase } from "./supabaseClient"; 
@@ -24,17 +24,7 @@ export default function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* المسارات العامة التي لا تتطلب تسجيل الدخول */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/student-grades/:id" element={<StudentGradesPublic />} />
-            <Route 
-              path="/grades/:gradeId/sections/:sectionId/students/:studentId" 
-              element={<StudentView />} 
-            />
-            <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
-
-            {/* المسارات المحمية التي تتطلب تسجيل الدخول */}
+            {/* الصفحة الرئيسية الجديدة - لوحة تحكم المعلم (مسار محمي) */}
             <Route
               path="/"
               element={
@@ -43,14 +33,17 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
+
+            {/* صفحة تسجيل الدخول */}
+            <Route path="/login" element={<Login />} />
+
+            {/* صفحة إنشاء حساب جديد */}
+            <Route path="/register" element={<Register />} />
+
+            {/* صفحة درجات الطالب العامة (بدون حماية) */}
+            <Route path="/student-grades/:id" element={<StudentGradesPublic />} />
+
+            {/* مسار الصفوف (مسار محمي) */}
             <Route
               path="/grades/:gradeId"
               element={
@@ -59,6 +52,8 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            
+            {/* مسار صفحة درجات الفصل (مسار محمي) */}
             <Route
               path="/grades/:gradeId/sections/:sectionId"
               element={
@@ -67,6 +62,18 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* لوحة تحكم الطالب (مسار محمي) */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* عرض قائمة الطلاب لفصل معين (مسار محمي) */}
             <Route
               path="/grades/:gradeId/sections/:sectionId/students"
               element={
@@ -75,14 +82,14 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* عرض درجات طالب معين (مسار عام لروابط الـ QR) - تم إزالة ProtectedRoute منه */}
             <Route
-              path="/grades/:gradeId/sections/:sectionId/connected-users"
-              element={
-                <ProtectedRoute>
-                  <ConnectedUsersPage />
-                </ProtectedRoute>
-              }
+              path="/grades/:gradeId/sections/:sectionId/students/:studentId"
+              element={<StudentView />}
             />
+
+            {/* مسار ملف الإنجاز المحمي */}
             <Route
               path="/portfolio"
               element={
@@ -92,8 +99,11 @@ export default function App() {
               }
             />
 
-            {/* إعادة توجيه أي مسار غير معروف إلى صفحة تسجيل الدخول */}
-            <Route path="*" element={<Navigate to="/login" />} />
+            {/* مسار ملف الإنجاز العام (بدون حماية) */}
+            <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
+
+            {/* إعادة توجيه أي مسار غير معروف. تم تعديلها لتوجيه المستخدمين إلى المسار المحمي "/" */}
+            <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </Router>
       </AuthProvider>
