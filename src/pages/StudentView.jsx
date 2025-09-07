@@ -42,20 +42,20 @@ const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
 
   return (
     <div className="flex gap-1 items-center">
-      <span className={`${sizes[size]} font-bold mr-2 text-${color}-400`}>{count}</span>
-      <div className="flex gap-0.5">
-        {Array.from({ length: max }).map((_, index) => (
-          <FaStar
-            key={index}
-            className={`${sizes[size]} ${index < count ? `text-${color}-400` : 'text-gray-600'}`}
-          />
-        ))}
-      </div>
+      <span className={`${sizes[size]} font-bold mr-2 text-yellow-400`}>{count}/{max}</span>
+      {[...Array(max)].map((_, i) => (
+        <FaRegStar
+          key={i}
+          className={`${sizes[size]} ${
+            i < count ? `text-${color}-400` : "text-gray-600"
+          }`}
+        />
+      ))}
     </div>
   );
 };
 
-function StudentView() {
+export default function StudentView() {
   const { studentId } = useParams();
   const navigate = useNavigate();
   const [studentData, setStudentData] = useState(null);
@@ -76,53 +76,56 @@ function StudentView() {
   const sectionName = getSectionNameById(studentData?.section);
 
   useEffect(() => {
-    let visitStartTime = Date.now();
     let visitId = null;
 
     const logVisitStart = async (studentInfo) => {
-        // التحقق من وجود معرف طالب
-        if (!studentInfo || !studentInfo.id) {
-            console.error("معرف الطالب غير موجود، لا يمكن تسجيل الزيارة.");
-            return;
-        }
+      if (!studentInfo || !studentInfo.id) {
+        console.error("معرف الطالب غير موجود، لا يمكن تسجيل الزيارة.");
+        return;
+      }
 
-        // Check if there is a logged-in user (teacher) to avoid logging their visits
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            console.log("المعلم مسجل دخوله، لا يتم تسجيل الزيارة.");
-            return;
-        }
+      const { data: { user } } = await supabase.auth.getUser();
+      // إذا كان المستخدم مسجل دخوله (معلم)، لا تسجل الزيارة
+      if (user) {
+        console.log("المعلم مسجل دخوله، لا يتم تسجيل الزيارة.");
+        return;
+      }
 
-        // Prepare the visit data
-        const newVisitData = {
-            page_name: 'StudentView',
-            visitor_name: studentInfo.name || 'مجهول',
-            student_id: studentInfo.id,
-            visit_start_time: new Date(visitStartTime).toISOString(),
-            is_teacher: false,
-            teacher_id: studentInfo.teacher_id,
-        };
+      const newVisitData = {
+        page_name: 'StudentView',
+        visitor_name: studentInfo.name || 'زائر',
+        student_id: studentInfo.id,
+        visit_start_time: new Date().toISOString(),
+        is_teacher: false,
+        teacher_id: studentInfo.teacher_id,
+      };
 
-        const { data, error } = await supabase
-            .from('page_visits')
-            .insert([newVisitData])
-            .select();
+      const { data, error } = await supabase
+        .from('page_visits')
+        .insert([newVisitData])
+        .select();
 
-        if (error) {
-            console.error("Error logging page visit start:", error);
-        } else {
-            visitId = data[0].id;
-            localStorage.setItem(`visitStartTime_${studentInfo.id}`, visitStartTime);
-            localStorage.setItem(`visitId_${studentInfo.id}`, visitId);
-        }
+      if (error) {
+        console.error("Error logging page visit start:", error);
+      } else {
+        visitId = data[0].id;
+        localStorage.setItem(`visitId_${studentInfo.id}`, visitId);
+      }
     };
 
     const logVisitEnd = async () => {
-        const storedVisitStartTime = localStorage.getItem(`visitStartTime_${studentId}`);
-        const storedVisitId = localStorage.getItem(`visitId_${studentId}`);
-
-        if (storedVisitId && storedVisitStartTime) {
-            const durationInSeconds = Math.floor((Date.now() - parseInt(storedVisitStartTime)) / 1000);
+      const storedVisitId = localStorage.getItem(`visitId_${studentId}`);
+      if (storedVisitId) {
+        // Find the visit start time from the database
+        const { data: visitData } = await supabase
+            .from('page_visits')
+            .select('visit_start_time')
+            .eq('id', storedVisitId)
+            .single();
+        
+        if (visitData) {
+            const visitStartTime = new Date(visitData.visit_start_time).getTime();
+            const durationInSeconds = Math.floor((Date.now() - visitStartTime) / 1000);
             
             const { error } = await supabase
                 .from('page_visits')
@@ -132,25 +135,18 @@ function StudentView() {
             if (error) {
                 console.error("Error logging page visit end:", error);
             }
-            
-            localStorage.removeItem(`visitStartTime_${studentId}`);
-            localStorage.removeItem(`visitId_${studentId}`);
         }
+        localStorage.removeItem(`visitId_${studentId}`);
+      }
     };
 
-    const handleBeforeUnload = (event) => {
-        logVisitEnd();
+    const handleBeforeUnload = () => {
+      logVisitEnd();
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-}, [studentId]);
-
-
-  useEffect(() => {
+    // Call logVisitStart only once after student data is fetched
     const fetchData = async () => {
       if (!studentId) {
         setError("معرف الطالب مفقود.");
@@ -172,29 +168,7 @@ function StudentView() {
         }
 
         // Log the start of the visit here, after fetching student data
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { // Only log if not a teacher
-          const { data: existingVisit } = await supabase
-              .from('page_visits')
-              .select('id')
-              .eq('student_id', student.id)
-              .eq('duration', null)
-              .single();
-
-          if (!existingVisit) {
-            // Only insert a new log if there isn't an ongoing one
-            await supabase.from('page_visits').insert([
-                {
-                    page_name: 'StudentView',
-                    visitor_name: student.name,
-                    student_id: studentId,
-                    visit_start_time: new Date().toISOString(),
-                    is_teacher: false,
-                    teacher_id: student.teacher_id,
-                }
-            ]);
-          }
-        }
+        await logVisitStart(student);
         
         const teacherId = student.teacher_id;
 
@@ -292,8 +266,12 @@ function StudentView() {
         setLoading(false);
       }
     };
-
     fetchData();
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      logVisitEnd(); // Ensure visit duration is logged on unmount
+    };
   }, [studentId]);
 
 
@@ -681,3 +659,4 @@ function StudentView() {
 }
 
 export default StudentView;
+
