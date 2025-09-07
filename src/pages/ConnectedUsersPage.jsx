@@ -74,6 +74,7 @@ function ConnectedUsersPage() {
       console.error("Error fetching data:", err);
       setError("فشل في جلب بيانات الزوار.");
     } finally {
+      setLoading(false);
       setIsRefreshing(false);
     }
   };
