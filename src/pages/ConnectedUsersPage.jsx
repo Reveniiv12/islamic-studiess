@@ -28,7 +28,10 @@ function ConnectedUsersPage() {
   };
 
   const fetchVisitData = async () => {
-    if (!teacherId) return;
+    if (!teacherId) {
+      setLoading(false);
+      return;
+    }
     setIsRefreshing(true);
     try {
       const { data, error } = await supabase
@@ -42,30 +45,8 @@ function ConnectedUsersPage() {
         throw error;
       }
 
-      const now = Date.now();
-      const thirtyMinutesAgo = now - 30 * 60 * 1000;
-
-      // Group visits by student to find the latest session for each
-      const latestVisits = {};
-      data.forEach(visit => {
-        if (!latestVisits[visit.student_id] || new Date(visit.visit_start_time) > new Date(latestVisits[visit.student_id].visit_start_time)) {
-          latestVisits[visit.student_id] = visit;
-        }
-      });
-      
-      const current = [];
-      const past = [];
-      Object.values(latestVisits).forEach(visit => {
-        const visitStartTime = new Date(visit.visit_start_time).getTime();
-        // Check if the visit is recent and ongoing (no duration)
-        if (visit.duration === null && visitStartTime > thirtyMinutesAgo) {
-          // Add a live duration property for the current counter
-          const liveDuration = Math.floor((now - visitStartTime) / 1000);
-          current.push({ ...visit, liveDuration });
-        } else {
-          past.push(visit);
-        }
-      });
+      const current = data.filter(visit => visit.duration === null);
+      const past = data.filter(visit => visit.duration !== null);
 
       setCurrentUsers(current);
       setPastUsers(past);
