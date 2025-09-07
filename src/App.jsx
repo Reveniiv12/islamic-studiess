@@ -8,8 +8,8 @@ import StudentGradesPublic from "./pages/StudentGradesPublic";
 import SectionsPage from "./pages/SectionsPage";
 import SectionGrades from "./pages/SectionGrades";
 import StudentList from "./pages/StudentList";
+import StudentGrades from "./pages/StudentGrades";
 import StudentView from "./pages/StudentView";
-import ConnectedUsersPage from "./pages/ConnectedUsersPage";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { supabase } from "./supabaseClient"; 
@@ -59,16 +59,6 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <SectionGrades />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* مسار صفحة المتصلين (مسار محمي) */}
-            <Route
-              path="/grades/:gradeId/sections/:sectionId/connected-users"
-              element={
-                <ProtectedRoute>
-                  <ConnectedUsersPage />
                 </ProtectedRoute>
               }
             />
