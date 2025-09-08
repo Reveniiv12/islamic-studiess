@@ -19,6 +19,7 @@ const GradesModal = ({
         participation: '',
         quranRecitation: '',
         quranMemorization: '',
+        oralTest: '', // New: Add oralTest search query
     });
 
     // فصل حالات الطلاب المحددين لكل تبويب
@@ -29,6 +30,7 @@ const GradesModal = ({
         participation: [],
         quranRecitation: [],
         quranMemorization: [],
+        oralTest: [], // New: Add oralTest selected students
     });
 
     const [batchGrade, setBatchGrade] = useState('');
@@ -39,6 +41,7 @@ const GradesModal = ({
     const [performanceTaskIndex, setPerformanceTaskIndex] = useState(0);
     const [recitationIndex, setRecitationIndex] = useState(0);
     const [memorizationIndex, setMemorizationIndex] = useState(0);
+    const [oralTestIndex, setOralTestIndex] = useState(0); // New: Add oralTest index
     
     // حالة منفصلة للطلاب المفلترين لكل تبويب
     const [filteredStudents, setFilteredStudents] = useState(students);
@@ -93,6 +96,8 @@ const GradesModal = ({
             setRecitationIndex(0);
         } else if (tab === 'quranMemorization') {
             setMemorizationIndex(0);
+        } else if (tab === 'oralTest') {
+            setOralTestIndex(0);
         }
 
         setActiveTab(tab);
@@ -139,9 +144,9 @@ const GradesModal = ({
                 break;
         }
 
-        const numericValue = value === '' ? '' : Number(value);
+        const numericValue = value === '' ? null : Number(value);
 
-        if (numericValue !== '' && (numericValue > maxLimit || numericValue < 0)) {
+        if (numericValue !== null && (numericValue > maxLimit || numericValue < 0)) {
             setCustomDialog({
                 isOpen: true,
                 title: 'خطأ في إدخال الدرجة',
@@ -154,7 +159,7 @@ const GradesModal = ({
             prevStudents.map(student => {
                 if (student.id === studentId) {
                     const newGrades = [...(student.grades[category] || [])];
-                    newGrades[index] = value === '' ? '' : numericValue;
+                    newGrades[index] = value === '' ? null : numericValue;
                     return {
                         ...student,
                         grades: {
@@ -171,7 +176,7 @@ const GradesModal = ({
     const calculateCategoryScore = (student, category) => {
         if (!student.grades || !student.grades[category]) return 0;
 
-        const grades = student.grades[category].filter(g => g !== null && g !== undefined);
+        const grades = student.grades[category].filter(g => g !== null && g !== undefined && g !== '');
         if (grades.length === 0) return 0;
 
         const sum = grades.reduce((acc, curr) => acc + curr, 0);
@@ -185,7 +190,7 @@ const GradesModal = ({
             }
         }
         
-        if (category === 'performanceTasks') {
+        if (category === 'oralTest' || category === 'performanceTasks') {
             return Math.max(...grades).toFixed(2);
         }
 
@@ -218,7 +223,7 @@ const GradesModal = ({
         setBatchGrade(e.target.value);
     };
 
-const applyBatchGrade = () => {
+    const applyBatchGrade = () => {
         const batchNumericValue = batchGrade !== '' ? Number(batchGrade) : null;
         let maxLimit = 0;
         let errorMessage = '';
@@ -271,31 +276,24 @@ const applyBatchGrade = () => {
                     const newGrades = [...(student.grades[activeTab] || [])];
                     let updated = false;
 
+                    let indexToUpdate;
                     if (activeTab === 'tests') {
-                        if (testIndex !== -1) {
-                            newGrades[testIndex] = batchNumericValue;
-                            updated = true;
-                        }
+                        indexToUpdate = testIndex;
                     } else if (activeTab === 'homework') {
-                        if (homeworkIndex !== -1) {
-                            newGrades[homeworkIndex] = batchNumericValue;
-                            updated = true;
-                        }
+                        indexToUpdate = homeworkIndex;
                     } else if (activeTab === 'performanceTasks') {
-                        if (performanceTaskIndex !== -1) {
-                            newGrades[performanceTaskIndex] = batchNumericValue;
-                            updated = true;
-                        }
+                        indexToUpdate = performanceTaskIndex;
                     } else if (activeTab === 'quranRecitation') {
-                        if (recitationIndex !== -1) {
-                            newGrades[recitationIndex] = batchNumericValue;
-                            updated = true;
-                        }
+                        indexToUpdate = recitationIndex;
                     } else if (activeTab === 'quranMemorization') {
-                        if (memorizationIndex !== -1) {
-                            newGrades[memorizationIndex] = batchNumericValue;
-                            updated = true;
-                        }
+                        indexToUpdate = memorizationIndex;
+                    } else if (activeTab === 'oralTest') {
+                        indexToUpdate = oralTestIndex;
+                    }
+
+                    if (indexToUpdate !== undefined && indexToUpdate !== -1) {
+                        newGrades[indexToUpdate] = batchNumericValue;
+                        updated = true;
                     } else if (activeTab === 'participation') {
                         const emptyIndex = newGrades.findIndex(grade => grade === null || grade === undefined || grade === '');
                         
@@ -353,15 +351,16 @@ const applyBatchGrade = () => {
             <div className="mb-4">
                 <input
                     type="text"
+                    inputMode="text"
                     placeholder="ابحث عن طالب..."
                     value={searchQueries.tests}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col md:flex-row items-center gap-4">
                 <div className="flex items-center gap-2">
-                    <label htmlFor="test-calc-method" className="text-sm font-medium text-gray-400">
+                    <label htmlFor="test-calc-method" className="text-sm font-medium text-gray-400 whitespace-nowrap">
                         طريقة حساب الاختبارات:
                     </label>
                     <select
@@ -378,7 +377,7 @@ const applyBatchGrade = () => {
                     </select>
                 </div>
                 <div className="flex items-center gap-2">
-                    <label htmlFor="batch-test-index" className="text-sm font-medium text-gray-400">
+                    <label htmlFor="batch-test-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
                         اختبار رقم:
                     </label>
                     <select
@@ -393,6 +392,7 @@ const applyBatchGrade = () => {
                 </div>
                 <input
                     type="text"
+                    inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
                     placeholder="درجة..."
@@ -401,7 +401,7 @@ const applyBatchGrade = () => {
                 <button
                     onClick={applyBatchGrade}
                     disabled={selectedStudentsPerTab.tests.length === 0}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full md:w-auto mt-2 md:mt-0"
                 >
                     تطبيق الدرجة
                 </button>
@@ -421,9 +421,9 @@ const applyBatchGrade = () => {
                                     <span className="font-semibold text-gray-100">اسم الطالب</span>
                                 </div>
                             </th>
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600">اختبار 1</th>
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600">اختبار 2</th>
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 1</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 2</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -443,6 +443,7 @@ const applyBatchGrade = () => {
                                 <td className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
                                     <input
                                         type="text"
+                                        inputMode="numeric"
                                         value={student.grades.tests[0] ?? ''}
                                         onChange={(e) => handleGradeChange(student.id, 'tests', 0, e.target.value)}
                                         className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -451,6 +452,7 @@ const applyBatchGrade = () => {
                                 <td className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
                                     <input
                                         type="text"
+                                        inputMode="numeric"
                                         value={student.grades.tests[1] ?? ''}
                                         onChange={(e) => handleGradeChange(student.id, 'tests', 1, e.target.value)}
                                         className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -466,21 +468,125 @@ const applyBatchGrade = () => {
             </div>
         </div>
     );
+    
+    // New: renderOralTests function
+    const renderOralTests = () => (
+        <div className="space-y-4">
+            <div className="mb-4">
+                <input
+                    type="text"
+                    inputMode="text"
+                    placeholder="ابحث عن طالب..."
+                    value={searchQueries.oralTest}
+                    onChange={handleSearchChange}
+                    className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+            </div>
+            <div className="flex flex-col md:flex-row items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <label htmlFor="batch-oral-test-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
+                        اختبار رقم:
+                    </label>
+                    <select
+                        id="batch-oral-test-index"
+                        value={oralTestIndex}
+                        onChange={(e) => setOralTestIndex(Number(e.target.value))}
+                        className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    >
+                        {[...Array(5)].map((_, i) => (
+                            <option key={i} value={i}>{i + 1}</option>
+                        ))}
+                    </select>
+                </div>
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    value={batchGrade}
+                    onChange={handleBatchGradeChange}
+                    placeholder="درجة..."
+                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+                <button
+                    onClick={applyBatchGrade}
+                    disabled={selectedStudentsPerTab.oralTest.length === 0}
+                    className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full md:w-auto mt-2 md:mt-0"
+                >
+                    تطبيق الدرجة
+                </button>
+            </div>
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] rounded-lg border border-gray-700" dir="rtl">
+                <table className="w-full divide-y divide-gray-700">
+                    <thead className="bg-gray-700 sticky top-0 z-30">
+                        <tr>
+                            <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider sticky right-0 bg-gray-700 z-20 whitespace-nowrap">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedStudentsPerTab.oralTest.length > 0 && selectedStudentsPerTab.oralTest.length === filteredStudents.length}
+                                        onChange={toggleSelectAll}
+                                        className="accent-blue-500"
+                                    />
+                                    <span className="font-semibold text-gray-100">اسم الطالب</span>
+                                </div>
+                            </th>
+                            {[...Array(5)].map((_, i) => (
+                                <th key={`oral_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار {i + 1}</th>
+                            ))}
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-gray-800 divide-y divide-gray-700">
+                        {filteredStudents.map(student => (
+                            <tr key={student.id} className="hover:bg-gray-700 transition-colors group">
+                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedStudentsPerTab.oralTest.includes(student.id)}
+                                            onChange={() => toggleStudentSelection(student.id)}
+                                            className="accent-blue-500"
+                                        />
+                                        <span className="truncate text-gray-100">{student.name}</span>
+                                    </div>
+                                </td>
+                                {[...Array(5)].map((_, i) => (
+                                    <td key={`oral_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={student.grades.oralTest?.[i] ?? ''}
+                                            onChange={(e) => handleGradeChange(student.id, 'oralTest', i, e.target.value)}
+                                            className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                        />
+                                    </td>
+                                ))}
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
+                                    {calculateCategoryScore(student, 'oralTest')}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+
 
     const renderHomework = () => (
         <div className="space-y-4">
             <div className="mb-4">
                 <input
                     type="text"
+                    inputMode="text"
                     placeholder="ابحث عن طالب..."
                     value={searchQueries.homework}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col md:flex-row items-center gap-4">
                 <div className="flex items-center gap-2">
-                    <label htmlFor="batch-homework-index" className="text-sm font-medium text-gray-400">
+                    <label htmlFor="batch-homework-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
                         واجب رقم:
                     </label>
                     <select
@@ -496,6 +602,7 @@ const applyBatchGrade = () => {
                 </div>
                 <input
                     type="text"
+                    inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
                     placeholder="درجة..."
@@ -504,7 +611,7 @@ const applyBatchGrade = () => {
                 <button
                     onClick={applyBatchGrade}
                     disabled={selectedStudentsPerTab.homework.length === 0}
-                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed"
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full md:w-auto mt-2 md:mt-0"
                 >
                     تطبيق الدرجة
                 </button>
@@ -525,9 +632,9 @@ const applyBatchGrade = () => {
                                 </div>
                             </th>
                             {[...Array(10)].map((_, i) => (
-                                <th key={`hw_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600">واجب {i + 1}</th>
+                                <th key={`hw_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">واجب {i + 1}</th>
                             ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -548,6 +655,7 @@ const applyBatchGrade = () => {
                                     <td key={`hw_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
                                         <input
                                             type="text"
+                                            inputMode="numeric"
                                             value={student.grades.homework[i] ?? ''}
                                             onChange={(e) => handleGradeChange(student.id, 'homework', i, e.target.value)}
                                             className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -570,15 +678,16 @@ const applyBatchGrade = () => {
             <div className="mb-4">
                 <input
                     type="text"
+                    inputMode="text"
                     placeholder="ابحث عن طالب..."
                     value={searchQueries.performanceTasks}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col md:flex-row items-center gap-4">
                 <div className="flex items-center gap-2">
-                    <label htmlFor="batch-pt-index" className="text-sm font-medium text-gray-400">
+                    <label htmlFor="batch-pt-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
                         مهمة رقم:
                     </label>
                     <select
@@ -587,13 +696,14 @@ const applyBatchGrade = () => {
                         onChange={(e) => setPerformanceTaskIndex(Number(e.target.value))}
                         className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
                     >
-                        {[...Array(3)].map((_, i) => ( // تم التغيير إلى 3
+                        {[...Array(5)].map((_, i) => (
                             <option key={i} value={i}>{i + 1}</option>
                         ))}
                     </select>
                 </div>
                 <input
                     type="text"
+                    inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
                     placeholder="درجة..."
@@ -602,7 +712,7 @@ const applyBatchGrade = () => {
                 <button
                     onClick={applyBatchGrade}
                     disabled={selectedStudentsPerTab.performanceTasks.length === 0}
-                    className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed"
+                    className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full md:w-auto mt-2 md:mt-0"
                 >
                     تطبيق الدرجة
                 </button>
@@ -622,10 +732,10 @@ const applyBatchGrade = () => {
                                     <span className="font-semibold text-gray-100">اسم الطالب</span>
                                 </div>
                             </th>
-                            {[...Array(3)].map((_, i) => ( // تم التغيير إلى 3
-                                <th key={`pt_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600">مهمة {i + 1}</th>
+                            {[...Array(5)].map((_, i) => (
+                                <th key={`pt_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مهمة {i + 1}</th>
                             ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -642,10 +752,11 @@ const applyBatchGrade = () => {
                                         <span className="truncate text-gray-100">{student.name}</span>
                                     </div>
                                 </td>
-                                {[...Array(3)].map((_, i) => ( // تم التغيير إلى 3
+                                {[...Array(5)].map((_, i) => (
                                     <td key={`pt_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
                                         <input
                                             type="text"
+                                            inputMode="numeric"
                                             value={student.grades.performanceTasks[i] ?? ''}
                                             onChange={(e) => handleGradeChange(student.id, 'performanceTasks', i, e.target.value)}
                                             className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -668,15 +779,17 @@ const applyBatchGrade = () => {
             <div className="mb-4">
                 <input
                     type="text"
+                    inputMode="text"
                     placeholder="ابحث عن طالب..."
                     value={searchQueries.participation}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col md:flex-row items-center gap-4">
                 <input
                     type="text"
+                    inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
                     placeholder="درجة..."
@@ -685,7 +798,7 @@ const applyBatchGrade = () => {
                 <button
                     onClick={applyBatchGrade}
                     disabled={selectedStudentsPerTab.participation.length === 0}
-                    className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed"
+                    className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full md:w-auto mt-2 md:mt-0"
                 >
                     تطبيق الدرجة
                 </button>
@@ -706,9 +819,9 @@ const applyBatchGrade = () => {
                                 </div>
                             </th>
                             {[...Array(10)].map((_, i) => (
-                                <th key={`part_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600">مشاركة {i + 1}</th>
+                                <th key={`part_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مشاركة {i + 1}</th>
                             ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -729,6 +842,7 @@ const applyBatchGrade = () => {
                                     <td key={`part_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
                                         <input
                                             type="text"
+                                            inputMode="numeric"
                                             value={student.grades.participation[i] ?? ''}
                                             onChange={(e) => handleGradeChange(student.id, 'participation', i, e.target.value)}
                                             className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -751,15 +865,16 @@ const applyBatchGrade = () => {
             <div className="mb-4">
                 <input
                     type="text"
+                    inputMode="text"
                     placeholder="ابحث عن طالب..."
                     value={searchQueries[category]}
                     onChange={handleSearchChange}
                     className={`w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-${color}-500`}
                 />
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col md:flex-row items-center gap-4">
                 <div className="flex items-center gap-2">
-                    <label htmlFor={`batch-${category}-index`} className="text-sm font-medium text-gray-400">
+                    <label htmlFor={`batch-${category}-index`} className="text-sm font-medium text-gray-400 whitespace-nowrap">
                         {label} رقم:
                     </label>
                     <select
@@ -775,6 +890,7 @@ const applyBatchGrade = () => {
                 </div>
                 <input
                     type="text"
+                    inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
                     placeholder="درجة..."
@@ -783,7 +899,7 @@ const applyBatchGrade = () => {
                 <button
                     onClick={applyBatchGrade}
                     disabled={selectedStudentsPerTab[category].length === 0}
-                    className={`bg-${color}-600 text-white px-4 py-2 rounded-lg hover:bg-${color}-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed`}
+                    className={`bg-${color}-600 text-white px-4 py-2 rounded-lg hover:bg-${color}-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full md:w-auto mt-2 md:mt-0`}
                 >
                     تطبيق الدرجة
                 </button>
@@ -804,9 +920,9 @@ const applyBatchGrade = () => {
                                 </div>
                             </th>
                             {[...Array(count)].map((_, i) => (
-                                <th key={`header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600">{label} {i + 1}</th>
+                                <th key={`header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">{label} {i + 1}</th>
                             ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -827,6 +943,7 @@ const applyBatchGrade = () => {
                                     <td key={`input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
                                         <input
                                             type="text"
+                                            inputMode="numeric"
                                             value={student.grades[category]?.[i] ?? ''}
                                             onChange={(e) => handleGradeChange(student.id, category, i, e.target.value)}
                                             className={`w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
@@ -849,6 +966,8 @@ const applyBatchGrade = () => {
         switch (activeTab) {
             case 'tests':
                 return <React.Fragment key="tests">{renderTests()}</React.Fragment>;
+            case 'oralTest':
+                return <React.Fragment key="oralTest">{renderOralTests()}</React.Fragment>;
             case 'homework':
                 return <React.Fragment key="homework">{renderHomework()}</React.Fragment>;
             case 'performanceTasks':
@@ -902,6 +1021,12 @@ const applyBatchGrade = () => {
                         className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'tests' ? "border-b-2 md:border-b-0 md:border-r-2 border-blue-500 text-blue-500" : "text-gray-400 hover:text-gray-200"}`}
                     >
                         الاختبارات
+                    </button>
+                    <button
+                        onClick={() => handleTabChange('oralTest')} // New button
+                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'oralTest' ? "border-b-2 md:border-b-0 md:border-r-2 border-yellow-500 text-yellow-500" : "text-gray-400 hover:text-gray-200"}`}
+                    >
+                        اختبار شفوي
                     </button>
                     <button
                         onClick={() => handleTabChange('homework')}
