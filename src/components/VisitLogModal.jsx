@@ -21,7 +21,7 @@ const VisitLogModal = ({ show, onClose, students, teacherId }) => {
                         .from('page_visits')
                         .select('student_id, visit_start_time, visit_end_time')
                         .eq('teacher_id', teacherId)
-                        .in('student_id', studentIds)
+                        .in('student_id', studentIds) // فلترة السجلات حسب طلاب الفصل الحالي
                         .order('visit_start_time', { ascending: false });
 
                     if (visitsError) throw visitsError;
@@ -83,13 +83,13 @@ const VisitLogModal = ({ show, onClose, students, teacherId }) => {
                             <div className="space-y-6">
                                 {visits.map((studentVisit, index) => (
                                     <div key={index} className="bg-gray-700 p-4 rounded-lg shadow-md border border-gray-600">
-                                        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-600">
-                                            <div className="flex items-center gap-2">
+                                        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-2 pb-2 border-b border-gray-600">
+                                            <div className="flex items-center gap-2 mb-2 md:mb-0">
                                                 <FaUser className="text-blue-400" />
                                                 <h4 className="text-lg font-bold text-gray-100">{studentVisit.student_name}</h4>
                                                 <p className="text-sm text-gray-400">({studentVisit.student_national_id})</p>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-4">
                                                 <h5 className="text-sm font-semibold text-gray-300">عدد الزيارات: {studentVisit.logs.length}</h5>
                                                 {studentVisit.logs.length > 2 && (
                                                     <button onClick={() => handleShowMore(studentVisit)} className="bg-blue-600 text-white text-xs px-2 py-1 rounded hover:bg-blue-500 transition-colors flex items-center gap-1">
