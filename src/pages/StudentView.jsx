@@ -97,6 +97,27 @@ function StudentView() {
         }
 
         const teacherId = student.teacher_id;
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // New Logic: Log the visit only if the user is not the teacher
+        let visitId = null;
+        if (!user || user.id !== teacherId) {
+            const { data, error } = await supabase
+                .from('page_visits')
+                .insert({
+                    student_id: studentId,
+                    teacher_id: teacherId,
+                    visit_start_time: new Date().toISOString()
+                })
+                .select()
+                .single();
+
+            if (error) {
+                console.error("Error logging visit:", error);
+            } else {
+                visitId = data.id;
+            }
+        }
 
         const { data: curriculumData, error: curriculumError } = await supabase
           .from('curriculum')
@@ -186,6 +207,20 @@ function StudentView() {
 
         setStudentData(processedStudentData);
         setLoading(false);
+
+        // Cleanup function to log visit end time
+        return () => {
+          if (visitId) {
+            supabase
+              .from('page_visits')
+              .update({ visit_end_time: new Date().toISOString() })
+              .eq('id', visitId)
+              .then(({ error }) => {
+                if (error) console.error("Error updating visit end time:", error);
+              });
+          }
+        };
+
       } catch (err) {
         console.error("Error fetching student data:", err);
         setError("فشل في جلب بيانات الطالب.");
@@ -207,16 +242,7 @@ function StudentView() {
       </div>
     );
   }
-
-  if (!studentData) {
-    return (
-      <div className="p-8 text-center text-gray-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">
-        <p className="text-xl">لا توجد بيانات متاحة لهذا الطالب.</p>
-      </div>
-    );
-  }
   
-  // الكود الجديد والمعدل
   const allNotes = [];
   (studentData.grades.weeklyNotes || []).forEach((notes, weekIndex) => {
     if (notes && notes.length > 0) {
@@ -226,7 +252,6 @@ function StudentView() {
     }
   });
 
-  // عكس المصفوفة للحصول على أحدث الملاحظات أولاً
   const processedNotes = allNotes.reverse().slice(0, 5);
   
   return (
@@ -530,7 +555,6 @@ function StudentView() {
               </div>
             </div>
 
-            {/* تم إضافة هذا القسم لعرض زر المكافآت */}
             <div className="col-span-full bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <div className="flex justify-between items-center mb-4">
                 <h4 className="font-semibold text-xl flex items-center gap-2 text-gray-100">
