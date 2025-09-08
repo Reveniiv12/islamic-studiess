@@ -31,20 +31,23 @@ const TroubledStudentsModal = ({ students, onClose, homeworkCurriculum, recitati
         students.forEach(student => {
             // Check Homework
             for (let i = 0; i < (student.grades?.homework?.length || 0); i++) {
-                if ((student.grades.homework[i] === null || student.grades.homework[i] === '') && homeworkCurriculum.some(item => item.type === 'homework' && item.name === `واجب ${i + 1}`)) {
+                // Modified condition to include 0 as an incomplete grade
+                if ((student.grades.homework[i] === null || student.grades.homework[i] === '' || student.grades.homework[i] === 0) && homeworkCurriculum.some(item => item.type === 'homework' && item.name === `واجب ${i + 1}`)) {
                     categories.incompleteHomework.push({ student, problemName: `واجب ${i + 1}` });
                 }
             }
 
             // Check Performance Tasks
             for (let i = 0; i < (student.grades?.performanceTasks?.length || 0); i++) {
-                if ((student.grades.performanceTasks[i] === null || student.grades.performanceTasks[i] === '') && homeworkCurriculum.some(item => item.type === 'performanceTask' && item.name === `مهمة أدائية ${i + 1}`)) {
+                // Modified condition to include 0 as an incomplete grade
+                if ((student.grades.performanceTasks[i] === null || student.grades.performanceTasks[i] === '' || student.grades.performanceTasks[i] === 0) && homeworkCurriculum.some(item => item.type === 'performanceTask' && item.name === `مهمة أدائية ${i + 1}`)) {
                     categories.incompletePerformanceTask.push({ student, problemName: `مهمة أدائية ${i + 1}` });
                 }
             }
             
             // Check Exams
             for (let i = 0; i < (student.grades?.tests?.length || 0); i++) {
+                // Condition remains the same (does not include 0)
                 if ((student.grades.tests[i] === null || student.grades.tests[i] === '') && homeworkCurriculum.some(item => item.type === 'test' && item.name === `اختبار ${i + 1}`)) {
                     categories.incompleteExam.push({ student, problemName: `اختبار ${i + 1}` });
                 }
@@ -54,7 +57,8 @@ const TroubledStudentsModal = ({ students, onClose, homeworkCurriculum, recitati
             const recitationItems = recitationCurriculum.filter(item => item.type === 'recitation');
             recitationItems.forEach((recitationItem, index) => {
                 const grade = student.grades?.quranRecitation?.[index];
-                if (grade === null || grade === '') {
+                // Modified condition to include 0 as an incomplete grade
+                if (grade === null || grade === '' || grade === 0) {
                     categories.incompleteRecitation.push({ student, problemName: `تلاوة من ${recitationItem.start} إلى ${recitationItem.end}` });
                 }
             });
@@ -63,7 +67,8 @@ const TroubledStudentsModal = ({ students, onClose, homeworkCurriculum, recitati
             const memorizationItems = recitationCurriculum.filter(item => item.type === 'memorization');
             memorizationItems.forEach((memorizationItem, index) => {
                 const grade = student.grades?.quranMemorization?.[index];
-                if (grade === null || grade === '') {
+                // Modified condition to include 0 as an incomplete grade
+                if (grade === null || grade === '' || grade === 0) {
                     categories.incompleteMemorization.push({ student, problemName: `حفظ من ${memorizationItem.start} إلى ${memorizationItem.end}` });
                 }
             });
@@ -107,7 +112,7 @@ const TroubledStudentsModal = ({ students, onClose, homeworkCurriculum, recitati
                                         <span className="text-lg font-semibold text-gray-200">{item.student.name}</span>
                                         <span className="text-sm text-gray-400">({gradeName} - {sectionName})</span>
                                     </div>
-                                </div>
+                                </li>
                                 <ul className="list-disc list-inside text-sm text-red-300 ml-8">
                                     {item.incompleteTasks.map((task, taskIndex) => (
                                         <li key={taskIndex}>
