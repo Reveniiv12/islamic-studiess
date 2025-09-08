@@ -18,7 +18,8 @@ import TroubledStudentsModal from "../components/TroubledStudentsModal.jsx";
 import CustomDialog from "../components/CustomDialog";
 import VerificationModal from "../components/VerificationModal.jsx";
 import CustomModal from "../components/CustomModal.jsx";
-import AnnouncementsModal from "../components/AnnouncementsModal"; 
+import AnnouncementsModal from "../components/AnnouncementsModal";
+import VisitLogModal from "../components/VisitLogModal.jsx"; // New import
 import { QRCodeSVG } from 'qrcode.react';
 import { getHijriToday } from '../utils/recitationUtils';
 
@@ -191,6 +192,7 @@ const SectionGrades = () => {
 
   const [showAnnouncementsModal, setShowAnnouncementsModal] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
+  const [showVisitLogModal, setShowVisitLogModal] = useState(false); // New State
   
   const gradeName = getGradeNameById(gradeId);
   const sectionName = getSectionNameById(sectionId);
@@ -1364,6 +1366,12 @@ const handleExportQRCodes = async () => {
             <FaStickyNote /> إعلانات هامة
           </button>
           <button
+            onClick={() => setShowVisitLogModal(true)} // New Button
+            className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-400 transition-colors shadow-md text-xs md:text-sm"
+          >
+            <FaClock /> سجل الزيارات
+          </button>
+          <button
             onClick={handleResetDataClick}
             className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-red-800 text-white rounded-lg hover:bg-red-700 transition-colors shadow-md text-xs md:text-sm"
           >
@@ -2089,6 +2097,15 @@ const handleExportQRCodes = async () => {
           teacherId={teacherId}
           onSave={setAnnouncements}
           handleDialog={handleDialog}
+        />
+      )}
+      
+      {showVisitLogModal && (
+        <VisitLogModal
+          show={showVisitLogModal}
+          onClose={() => setShowVisitLogModal(false)}
+          students={students}
+          teacherId={teacherId}
         />
       )}
 
