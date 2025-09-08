@@ -9,30 +9,44 @@ const VisitLogModal = ({ show, onClose, students, teacherId }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (show && teacherId) {
+        if (show && teacherId && students && students.length > 0) {
             const fetchVisits = async () => {
                 setLoading(true);
                 try {
-                    const { data, error } = await supabase
+                    // الحصول على قائمة معرفات الطلاب في الفصل الحالي
+                    const studentIds = students.map(s => s.id);
+
+                    const { data: rawVisits, error: visitsError } = await supabase
                         .from('page_visits')
                         .select('student_id, visit_start_time, visit_end_time')
                         .eq('teacher_id', teacherId)
+                        .in('student_id', studentIds) // فلترة السجلات حسب طلاب الفصل الحالي
                         .order('visit_start_time', { ascending: false });
 
-                    if (error) {
-                        throw error;
+                    if (visitsError) {
+                        throw visitsError;
                     }
 
-                    const visitsWithStudentNames = data.map(visit => {
-                        const student = students.find(s => s.id === visit.student_id);
-                        return {
-                            ...visit,
-                            student_name: student ? student.name : 'طالب محذوف',
-                            student_national_id: student ? student.nationalId : 'غير متوفر',
-                        };
-                    });
+                    // إنشاء خريطة لسهولة الوصول إلى بيانات الطالب
+                    const studentMap = new Map(students.map(s => [s.id, s]));
 
-                    setVisits(visitsWithStudentNames);
+                    // تجميع الزيارات حسب الطالب
+                    const groupedVisits = rawVisits.reduce((acc, visit) => {
+                        const student = studentMap.get(visit.student_id);
+                        if (student) {
+                            if (!acc[student.id]) {
+                                acc[student.id] = {
+                                    student_name: student.name,
+                                    student_national_id: student.nationalId,
+                                    logs: []
+                                };
+                            }
+                            acc[student.id].logs.push(visit);
+                        }
+                        return acc;
+                    }, {});
+
+                    setVisits(Object.values(groupedVisits));
                 } catch (err) {
                     console.error("Error fetching visit logs:", err);
                 } finally {
@@ -63,29 +77,38 @@ const VisitLogModal = ({ show, onClose, students, teacherId }) => {
             ) : (
                 <div className="max-h-96 overflow-y-auto">
                     {visits.length > 0 ? (
-                        <div className="space-y-4">
-                            {visits.map((visit, index) => (
+                        <div className="space-y-6">
+                            {visits.map((studentVisit, index) => (
                                 <div key={index} className="bg-gray-700 p-4 rounded-lg shadow-md border border-gray-600">
-                                    <div className="flex items-center gap-2 mb-2">
+                                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-600">
                                         <FaUser className="text-blue-400" />
-                                        <h4 className="text-lg font-bold text-gray-100">{visit.student_name}</h4>
-                                        <p className="text-sm text-gray-400">({visit.student_national_id})</p>
+                                        <h4 className="text-lg font-bold text-gray-100">{studentVisit.student_name}</h4>
+                                        <p className="text-sm text-gray-400">({studentVisit.student_national_id})</p>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-gray-300 text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <FaCalendarAlt className="text-green-400" />
-                                            <span>وقت الدخول: {new Date(visit.visit_start_time).toLocaleString('ar-SA', {
-                                                year: 'numeric',
-                                                month: 'short',
-                                                day: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <FaHourglassHalf className="text-red-400" />
-                                            <span>المدة: {calculateDuration(visit.visit_start_time, visit.visit_end_time)}</span>
-                                        </div>
+                                    <h5 className="text-sm font-semibold text-gray-300 mb-2">عدد الزيارات: {studentVisit.logs.length}</h5>
+                                    <div className="space-y-2 pr-4">
+                                        {studentVisit.logs.map((log, logIndex) => (
+                                            <div key={logIndex} className="bg-gray-800 p-3 rounded-lg border border-gray-600">
+                                                <div className="flex items-center gap-2">
+                                                    <FaCalendarAlt className="text-green-400" />
+                                                    <span className="text-gray-300 text-sm">
+                                                        وقت الدخول: {new Date(log.visit_start_time).toLocaleString('ar-SA', {
+                                                            year: 'numeric',
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <FaHourglassHalf className="text-red-400" />
+                                                    <span className="text-gray-300 text-sm">
+                                                        المدة: {calculateDuration(log.visit_start_time, log.visit_end_time)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             ))}
@@ -93,7 +116,7 @@ const VisitLogModal = ({ show, onClose, students, teacherId }) => {
                     ) : (
                         <div className="text-center text-gray-400 p-8">
                             <FaClock className="text-6xl mx-auto mb-4 text-gray-600" />
-                            <p>لا توجد زيارات مسجلة حتى الآن.</p>
+                            <p>لا توجد زيارات مسجلة لهذا الفصل حتى الآن.</p>
                         </div>
                     )}
                 </div>
