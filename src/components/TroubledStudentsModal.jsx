@@ -52,21 +52,21 @@ const TroubledStudentsModal = ({ students, onClose, homeworkCurriculum, recitati
 
             // Check Quran Recitation
             const recitationItems = recitationCurriculum.filter(item => item.type === 'recitation');
-            for (let i = 0; i < (student.grades?.quranRecitation?.length || 0); i++) {
-                if ((student.grades.quranRecitation[i] === null || student.grades.quranRecitation[i] === '') && recitationItems[i]) {
-                    const recitationPart = recitationItems[i];
-                    categories.incompleteRecitation.push({ student, problemName: `تلاوة من ${recitationPart.start} إلى ${recitationPart.end}` });
+            recitationItems.forEach((recitationItem, index) => {
+                const grade = student.grades?.quranRecitation?.[index];
+                if (grade === null || grade === '') {
+                    categories.incompleteRecitation.push({ student, problemName: `تلاوة من ${recitationItem.start} إلى ${recitationItem.end}` });
                 }
-            }
+            });
 
-            // Check Quran Memorization
+            // Check Quran Memorization - UPDATED
             const memorizationItems = recitationCurriculum.filter(item => item.type === 'memorization');
-            for (let i = 0; i < (student.grades?.quranMemorization?.length || 0); i++) {
-                if ((student.grades.quranMemorization[i] === null || student.grades.quranMemorization[i] === '') && memorizationItems[i]) {
-                    const memorizationPart = memorizationItems[i];
-                    categories.incompleteMemorization.push({ student, problemName: `حفظ من ${memorizationPart.start} إلى ${memorizationPart.end}` });
+            memorizationItems.forEach((memorizationItem, index) => {
+                const grade = student.grades?.quranMemorization?.[index];
+                if (grade === null || grade === '') {
+                    categories.incompleteMemorization.push({ student, problemName: `حفظ من ${memorizationItem.start} إلى ${memorizationItem.end}` });
                 }
-            }
+            });
         });
 
         setCategorizedStudents(categories);
