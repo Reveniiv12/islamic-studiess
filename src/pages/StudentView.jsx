@@ -102,6 +102,14 @@ function StudentView() {
         // New Logic: Log the visit only if the user is not the teacher
         let visitId = null;
         if (!user || user.id !== teacherId) {
+            // Check for previous incomplete visits and close them
+            await supabase
+                .from('page_visits')
+                .update({ visit_end_time: new Date().toISOString() })
+                .eq('student_id', studentId)
+                .is('visit_end_time', null);
+
+            // Insert a new visit log
             const { data, error } = await supabase
                 .from('page_visits')
                 .insert({
