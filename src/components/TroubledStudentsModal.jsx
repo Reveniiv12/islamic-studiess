@@ -112,7 +112,7 @@ const TroubledStudentsModal = ({ students, onClose, homeworkCurriculum, recitati
                                         <span className="text-lg font-semibold text-gray-200">{item.student.name}</span>
                                         <span className="text-sm text-gray-400">({gradeName} - {sectionName})</span>
                                     </div>
-                                </li>
+                                </div>
                                 <ul className="list-disc list-inside text-sm text-red-300 ml-8">
                                     {item.incompleteTasks.map((task, taskIndex) => (
                                         <li key={taskIndex}>
