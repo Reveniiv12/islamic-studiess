@@ -2095,7 +2095,8 @@ const handleExportQRCodes = async () => {
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
-                  <h4 className="font-semibold text-gray-100">المجموع الفرعي: (أعمال السنة)</h4>
+                  <h4 className="font-semibold text-gray-100">المهام الأدائية والمشاركة والتفاعل الصفي
+</h4>
                   <span className="text-xl md:text-2xl font-bold text-yellow-400">{calculateCoursework(selectedStudent.grades)} / 40</span>
                 </div>
                 <FaTasks className="text-4xl text-yellow-400" />
@@ -2106,7 +2107,7 @@ const handleExportQRCodes = async () => {
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
-                  <h4 className="font-semibold text-gray-100">المجموع الفرعي: (الاختبارات والقرآن)</h4>
+                  <h4 className="font-semibold text-gray-100">تقويمات شفهية وتحريرية</h4>
                   <span className="text-xl md:text-2xl font-bold text-blue-400">{calculateMajorAssessments(selectedStudent.grades)} / 60</span>
                 </div>
                 <FaBookOpen className="text-4xl text-blue-400" />
