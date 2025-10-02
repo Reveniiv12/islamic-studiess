@@ -1,4 +1,21 @@
 import React, { useState, useEffect } from "react";
+// إضافة FaClock للاستفادة منها إذا لزم الأمر في التبويبات
+import { FaClock } from "react-icons/fa"; 
+
+// دالة تحويل الأرقام
+const convertToEnglishNumbers = (input) => {
+    if (input === null || input === undefined) {
+        return null;
+    }
+    const arabicNumbers = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+    const englishNumbers = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+    let output = String(input);
+    for (let i = 0; i < arabicNumbers.length; i++) {
+        output = output.replace(new RegExp(arabicNumbers[i], "g"), englishNumbers[i]);
+    }
+    return output;
+};
+
 
 const GradesModal = ({
     students,
@@ -7,31 +24,22 @@ const GradesModal = ({
     testCalculationMethod: propTestCalculationMethod,
     onTestCalculationMethodChange
 }) => {
+    // تم تغيير 'oralTest' إلى 'classInteraction' لتمثيل التفاعل الصفي
+    const initialTabs = ['tests', 'homework', 'performanceTasks', 'participation', 'quranRecitation', 'quranMemorization', 'classInteraction'];
+    
     const [activeTab, setActiveTab] = useState('tests');
     const [modalStudents, setModalStudents] = useState(students);
     const [testCalculationMethod, setTestCalculationMethod] = useState(propTestCalculationMethod);
     
     // فصل حالات البحث لكل تبويب
-    const [searchQueries, setSearchQueries] = useState({
-        tests: '',
-        homework: '',
-        performanceTasks: '',
-        participation: '',
-        quranRecitation: '',
-        quranMemorization: '',
-        oralTest: '', // New: Add oralTest search query
-    });
+    const [searchQueries, setSearchQueries] = useState(
+        initialTabs.reduce((acc, tab) => ({ ...acc, [tab]: '' }), {})
+    );
 
     // فصل حالات الطلاب المحددين لكل تبويب
-    const [selectedStudentsPerTab, setSelectedStudentsPerTab] = useState({
-        tests: [],
-        homework: [],
-        performanceTasks: [],
-        participation: [],
-        quranRecitation: [],
-        quranMemorization: [],
-        oralTest: [], // New: Add oralTest selected students
-    });
+    const [selectedStudentsPerTab, setSelectedStudentsPerTab] = useState(
+        initialTabs.reduce((acc, tab) => ({ ...acc, [tab]: [] }), {})
+    );
 
     const [batchGrade, setBatchGrade] = useState('');
     
@@ -41,7 +49,7 @@ const GradesModal = ({
     const [performanceTaskIndex, setPerformanceTaskIndex] = useState(0);
     const [recitationIndex, setRecitationIndex] = useState(0);
     const [memorizationIndex, setMemorizationIndex] = useState(0);
-    const [oralTestIndex, setOralTestIndex] = useState(0); // New: Add oralTest index
+    const [classInteractionIndex, setClassInteractionIndex] = useState(0); // تم التعديل
     
     // حالة منفصلة للطلاب المفلترين لكل تبويب
     const [filteredStudents, setFilteredStudents] = useState(students);
@@ -96,8 +104,8 @@ const GradesModal = ({
             setRecitationIndex(0);
         } else if (tab === 'quranMemorization') {
             setMemorizationIndex(0);
-        } else if (tab === 'oralTest') {
-            setOralTestIndex(0);
+        } else if (tab === 'classInteraction') {
+            setClassInteractionIndex(0); // تم التعديل
         }
 
         setActiveTab(tab);
@@ -108,25 +116,29 @@ const GradesModal = ({
     };
 
     const handleGradeChange = (studentId, category, index, value) => {
+        // استخدام دالة التحويل لدعم الأرقام العربية
+        const englishValue = convertToEnglishNumbers(value);
+        const numericValue = englishValue === '' ? null : Number(englishValue);
+        
         let maxLimit = 0;
         let errorMessage = '';
 
         switch(category) {
             case 'tests':
-                maxLimit = 15;
-                errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 15.";
+                maxLimit = 20; // تم التعديل
+                errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 20.";
                 break;
-            case 'oralTest':
-                maxLimit = 5;
-                errorMessage = "خطأ: درجة الاختبار الشفوي لا يمكن أن تتجاوز 5.";
+            case 'classInteraction': // تم التعديل
+                maxLimit = 10; // تم التعديل
+                errorMessage = "خطأ: درجة التفاعل الصفي لا يمكن أن تتجاوز 10.";
                 break;
             case 'homework':
                 maxLimit = 1;
                 errorMessage = "خطأ: درجة الواجب لا يمكن أن تتجاوز 1.";
                 break;
             case 'performanceTasks':
-                maxLimit = 5;
-                errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 5.";
+                maxLimit = 10; // تم التعديل
+                errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 10.";
                 break;
             case 'participation':
                 maxLimit = 1;
@@ -137,14 +149,12 @@ const GradesModal = ({
                 errorMessage = "خطأ: درجة تلاوة القرآن لا يمكن أن تتجاوز 10.";
                 break;
             case 'quranMemorization':
-                maxLimit = 5;
-                errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 5.";
+                maxLimit = 10; // تم التعديل
+                errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 10.";
                 break;
             default:
                 break;
         }
-
-        const numericValue = value === '' ? null : Number(value);
 
         if (numericValue !== null && (numericValue > maxLimit || numericValue < 0)) {
             setCustomDialog({
@@ -182,19 +192,16 @@ const GradesModal = ({
         const sum = grades.reduce((acc, curr) => acc + curr, 0);
 
         if (category === 'tests') {
-            if (testCalculationMethod === 'average') {
-                return (sum / grades.length).toFixed(2);
-            }
-            if (testCalculationMethod === 'best') {
-                return Math.max(...grades).toFixed(2);
-            }
+            // تم التعديل: أصبح الاحتساب الافتراضي هو المجموع الكلي
+            return sum.toFixed(2);
         }
         
-        if (category === 'oralTest' || category === 'performanceTasks') {
-            return Math.max(...grades).toFixed(2);
+        if (category === 'classInteraction' || category === 'performanceTasks') { // تم التعديل
+             return Math.max(...grades).toFixed(2);
         }
 
         if (category === 'quranRecitation' || category === 'quranMemorization') {
+            // تم التعديل: حفظ القرآن أصبح متوسط
             return (sum / grades.length).toFixed(2);
         }
 
@@ -224,26 +231,29 @@ const GradesModal = ({
     };
 
     const applyBatchGrade = () => {
-        const batchNumericValue = batchGrade !== '' ? Number(batchGrade) : null;
+        // استخدام دالة التحويل لدعم الأرقام العربية
+        const englishBatchGrade = convertToEnglishNumbers(batchGrade);
+        const batchNumericValue = englishBatchGrade !== '' ? Number(englishBatchGrade) : null;
+
         let maxLimit = 0;
         let errorMessage = '';
 
         switch(activeTab) {
             case 'tests':
-                maxLimit = 15;
-                errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 15.";
+                maxLimit = 20; // تم التعديل
+                errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 20.";
                 break;
-            case 'oralTest':
-                maxLimit = 5;
-                errorMessage = "خطأ: درجة الاختبار الشفوي لا يمكن أن تتجاوز 5.";
+            case 'classInteraction': // تم التعديل
+                maxLimit = 10; // تم التعديل
+                errorMessage = "خطأ: درجة التفاعل الصفي لا يمكن أن تتجاوز 10.";
                 break;
             case 'homework':
                 maxLimit = 1;
                 errorMessage = "خطأ: درجة الواجب لا يمكن أن تتجاوز 1.";
                 break;
             case 'performanceTasks':
-                maxLimit = 5;
-                errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 5.";
+                maxLimit = 10; // تم التعديل
+                errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 10.";
                 break;
             case 'participation':
                 maxLimit = 1;
@@ -254,8 +264,8 @@ const GradesModal = ({
                 errorMessage = "خطأ: درجة تلاوة القرآن لا يمكن أن تتجاوز 10.";
                 break;
             case 'quranMemorization':
-                maxLimit = 5;
-                errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 5.";
+                maxLimit = 10; // تم التعديل
+                errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 10.";
                 break;
             default:
                 break;
@@ -287,8 +297,8 @@ const GradesModal = ({
                         indexToUpdate = recitationIndex;
                     } else if (activeTab === 'quranMemorization') {
                         indexToUpdate = memorizationIndex;
-                    } else if (activeTab === 'oralTest') {
-                        indexToUpdate = oralTestIndex;
+                    } else if (activeTab === 'classInteraction') { // تم التعديل
+                        indexToUpdate = classInteractionIndex; // تم التعديل
                     }
 
                     if (indexToUpdate !== undefined && indexToUpdate !== -1) {
@@ -301,11 +311,7 @@ const GradesModal = ({
                             newGrades[emptyIndex] = batchNumericValue;
                             updated = true;
                         } else {
-                            const zeroIndex = newGrades.findIndex(grade => grade === 0);
-                            if (zeroIndex !== -1) {
-                                newGrades[zeroIndex] = 1;
-                                updated = true;
-                            }
+                            // لم يعد هناك منطق لإضافة "1" بشكل تلقائي، فقط تحديث القيم الموجودة
                         }
                     }
                     
@@ -358,24 +364,8 @@ const GradesModal = ({
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
             </div>
+            {/* تم إزالة خيار طريقة الاحتساب من الاختبارات لأنها أصبحت مجموع (Sum) */}
             <div className="flex flex-col md:flex-row items-center gap-4">
-                <div className="flex items-center gap-2">
-                    <label htmlFor="test-calc-method" className="text-sm font-medium text-gray-400 whitespace-nowrap">
-                        طريقة حساب الاختبارات:
-                    </label>
-                    <select
-                        id="test-calc-method"
-                        value={testCalculationMethod}
-                        onChange={(e) => {
-                            setTestCalculationMethod(e.target.value);
-                            onTestCalculationMethodChange(e.target.value);
-                        }}
-                        className="bg-gray-700 text-white rounded p-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="best">أفضل درجة</option>
-                        <option value="average">المتوسط</option>
-                    </select>
-                </div>
                 <div className="flex items-center gap-2">
                     <label htmlFor="batch-test-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
                         اختبار رقم:
@@ -421,9 +411,9 @@ const GradesModal = ({
                                     <span className="font-semibold text-gray-100">اسم الطالب</span>
                                 </div>
                             </th>
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 1</th>
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 2</th>
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 1 </th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 2 </th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -469,31 +459,31 @@ const GradesModal = ({
         </div>
     );
     
-    // New: renderOralTests function
-    const renderOralTests = () => (
+    // تم تغيير اسم الدالة والمحتوى لتمثيل التفاعل الصفي (Class Interaction)
+    const renderClassInteraction = () => (
         <div className="space-y-4">
             <div className="mb-4">
                 <input
                     type="text"
                     inputMode="text"
                     placeholder="ابحث عن طالب..."
-                    value={searchQueries.oralTest}
+                    value={searchQueries.classInteraction}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
             </div>
             <div className="flex flex-col md:flex-row items-center gap-4">
                 <div className="flex items-center gap-2">
-                    <label htmlFor="batch-oral-test-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
-                        اختبار رقم:
+                    <label htmlFor="batch-classInteraction-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
+                        تفاعل رقم:
                     </label>
                     <select
-                        id="batch-oral-test-index"
-                        value={oralTestIndex}
-                        onChange={(e) => setOralTestIndex(Number(e.target.value))}
+                        id="batch-classInteraction-index"
+                        value={classInteractionIndex}
+                        onChange={(e) => setClassInteractionIndex(Number(e.target.value))}
                         className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
                     >
-                        {[...Array(5)].map((_, i) => (
+                        {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
                             <option key={i} value={i}>{i + 1}</option>
                         ))}
                     </select>
@@ -508,7 +498,7 @@ const GradesModal = ({
                 />
                 <button
                     onClick={applyBatchGrade}
-                    disabled={selectedStudentsPerTab.oralTest.length === 0}
+                    disabled={selectedStudentsPerTab.classInteraction.length === 0}
                     className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full md:w-auto mt-2 md:mt-0"
                 >
                     تطبيق الدرجة
@@ -522,17 +512,17 @@ const GradesModal = ({
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="checkbox"
-                                        checked={selectedStudentsPerTab.oralTest.length > 0 && selectedStudentsPerTab.oralTest.length === filteredStudents.length}
+                                        checked={selectedStudentsPerTab.classInteraction.length > 0 && selectedStudentsPerTab.classInteraction.length === filteredStudents.length}
                                         onChange={toggleSelectAll}
                                         className="accent-blue-500"
                                     />
                                     <span className="font-semibold text-gray-100">اسم الطالب</span>
                                 </div>
                             </th>
-                            {[...Array(5)].map((_, i) => (
-                                <th key={`oral_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار {i + 1}</th>
+                            {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
+                                <th key={`classInteraction_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">تفاعل {i + 1} </th>
                             ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">أفضل درجة </th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -542,26 +532,26 @@ const GradesModal = ({
                                     <div className="flex items-center gap-2">
                                         <input
                                             type="checkbox"
-                                            checked={selectedStudentsPerTab.oralTest.includes(student.id)}
+                                            checked={selectedStudentsPerTab.classInteraction.includes(student.id)}
                                             onChange={() => toggleStudentSelection(student.id)}
                                             className="accent-blue-500"
                                         />
                                         <span className="truncate text-gray-100">{student.name}</span>
                                     </div>
                                 </td>
-                                {[...Array(5)].map((_, i) => (
-                                    <td key={`oral_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
+                                {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
+                                    <td key={`classInteraction_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
                                         <input
                                             type="text"
                                             inputMode="numeric"
-                                            value={student.grades.oralTest?.[i] ?? ''}
-                                            onChange={(e) => handleGradeChange(student.id, 'oralTest', i, e.target.value)}
+                                            value={student.grades.classInteraction?.[i] ?? ''}
+                                            onChange={(e) => handleGradeChange(student.id, 'classInteraction', i, e.target.value)}
                                             className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                         />
                                     </td>
                                 ))}
                                 <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
-                                    {calculateCategoryScore(student, 'oralTest')}
+                                    {calculateCategoryScore(student, 'classInteraction')}
                                 </td>
                             </tr>
                         ))}
@@ -632,9 +622,9 @@ const GradesModal = ({
                                 </div>
                             </th>
                             {[...Array(10)].map((_, i) => (
-                                <th key={`hw_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">واجب {i + 1}</th>
+                                <th key={`hw_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">واجب {i + 1} </th>
                             ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -696,7 +686,7 @@ const GradesModal = ({
                         onChange={(e) => setPerformanceTaskIndex(Number(e.target.value))}
                         className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
                     >
-                        {[...Array(5)].map((_, i) => (
+                        {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
                             <option key={i} value={i}>{i + 1}</option>
                         ))}
                     </select>
@@ -732,10 +722,10 @@ const GradesModal = ({
                                     <span className="font-semibold text-gray-100">اسم الطالب</span>
                                 </div>
                             </th>
-                            {[...Array(5)].map((_, i) => (
-                                <th key={`pt_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مهمة {i + 1}</th>
+                            {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
+                                <th key={`pt_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مهمة {i + 1} </th>
                             ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">أفضل درجة </th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -752,7 +742,7 @@ const GradesModal = ({
                                         <span className="truncate text-gray-100">{student.name}</span>
                                     </div>
                                 </td>
-                                {[...Array(5)].map((_, i) => (
+                                {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
                                     <td key={`pt_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
                                         <input
                                             type="text"
@@ -819,9 +809,9 @@ const GradesModal = ({
                                 </div>
                             </th>
                             {[...Array(10)].map((_, i) => (
-                                <th key={`part_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مشاركة {i + 1}</th>
+                                <th key={`part_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مشاركة {i + 1} </th>
                             ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -920,9 +910,9 @@ const GradesModal = ({
                                 </div>
                             </th>
                             {[...Array(count)].map((_, i) => (
-                                <th key={`header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">{label} {i + 1}</th>
+                                <th key={`header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">{label} {i + 1} </th>
                             ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع</th>
+                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
                         </tr>
                     </thead>
                     <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -966,8 +956,8 @@ const GradesModal = ({
         switch (activeTab) {
             case 'tests':
                 return <React.Fragment key="tests">{renderTests()}</React.Fragment>;
-            case 'oralTest':
-                return <React.Fragment key="oralTest">{renderOralTests()}</React.Fragment>;
+            case 'classInteraction': // تم التعديل
+                return <React.Fragment key="classInteraction">{renderClassInteraction()}</React.Fragment>; // تم التعديل
             case 'homework':
                 return <React.Fragment key="homework">{renderHomework()}</React.Fragment>;
             case 'performanceTasks':
@@ -1020,43 +1010,43 @@ const GradesModal = ({
                         onClick={() => handleTabChange('tests')}
                         className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'tests' ? "border-b-2 md:border-b-0 md:border-r-2 border-blue-500 text-blue-500" : "text-gray-400 hover:text-gray-200"}`}
                     >
-                        الاختبارات
+                        الاختبارات 
                     </button>
                     <button
-                        onClick={() => handleTabChange('oralTest')} // New button
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'oralTest' ? "border-b-2 md:border-b-0 md:border-r-2 border-yellow-500 text-yellow-500" : "text-gray-400 hover:text-gray-200"}`}
+                        onClick={() => handleTabChange('classInteraction')} // تم التعديل
+                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'classInteraction' ? "border-b-2 md:border-b-0 md:border-r-2 border-yellow-500 text-yellow-500" : "text-gray-400 hover:text-gray-200"}`}
                     >
-                        اختبار شفوي
+                        التفاعل الصفي 
                     </button>
                     <button
                         onClick={() => handleTabChange('homework')}
                         className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'homework' ? "border-b-2 md:border-b-0 md:border-r-2 border-purple-500 text-purple-500" : "text-gray-400 hover:text-gray-200"}`}
                     >
-                        الواجبات
+                        الواجبات 
                     </button>
                     <button
                         onClick={() => handleTabChange('performanceTasks')}
                         className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'performanceTasks' ? "border-b-2 md:border-b-0 md:border-r-2 border-orange-500 text-orange-500" : "text-gray-400 hover:text-gray-200"}`}
                     >
-                        المهام الأدائية
+                        المهام الأدائية 
                     </button>
                     <button
                         onClick={() => handleTabChange('participation')}
                         className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'participation' ? "border-b-2 md:border-b-0 md:border-r-2 border-cyan-500 text-cyan-500" : "text-gray-400 hover:text-gray-200"}`}
                     >
-                        المشاركة
+                        المشاركة 
                     </button>
                     <button
                         onClick={() => handleTabChange('quranRecitation')}
                         className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'quranRecitation' ? "border-b-2 md:border-b-0 md:border-r-2 border-indigo-500 text-indigo-500" : "text-gray-400 hover:text-gray-200"}`}
                     >
-                        تلاوة القرآن
+                        تلاوة القرآن 
                     </button>
                     <button
                         onClick={() => handleTabChange('quranMemorization')}
                         className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'quranMemorization' ? "border-b-2 md:border-b-0 md:border-r-2 border-emerald-500 text-emerald-500" : "text-gray-400 hover:text-gray-200"}`}
                     >
-                        حفظ القرآن
+                        حفظ القرآن 
                     </button>
                 </div>
                 

@@ -1,11 +1,12 @@
+// CurriculumModal.jsx
 import React, { useState, useEffect } from 'react';
 import { FaTimes, FaPlus, FaSave, FaPen, FaTrash, FaExclamationTriangle } from 'react-icons/fa';
 import { getHijriToday } from '../utils/recitationUtils';
 import { supabase } from '../supabaseClient';
 import CustomDialog from "./CustomDialog.jsx";
-import { deleteCurriculumPart, deleteAllCurriculum } from '../utils/resetDataUtils'; // استيراد الدوال الجديدة
 
-const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
+// إضافة currentPeriod إلى props
+const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
   const [curriculum, setCurriculum] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newPart, setNewPart] = useState({ start: '', end: '', dueDate: getHijriToday(), type: 'memorization' });
@@ -30,7 +31,41 @@ const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
       dialogAction();
     }
     setShowDialog(false);
+    setDialogAction(null);
   };
+
+  // دوال مساعدة لدعم التوافق والتعامل مع هيكل الفترات
+  const extractCurriculum = (data, period) => {
+    if (!data) return [];
+    if (Array.isArray(data.recitation)) { // تنسيق قديم: يعتبر period1
+        return period === 'period1' ? data.recitation : [];
+    }
+    return data.recitation?.[period] || [];
+  };
+
+  const getFullCurriculumStructure = (existingData, currentPeriod, newRecitationPart) => {
+    let recitation = {};
+    let homework = {};
+
+    // معالجة منهج التلاوة
+    if (existingData && Array.isArray(existingData.recitation)) {
+        recitation = { period1: existingData.recitation, period2: [] };
+    } else {
+        recitation = existingData?.recitation || { period1: [], period2: [] };
+    }
+
+    // معالجة منهج الواجبات (للحفاظ عليه)
+    if (existingData && Array.isArray(existingData.homework)) {
+         homework = { period1: existingData.homework, period2: [] };
+    } else {
+        homework = existingData?.homework || { period1: [], period2: [] };
+    }
+
+    // تحديث الجزء النشط فقط ضمن هيكل التلاوة
+    const updatedRecitation = { ...recitation, [currentPeriod]: newRecitationPart };
+    return { updatedRecitation, homework };
+  };
+  // نهاية الدوال المساعدة
 
   useEffect(() => {
     const fetchCurriculum = async () => {
@@ -50,14 +85,16 @@ const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
                 console.error("Error fetching curriculum:", error);
             }
             if (data) {
-                setCurriculum(data.recitation || []);
+                setCurriculum(extractCurriculum(data, currentPeriod) || []);
+            } else {
+                setCurriculum([]);
             }
         }
         setLoading(false);
     };
 
     fetchCurriculum();
-  }, [gradeId, sectionId]);
+  }, [gradeId, sectionId, currentPeriod]); 
 
   const handleAddPart = async () => {
     if (!newPart.start || !newPart.end || !newPart.dueDate) {
@@ -79,10 +116,8 @@ const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
             .eq('teacher_id', teacherId)
             .single();
 
-        const newRecitation = existingCurriculum?.recitation || [];
-        const newHomework = existingCurriculum?.homework || [];
-
-        const updatedRecitation = [...newRecitation, { ...newPart, id: Date.now() }];
+        const newCurriculumPart = [...curriculum, { ...newPart, id: Date.now() }];
+        const { updatedRecitation, homework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, newCurriculumPart);
 
         const { error } = await supabase
             .from('curriculum')
@@ -90,13 +125,13 @@ const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
                 grade_id: gradeId,
                 section_id: sectionId,
                 teacher_id: teacherId,
-                recitation: updatedRecitation,
-                homework: newHomework,
+                recitation: updatedRecitation, 
+                homework: homework,           
             }, { onConflict: 'grade_id,section_id' });
 
         if (error) throw error;
 
-        setCurriculum(updatedRecitation);
+        setCurriculum(newCurriculumPart);
         setNewPart({ start: '', end: '', dueDate: getHijriToday(), type: 'memorization' });
         handleDialog("نجاح", "تم إضافة الجزء بنجاح", "success");
 
@@ -124,12 +159,25 @@ const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
             part.id === editingPart.id ? newPart : part
         );
 
-        const { error } = await supabase
+        const { data: existingCurriculum } = await supabase
             .from('curriculum')
-            .update({ recitation: updatedCurriculum })
+            .select('*')
             .eq('grade_id', gradeId)
             .eq('section_id', sectionId)
-            .eq('teacher_id', teacherId);
+            .eq('teacher_id', teacherId)
+            .single();
+
+        const { updatedRecitation, homework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, updatedCurriculum);
+
+        const { error } = await supabase
+            .from('curriculum')
+            .upsert({
+                grade_id: gradeId,
+                section_id: sectionId,
+                teacher_id: teacherId,
+                recitation: updatedRecitation,
+                homework: homework,
+            }, { onConflict: 'grade_id,section_id' });
 
         if (error) throw error;
 
@@ -145,12 +193,83 @@ const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
         setLoading(false);
     }
   };
+
+  // دالة الحذف الجزئي (معدلة)
+  const deleteCurriculumPart = async (partId, gId, sId, tId, currentCurriculum, setCurriculumState, dialogHandler) => {
+    try {
+        const updatedCurriculum = currentCurriculum.filter(part => part.id !== partId);
+
+        const { data: existingCurriculum } = await supabase
+            .from('curriculum')
+            .select('*')
+            .eq('grade_id', gId)
+            .eq('section_id', sId)
+            .eq('teacher_id', tId)
+            .single();
+
+        const { updatedRecitation, homework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, updatedCurriculum);
+
+        const { error } = await supabase
+            .from('curriculum')
+            .upsert({
+                grade_id: gId,
+                section_id: sId,
+                teacher_id: tId,
+                recitation: updatedRecitation,
+                homework: homework,
+            }, { onConflict: 'grade_id,section_id' });
+
+        if (error) throw error;
+
+        setCurriculumState(updatedCurriculum);
+        dialogHandler("نجاح", "تم حذف الجزء بنجاح", "success");
+    } catch (error) {
+        console.error("Error deleting curriculum part:", error);
+        dialogHandler("خطأ", "حدث خطأ أثناء حذف الجزء.", "error");
+    }
+  };
+
+  // دالة الحذف الكلي للفترة النشطة فقط (معدلة)
+  const deleteAllCurriculum = async (gId, sId, tId, dialogHandler, setCurriculumState) => {
+    try {
+        const { data: existingCurriculum } = await supabase
+            .from('curriculum')
+            .select('*')
+            .eq('grade_id', gId)
+            .eq('section_id', sId)
+            .eq('teacher_id', tId)
+            .single();
+
+        const { updatedRecitation, homework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, []);
+
+        const { error } = await supabase
+            .from('curriculum')
+            .upsert({
+                grade_id: gId,
+                section_id: sId,
+                teacher_id: tId,
+                recitation: updatedRecitation,
+                homework: homework,
+            }, { onConflict: 'grade_id,section_id' });
+
+        if (error) throw error;
+
+        setCurriculumState([]);
+        dialogHandler("نجاح", "تم حذف كل أجزاء منهج هذه الفترة بنجاح", "success");
+    } catch (error) {
+        console.error("Error deleting all curriculum:", error);
+        dialogHandler("خطأ", "حدث خطأ أثناء حذف كل المنهج.", "error");
+    }
+  };
     
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 font-['Noto_Sans_Arabic',sans-serif]">
       <div className="bg-gray-800 rounded-xl p-6 md:p-8 shadow-2xl w-full max-w-2xl text-right overflow-y-auto max-h-[90vh]">
         <div className="flex justify-between items-center border-b border-gray-700 pb-4 mb-4">
-          <h2 className="text-2xl font-bold text-blue-400">إدارة منهج التلاوة والحفظ</h2>
+          <h2 className="text-2xl font-bold text-blue-400">
+            إدارة منهج التلاوة والحفظ
+            <span className="text-xl text-gray-400 mr-2"> (الفترة {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})</span>
+          </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <FaTimes size={24} />
           </button>
@@ -229,7 +348,7 @@ const CurriculumModal = ({ gradeId, sectionId, onClose }) => {
                 onClick={() => {
                   handleDialog(
                     "تأكيد حذف كل المناهج",
-                    "هل أنت متأكد من حذف جميع أجزاء منهج التلاوة والحفظ؟ هذا الإجراء لا يمكن التراجع عنه.",
+                    "هل أنت متأكد من حذف جميع أجزاء منهج التلاوة والحفظ في هذه الفترة؟ هذا الإجراء لا يمكن التراجع عنه.",
                     "confirm",
                     () => deleteAllCurriculum(gradeId, sectionId, teacherId, handleDialog, setCurriculum)
                   );

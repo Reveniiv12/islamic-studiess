@@ -1,9 +1,11 @@
+// HomeworkCurriculumModal.jsx
 import React, { useState, useEffect } from 'react';
 import { getHijriToday } from '../utils/recitationUtils';
 import { supabase } from '../supabaseClient';
-import { FaTimes } from 'react-icons/fa';
+import { FaTimes, FaPlus, FaSave, FaPen, FaTrash } from 'react-icons/fa';
 
-const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
+// إضافة currentPeriod إلى props
+const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
     const [homeworkCurriculum, setHomeworkCurriculum] = useState([]);
     const [loading, setLoading] = useState(true);
     const [newPart, setNewPart] = useState({
@@ -12,7 +14,40 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
         dueDate: getHijriToday()
     });
     const [editingPart, setEditingPart] = useState(null);
-    const [teacherId, setTeacherId] = useState(null); // حالة جديدة لتخزين معرف المعلم
+    const [teacherId, setTeacherId] = useState(null);
+
+    // دوال مساعدة لدعم التوافق والتعامل مع هيكل الفترات
+    const extractHomeworkCurriculum = (data, period) => {
+        if (!data) return [];
+        if (Array.isArray(data.homework)) { // تنسيق قديم
+            return period === 'period1' ? data.homework : [];
+        }
+        return data.homework?.[period] || [];
+    };
+
+    const getFullCurriculumStructure = (existingData, currentPeriod, newHomeworkCurriculumPart) => {
+        let recitation = {};
+        let homework = {};
+
+        // معالجة منهج التلاوة (للحفاظ عليه)
+        if (existingData && Array.isArray(existingData.recitation)) {
+            recitation = { period1: existingData.recitation, period2: [] };
+        } else {
+            recitation = existingData?.recitation || { period1: [], period2: [] };
+        }
+
+        // معالجة منهج الواجبات
+        if (existingData && Array.isArray(existingData.homework)) {
+            homework = { period1: existingData.homework, period2: [] };
+        } else {
+            homework = existingData?.homework || { period1: [], period2: [] };
+        }
+
+        // تحديث الجزء النشط فقط ضمن هيكل الواجبات
+        const updatedHomework = { ...homework, [currentPeriod]: newHomeworkCurriculumPart };
+        return { recitation, updatedHomework };
+    };
+    // نهاية الدوال المساعدة
 
     useEffect(() => {
         const fetchHomeworkCurriculum = async () => {
@@ -23,17 +58,17 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
                 try {
                     const { data, error } = await supabase
                         .from('curriculum')
-                        .select('homework')
+                        .select('*') 
                         .eq('grade_id', gradeId)
                         .eq('section_id', sectionId)
-                        .eq('teacher_id', user.id) // إضافة شرط معرف المعلم
+                        .eq('teacher_id', user.id)
                         .single();
                     
                     if (error && error.code !== 'PGRST116') {
                         throw error;
                     }
 
-                    setHomeworkCurriculum(data?.homework || []);
+                    setHomeworkCurriculum(extractHomeworkCurriculum(data, currentPeriod) || []);
                 } catch (error) {
                     console.error("Error fetching homework curriculum:", error);
                 } finally {
@@ -43,7 +78,7 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
         };
 
         fetchHomeworkCurriculum();
-    }, [gradeId, sectionId]);
+    }, [gradeId, sectionId, currentPeriod]);
 
     const getOptionsForType = (type) => {
         let count = 0;
@@ -64,9 +99,7 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
         const options = [];
         for (let i = 1; i <= count; i++) {
             const optionName = `${prefix}${i}`;
-            if (!existingNames.includes(optionName) || (editingPart && editingPart.name === optionName)) {
-                options.push(optionName);
-            }
+            options.push(optionName);
         }
         return options;
     };
@@ -80,32 +113,30 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
 
         setLoading(true);
         try {
-            const { data: existingCurriculum, error: fetchError } = await supabase
+            const { data: existingCurriculum } = await supabase
                 .from('curriculum')
                 .select('*')
                 .eq('grade_id', gradeId)
                 .eq('section_id', sectionId)
-                .eq('teacher_id', teacherId) // إضافة شرط معرف المعلم
+                .eq('teacher_id', teacherId)
                 .single();
 
-            const newRecitation = existingCurriculum?.recitation || [];
-            const newHomework = existingCurriculum?.homework || [];
+            const newHomeworkCurriculumPart = [...homeworkCurriculum, { ...newPart, id: Date.now() }];
+            const { recitation, updatedHomework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, newHomeworkCurriculumPart);
             
-            const updatedHomeworkCurriculum = [...newHomework, { ...newPart, id: Date.now() }];
-
             const { error } = await supabase
                 .from('curriculum')
                 .upsert({
                     grade_id: gradeId,
                     section_id: sectionId,
-                    teacher_id: teacherId, // إضافة معرف المعلم إلى كائن الإدخال
-                    recitation: newRecitation,
-                    homework: updatedHomeworkCurriculum
+                    teacher_id: teacherId, 
+                    recitation: recitation,
+                    homework: updatedHomework
                 }, { onConflict: 'grade_id,section_id' });
 
             if (error) throw error;
             
-            setHomeworkCurriculum(updatedHomeworkCurriculum);
+            setHomeworkCurriculum(newHomeworkCurriculumPart);
             setNewPart({ name: '', type: 'homework', dueDate: getHijriToday() });
 
         } catch (error) {
@@ -127,13 +158,26 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
             const updatedHomeworkCurriculum = homeworkCurriculum.map(part =>
                 part.id === editingPart.id ? newPart : part
             );
+            
+            const { data: existingCurriculum } = await supabase
+                .from('curriculum')
+                .select('*')
+                .eq('grade_id', gradeId)
+                .eq('section_id', sectionId)
+                .eq('teacher_id', teacherId)
+                .single();
+
+            const { recitation, updatedHomework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, updatedHomeworkCurriculum);
 
             const { error } = await supabase
                 .from('curriculum')
-                .update({ homework: updatedHomeworkCurriculum })
-                .eq('grade_id', gradeId)
-                .eq('section_id', sectionId)
-                .eq('teacher_id', teacherId); // إضافة شرط معرف المعلم
+                .upsert({
+                    grade_id: gradeId,
+                    section_id: sectionId,
+                    teacher_id: teacherId,
+                    recitation: recitation,
+                    homework: updatedHomework,
+                }, { onConflict: 'grade_id,section_id' });
 
             if (error) throw error;
             
@@ -158,12 +202,25 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
         try {
             const updatedHomeworkCurriculum = homeworkCurriculum.filter(part => part.id !== id);
 
-            const { error } = await supabase
+            const { data: existingCurriculum } = await supabase
                 .from('curriculum')
-                .update({ homework: updatedHomeworkCurriculum })
+                .select('*')
                 .eq('grade_id', gradeId)
                 .eq('section_id', sectionId)
-                .eq('teacher_id', teacherId); // إضافة شرط معرف المعلم
+                .eq('teacher_id', teacherId)
+                .single();
+
+            const { recitation, updatedHomework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, updatedHomeworkCurriculum);
+
+            const { error } = await supabase
+                .from('curriculum')
+                .upsert({
+                    grade_id: gradeId,
+                    section_id: sectionId,
+                    teacher_id: teacherId,
+                    recitation: recitation,
+                    homework: updatedHomework,
+                }, { onConflict: 'grade_id,section_id' });
 
             if (error) throw error;
             
@@ -175,12 +232,24 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
         }
     };
 
+    const getPartTypeInfo = (type) => {
+        switch (type) {
+            case 'homework': return { name: 'واجب', color: 'bg-yellow-600' };
+            case 'performanceTask': return { name: 'مهمة أدائية', color: 'bg-green-600' };
+            case 'test': return { name: 'اختبار', color: 'bg-blue-600' };
+            default: return { name: '', color: 'bg-gray-600' };
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-gray-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-700">
                 <div className="p-6 overflow-y-auto">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-bold text-gray-100">الواجبات والمهام الأدائية والاختبارات</h3>
+                        <h3 className="text-xl font-bold text-gray-100">
+                            الواجبات والمهام الأدائية والاختبارات 
+                            <span className="text-base text-gray-400 mr-2"> (الفترة {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})</span>
+                        </h3>
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-3xl leading-none font-semibold">&times;</button>
                     </div>
 
@@ -240,14 +309,14 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, onClose }) => {
                             homeworkCurriculum.length > 0 ? (
                                 <ul className="divide-y divide-gray-600">
                                     {homeworkCurriculum.map(part => (
-                                        <li key={part.id} className="py-2 flex justify-between items-center text-sm">
+                                        <li key={part.id} className="py-2 flex justify-between items-center text-sm border-l-4 p-2" style={{ borderColor: getPartTypeInfo(part.type).color }}>
                                             <div className="flex-1">
                                                 <span className="font-medium text-gray-300">{part.name}</span>
-                                                <span className="text-gray-400 mr-2">({part.type === 'homework' ? 'واجب' : part.type === 'performanceTask' ? 'مهمة أدائية' : 'اختبار'})</span>
+                                                <span className="text-gray-400 mr-2">({getPartTypeInfo(part.type).name})</span>
                                                 <span className="text-gray-500 block">تاريخ الاستحقاق: {part.dueDate}</span>
                                             </div>
                                             <div className="flex gap-2">
-                                                <button onClick={() => setEditingPart(part)} className="text-blue-400 hover:text-blue-300">تعديل</button>
+                                                <button onClick={() => { setEditingPart(part); setNewPart(part); }} className="text-blue-400 hover:text-blue-300">تعديل</button>
                                                 <button onClick={() => handleDeletePart(part.id)} className="text-red-400 hover:text-red-300">حذف</button>
                                             </div>
                                         </li>

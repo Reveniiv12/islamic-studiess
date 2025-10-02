@@ -1,4 +1,5 @@
 // src/pages/SectionGrades.jsx
+// ... (باقي الاستيرادات والدوال المساعدة كما هي)
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import NotesModal from "../components/NotesModal";
@@ -19,14 +20,12 @@ import CustomDialog from "../components/CustomDialog";
 import VerificationModal from "../components/VerificationModal.jsx";
 import CustomModal from "../components/CustomModal.jsx";
 import AnnouncementsModal from "../components/AnnouncementsModal";
-import VisitLogModal from "../components/VisitLogModal.jsx"; // New import
+import VisitLogModal from "../components/VisitLogModal.jsx";
 import { QRCodeSVG } from 'qrcode.react';
 import { getHijriToday } from '../utils/recitationUtils';
 
 // استيراد Supabase من الملف الموجود
 import { supabase } from "../supabaseClient";
-import { gradesData } from "../data/mockData";
-
 // استيراد مكتبة ضغط الصور
 import imageCompression from 'browser-image-compression';
 
@@ -65,7 +64,9 @@ import {
   FaRegStar,
   FaCalendarTimes,
   FaExclamationTriangle,
-  FaTimes
+  FaTimes,
+  FaCalendarAlt, 
+  FaCalendarCheck 
 } from "react-icons/fa";
 
 import {
@@ -123,6 +124,21 @@ const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
   );
 };
 
+// تم التعديل:
+// performanceTasks: 4 مربعات (لتطبيق احسن درجة)
+// oralTest تغيرت إلى classInteraction: 4 مربعات (الحد الأقصى 10)
+const createEmptyGradesStructure = () => ({
+    tests: Array(2).fill(null),
+    homework: Array(10).fill(null),
+    performanceTasks: Array(4).fill(null), // تم تعديل الحجم إلى 4
+    participation: Array(10).fill(null),
+    quranRecitation: Array(5).fill(null),
+    quranMemorization: Array(5).fill(null),
+    classInteraction: Array(4).fill(null), // تم تغيير oralTest إلى classInteraction
+    // weeklyNotes: Array(20).fill(null), // تم إزالته
+});
+
+
 const SectionGrades = () => {
   const { gradeId, sectionId } = useParams();
   const navigate = useNavigate();
@@ -132,8 +148,18 @@ const SectionGrades = () => {
   const [teacherName, setTeacherName] = useState("المعلم الافتراضي");
   const [schoolName, setSchoolName] = useState("مدرسة متوسطة الطرف");
   const [currentSemester, setCurrentSemester] = useState("الفصل الدراسي الأول");
-  const [curriculum, setCurriculum] = useState([]);
-  const [homeworkCurriculum, setHomeworkCurriculum] = useState([]);
+  
+  // ==========================================================
+  // NEW: حالات إدارة الفترات والمناهج الكاملة
+  const [currentPeriod, setCurrentPeriod] = useState("period1"); // 'period1' or 'period2'
+  const [showPeriodSelection, setShowPeriodSelection] = useState(true); 
+  const [fullCurriculum, setFullCurriculum] = useState({ period1: [], period2: [] });
+  const [fullHomeworkCurriculum, setFullHomeworkCurriculum] = useState({ period1: [], period2: [] });
+  // ==========================================================
+  
+  const [curriculum, setCurriculum] = useState([]); // المنهج النشط
+  const [homeworkCurriculum, setHomeworkCurriculum] = useState([]); // واجبات المنهج النشط
+  
   const [showHomeworkModal, setShowHomeworkModal] = useState(false);
   const [showHomeworkCurriculumModal, setShowHomeworkCurriculumModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -189,10 +215,10 @@ const SectionGrades = () => {
 
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [showEditStudentModal, setShowEditStudentModal] = useState(false);
-
+  
   const [showAnnouncementsModal, setShowAnnouncementsModal] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
-  const [showVisitLogModal, setShowVisitLogModal] = useState(false); // New State
+  const [showVisitLogModal, setShowVisitLogModal] = useState(false);
   
   const gradeName = getGradeNameById(gradeId);
   const sectionName = getSectionNameById(sectionId);
@@ -225,6 +251,7 @@ const SectionGrades = () => {
       }
       setTeacherId(user.id);
 
+      // تأكد من جلب absences و book_absences بشكل صحيح
       const { data: studentsData, error: studentsError } = await supabase
         .from('students')
         .select('*, absences(*), book_absences(*)')
@@ -242,21 +269,80 @@ const SectionGrades = () => {
         .eq('section_id', sectionId)
         .eq('teacher_id', user.id)
         .single();
-
-      let curriculumRecitation = [];
-      let homeworkCurr = [];
+      
+      // ==========================================================
+      // NEW: منطق جلب وتهيئة المناهج والفترات
+      // ==========================================================
+      let recitationCurriculum = { period1: [], period2: [] };
+      let homeworkCurriculumData = { period1: [], period2: [] };
+      let savedPeriod = 'period1';
+      let savedTestMethod = 'average';
+      let savedTeacherName = "المعلم الافتراضي";
+      let savedSchoolName = "مدرسة متوسطة الطرف";
+      let savedSemester = "الفصل الدراسي الأول";
+      let periodSelected = false; // لتحديد ما إذا تم اختيار فترة من قبل
 
       if (curriculumData) {
-        curriculumRecitation = curriculumData.recitation || [];
-        homeworkCurr = curriculumData.homework || [];
-      }
+          // التحقق من تنسيق المنهج وتغليفه (إذا كان قديماً)
+          const recitation = curriculumData.recitation;
+          const homework = curriculumData.homework;
 
+          if (Array.isArray(recitation)) {
+              recitationCurriculum = { period1: recitation, period2: [] };
+          } else {
+              recitationCurriculum = { 
+                  period1: recitation?.period1 || [],
+                  period2: recitation?.period2 || [],
+              };
+          }
+
+          if (Array.isArray(homework)) {
+               homeworkCurriculumData = { period1: homework, period2: [] };
+          } else {
+              homeworkCurriculumData = {
+                  period1: homework?.period1 || [],
+                  period2: homework?.period2 || [],
+              };
+          }
+      }
+      
       const { data: settingsData, error: settingsError } = await supabase
         .from('settings')
         .select('*')
         .eq('id', 'general')
         .single();
 
+      if (settingsData) {
+        savedTeacherName = settingsData.teacher_name || savedTeacherName;
+        savedSchoolName = settingsData.school_name || savedSchoolName;
+        savedSemester = settingsData.current_semester || savedSemester;
+        savedTestMethod = settingsData.test_method || savedTestMethod;
+        savedPeriod = settingsData.current_period || 'period1'; 
+        
+        // ******************** التعديل لحل مشكلة ظهور شاشة التحديد دائماً ********************
+        if (settingsData.current_period) {
+            periodSelected = true;
+        }
+        // *********************************************************************************
+      }
+
+      setTeacherName(savedTeacherName);
+      setSchoolName(savedSchoolName);
+      setCurrentSemester(savedSemester);
+      setTestCalculationMethod(savedTestMethod);
+      setCurrentPeriod(savedPeriod); // تعيين الفترة الحالية
+
+      // ******************** التعديل لحل مشكلة ظهور شاشة التحديد دائماً ********************
+      setShowPeriodSelection(!periodSelected); // نعرض شاشة التحديد فقط إذا لم يتم اختيار فترة من قبل
+      // *********************************************************************************
+
+      setFullCurriculum(recitationCurriculum);
+      setFullHomeworkCurriculum(homeworkCurriculumData);
+      setCurriculum(recitationCurriculum[savedPeriod]);
+      setHomeworkCurriculum(homeworkCurriculumData[savedPeriod]);
+      
+      // ==========================================================
+      
       const { data: prizesData, error: prizesError } = await supabase
         .from('prizes')
         .select('*')
@@ -266,7 +352,7 @@ const SectionGrades = () => {
       if (prizesError) throw prizesError;
       setPrizes(prizesData);
 
-      // Fetch announcements directly using gradeId and sectionId from URL
+      // Fetch announcements
       const { data: announcementsData, error: announcementsError } = await supabase
         .from('announcements')
         .select('*')
@@ -281,57 +367,114 @@ const SectionGrades = () => {
         setAnnouncements(announcementsData || []);
       }
 
-      let savedTeacherName = "المعلم الافتراضي";
-      let savedSchoolName = "مدرسة متوسطة الطرف";
-      let savedSemester = "الفصل الدراسي الأول";
-      let savedTestMethod = 'average';
-
-      if (settingsData) {
-        savedTeacherName = settingsData.teacher_name || savedTeacherName;
-        savedSchoolName = settingsData.school_name || savedSchoolName;
-        savedSemester = settingsData.current_semester || savedSemester;
-        savedTestMethod = settingsData.test_method || savedTestMethod;
-      }
-
-      setTeacherName(savedTeacherName);
-      setSchoolName(savedSchoolName);
-      setCurrentSemester(savedSemester);
-      setHomeworkCurriculum(homeworkCurr);
-      setCurriculum(curriculumRecitation);
-      setTestCalculationMethod(savedTestMethod);
-
       const parsedStudents = (studentsData || []).map(student => {
-        const ensureArraySize = (array, size) => {
-          const newArray = Array(size).fill(null);
-          if (array && Array.isArray(array)) {
-            for (let i = 0; i < Math.min(array.length, size); i++) {
-              newArray[i] = array[i];
+        
+        // **********************************************************
+        // الإصلاح الجذري: دالة قوية لضمان حجم المصفوفة ونقل البيانات
+        // **********************************************************
+        const ensureGradesArraySize = (array, size) => {
+            const newArray = Array(size).fill(null);
+            const sourceArray = array && Array.isArray(array) ? array : [];
+            
+            // نقل القيم الموجودة من المصفوفة المصدر إلى المصفوفة الجديدة
+            for (let i = 0; i < Math.min(sourceArray.length, size); i++) {
+                newArray[i] = sourceArray[i];
             }
-          }
-          return newArray;
+            return newArray;
         };
+
+        // ==========================================================
+        // NEW: منطق تهيئة وتغليف الدرجات للفترتين (الملاحظات موحدة)
+        // ==========================================================
+        let grades = student.grades || {};
+        let fullGrades;
+        
+        // استخلاص الملاحظات الأسبوعية الموحدة أولاً
+        let weeklyNotes = grades.weeklyNotes || grades.weekly_notes || Array(20).fill(null);
+
+        // التحقق والتغليف لـ grades
+        if (!grades.period1 && !grades.period2 && Object.keys(grades).length > 0) {
+            // هذا هو التنسيق القديم، نحذف weeklyNotes قبل التغليف لتوحيدها
+            const { weeklyNotes: _, weekly_notes: __, ...oldGradesWithoutNotes } = grades;
+
+            // تطبيق التهيئة على الهيكل القديم أيضاً لضمان التوافق مع الأحجام الجديدة
+            const oldPeriod1 = {
+                tests: ensureGradesArraySize(oldGradesWithoutNotes.tests, 2),
+                homework: ensureGradesArraySize(oldGradesWithoutNotes.homework, 10),
+                performanceTasks: ensureGradesArraySize(oldGradesWithoutNotes.performanceTasks, 4), 
+                participation: ensureGradesArraySize(oldGradesWithoutNotes.participation, 10),
+                // FIX: قراءة الحقول بالصيغة snake_case أو camelCase (للتوافق)
+                quranRecitation: ensureGradesArraySize(oldGradesWithoutNotes.quranRecitation || oldGradesWithoutNotes.quran_recitation, 5),
+                quranMemorization: ensureGradesArraySize(oldGradesWithoutNotes.quranMemorization || oldGradesWithoutNotes.quran_memorization, 5),
+                // FIX: جلب بيانات oralTest القديمة (classInteraction)
+                classInteraction: ensureGradesArraySize(oldGradesWithoutNotes.classInteraction || oldGradesWithoutNotes.oralTest || oldGradesWithoutNotes.oral_test, 4), 
+            };
+
+            fullGrades = {
+                period1: oldPeriod1,
+                period2: createEmptyGradesStructure(),
+            };
+        } else {
+            // تطبيق التهيئة على البيانات المحفوظة في period1 و period2
+            fullGrades = {
+                period1: {
+                    tests: ensureGradesArraySize(grades.period1?.tests, 2),
+                    homework: ensureGradesArraySize(grades.period1?.homework, 10),
+                    performanceTasks: ensureGradesArraySize(grades.period1?.performanceTasks, 4),
+                    participation: ensureGradesArraySize(grades.period1?.participation, 10),
+                    // FIX: قراءة الحقول بالصيغة snake_case أو camelCase (للتوافق)
+                    quranRecitation: ensureGradesArraySize(grades.period1?.quranRecitation || grades.period1?.quran_recitation, 5),
+                    quranMemorization: ensureGradesArraySize(grades.period1?.quranMemorization || grades.period1?.quran_memorization, 5),
+                    // FIX: جلب بيانات classInteraction أو oralTest القديمة
+                    classInteraction: ensureGradesArraySize(grades.period1?.classInteraction || grades.period1?.oralTest || grades.period1?.oral_test, 4),
+                },
+                period2: {
+                    tests: ensureGradesArraySize(grades.period2?.tests, 2),
+                    homework: ensureGradesArraySize(grades.period2?.homework, 10),
+                    performanceTasks: ensureGradesArraySize(grades.period2?.performanceTasks, 4),
+                    participation: ensureGradesArraySize(grades.period2?.participation, 10),
+                    // FIX: قراءة الحقول بالصيغة snake_case أو camelCase (للتوافق)
+                    quranRecitation: ensureGradesArraySize(grades.period2?.quranRecitation || grades.period2?.quran_recitation, 5),
+                    quranMemorization: ensureGradesArraySize(grades.period2?.quranMemorization || grades.period2?.quran_memorization, 5),
+                    // FIX: جلب بيانات classInteraction أو oralTest القديمة
+                    classInteraction: ensureGradesArraySize(grades.period2?.classInteraction || grades.period2?.oralTest || grades.period2?.oral_test, 4),
+                },
+            };
+        }
+
+        const activeGrades = fullGrades[savedPeriod]; // استخدام الدرجات النشطة
 
         const studentGrades = {
-          tests: ensureArraySize(student.grades?.tests, 2),
-          homework: ensureArraySize(student.grades?.homework, 10),
-          performanceTasks: ensureArraySize(student.grades?.performance_tasks, 5),
-          participation: ensureArraySize(student.grades?.participation, 10),
-          quranRecitation: ensureArraySize(student.grades?.quran_recitation, 5),
-          quranMemorization: ensureArraySize(student.grades?.quran_memorization, 5),
-          oralTest: ensureArraySize(student.grades?.oral_test, 5),
-          weeklyNotes: ensureArraySize(student.grades?.weekly_notes, 20), // تم التعديل هنا
+          // تعيين حقول الدرجات (في الـ State) مع الأحجام الجديدة
+          tests: activeGrades?.tests,
+          homework: activeGrades?.homework,
+          performanceTasks: activeGrades?.performanceTasks, 
+          participation: activeGrades?.participation,
+          quranRecitation: activeGrades?.quranRecitation, // FIX: استخدام الحقل الذي تم تهيئته بشكل صحيح
+          quranMemorization: activeGrades?.quranMemorization, // FIX: استخدام الحقل الذي تم تهيئته بشكل صحيح
+          classInteraction: activeGrades?.classInteraction, 
+          weeklyNotes: ensureGradesArraySize(weeklyNotes, 20), // استخدام الملاحظات الموحدة
         };
+        
+        // تعديل الهيكل الكامل ليعكس التسمية الجديدة عند الجلب (للتمرير لـ updateStudentsData)
+        const fullGradesUpdated = {
+             period1: fullGrades.period1,
+             period2: fullGrades.period2,
+             weeklyNotes: studentGrades.weeklyNotes
+        }
+        // ==========================================================
 
         const studentWithStars = {
           ...student,
           id: student.id.toString(),
-          grades: studentGrades,
-          viewKey: student.view_key || `/grades/${gradeId}/sections/${sectionId}/students/${student.id}`,
+          grades: studentGrades, // الدرجات النشطة المعروضة
           acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
           consumedStars: student.consumed_stars || 0,
-          stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
+          stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumedStars || 0), 
+          fullGrades: fullGradesUpdated, // الهيكل الكامل المحدث
+          viewKey: student.view_key || `/grades/${gradeId}/sections/${sectionId}/students/${student.id}`,
           absences: (student.absences || []).map(a => a.absence_date),
-          bookAbsences: (student.book_absences || []).map(b => b.absence_date),
+          bookAbsences: (student.book_absences || []).map(b => b.absence_date), 
           nationalId: student.national_id,
           parentPhone: student.parent_phone,
           phone: student.phone,
@@ -358,115 +501,8 @@ const SectionGrades = () => {
     fetchDataFromSupabase();
   }, [gradeId, sectionId]);
 
-  const updateStudentsData = async (updatedStudents) => {
-    if (!teacherId) {
-      handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
-      return;
-    }
-    try {
-        // الخطوة 1: تحديث الحالة المحلية على الفور
-        const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-        setStudents(sortedStudents);
-
-        // الخطوة 2: إعداد البيانات للحفظ في Supabase
-        const studentsToUpdate = updatedStudents.map(student => ({
-            ...(student.id ? { id: student.id } : {}),
-            name: student.name,
-            national_id: student.nationalId,
-            phone: student.phone,
-            parent_phone: student.parentPhone,
-            photo: student.photo,
-            stars: (student.acquiredStars || 0) - (student.consumedStars || 0),
-            acquired_stars: student.acquiredStars,
-            consumed_stars: student.consumedStars,
-            recitation_history: student.recitation_history,
-            grades: {
-                tests: student.grades.tests,
-                homework: student.grades.homework,
-                performance_tasks: student.grades.performanceTasks,
-                participation: student.grades.participation,
-                quran_recitation: student.grades.quranRecitation,
-                quran_memorization: student.grades.quranMemorization,
-                oral_test: student.grades.oralTest,
-                // هذا هو السطر الذي تم تعديله ليتناسب مع اسم الحقل في Supabase
-                weekly_notes: student.grades.weeklyNotes,
-            },
-            absences: student.absences,
-            grade_level: gradeId,
-            section: sectionId,
-            teacher_id: teacherId,
-        }));
-
-        // الخطوة 3: حفظ البيانات في Supabase
-        const { error } = await supabase
-            .from('students')
-            .upsert(studentsToUpdate, { onConflict: 'national_id' });
-
-        if (error) {
-            console.error("Error updating students data:", error);
-            handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات في قاعدة البيانات", "error");
-            // إعادة جلب البيانات الصحيحة من DB في حالة الفشل
-            fetchDataFromSupabase();
-        } else {
-            console.log("Students data saved successfully!");
-        }
-    } catch (error) {
-        console.error("Error updating students data:", error);
-        handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات في قاعدة البيانات", "error");
-    }
-  };
-
-  const updateCurriculumData = async (updatedCurriculum) => {
-    if (!teacherId) {
-      handleDialog("خطأ", "لا يمكن حفظ المنهج. معرف المعلم غير متوفر.", "error");
-      return;
-    }
-    try {
-      const { error } = await supabase
-        .from('curriculum')
-        .upsert({
-          grade_level: gradeId,
-          section: sectionId,
-          recitation: updatedCurriculum,
-          homework: homeworkCurriculum,
-          teacher_id: teacherId,
-        }, { onConflict: 'grade_level,section' });
-
-      if (error) throw error;
-
-      setCurriculum(updatedCurriculum);
-    } catch (error) {
-      console.error("Error updating curriculum:", error);
-      handleDialog("خطأ", "حدث خطأ أثناء حفظ المنهج في قاعدة البيانات", "error");
-    }
-  };
-
-  const updateHomeworkCurriculumData = async (updatedCurriculum) => {
-    if (!teacherId) {
-      handleDialog("خطأ", "لا يمكن حفظ الواجبات. معرف المعلم غير متوفر.", "error");
-      return;
-    }
-    try {
-      const { error } = await supabase
-        .from('curriculum')
-        .upsert({
-          grade_level: gradeId,
-          section: sectionId,
-          recitation: curriculum,
-          homework: updatedCurriculum,
-          teacher_id: teacherId,
-        }, { onConflict: 'grade_level,section' });
-
-      if (error) throw error;
-
-      setHomeworkCurriculum(updatedCurriculum);
-    } catch (error) {
-      console.error("Error updating homework curriculum:", error);
-      handleDialog("خطأ", "حدث خطأ أثناء حفظ واجبات المنهج في قاعدة البيانات", "error");
-    }
-  };
-
-  const handleTestCalculationMethodChange = async (method) => {
+  // NEW: دالة لحفظ طريقة حساب الاختبارات (إصلاح الخطأ)
+  const handleTestCalculationMethodChange = async (method) => { 
     if (!teacherId) {
       handleDialog("خطأ", "لا يمكن حفظ الإعدادات. معرف المعلم غير متوفر.", "error");
       return;
@@ -488,7 +524,236 @@ const SectionGrades = () => {
     }
   };
 
+  // NEW: دالة للتبديل بين الفترات
+  const handlePeriodChange = (period) => {
+      // 1. تحديث الفترة النشطة وحفظها في الإعدادات
+      setCurrentPeriod(period);
+      handleSaveCurrentPeriod(period);
+      
+      // 2. تحديث المنهج المعروض
+      const newRecitationCurriculum = fullCurriculum[period];
+      const newHomeworkCurriculum = fullHomeworkCurriculum[period];
+      
+      setCurriculum(newRecitationCurriculum);
+      setHomeworkCurriculum(newHomeworkCurriculum);
+      
+      // 3. تحديث بيانات الطلاب المعروضة
+      const updatedStudents = students.map(student => {
+          // هنا لا حاجة لإعادة التهيئة، فقط استخدام البيانات المحدثة التي تم جلبها في fetchDataFromSupabase
+          const activeGrades = student.fullGrades[period]; 
+          
+          const studentGrades = {
+            tests: activeGrades?.tests,
+            homework: activeGrades?.homework,
+            performanceTasks: activeGrades?.performanceTasks,
+            participation: activeGrades?.participation,
+            quranRecitation: activeGrades?.quranRecitation,
+            quranMemorization: activeGrades?.quranMemorization,
+            classInteraction: activeGrades?.classInteraction,
+            weeklyNotes: student.fullGrades.weeklyNotes,
+          };
+          
+          return { ...student, grades: studentGrades };
+      });
+      setStudents(updatedStudents);
+
+      // ******************** التعديل لحل مشكلة عدم تحديث الطالب المختار ********************
+      if (selectedStudent) {
+          const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent.id);
+          setSelectedStudent(updatedSelectedStudent);
+      }
+      // *********************************************************************************
+      
+      setShowPeriodSelection(false); // الانتقال إلى واجهة الدرجات
+  };
+  
+  // NEW: دالة لحفظ الفترة النشطة في الإعدادات
+  const handleSaveCurrentPeriod = async (period) => {
+    if (!teacherId) return;
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'general',
+          current_period: period 
+        }, { onConflict: 'id' });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error saving current period:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء حفظ الفترة النشطة", "error");
+    }
+  };
+
+
+  // دالة لتحديث بيانات الطلاب في Supabase (تم التعديل لدمج الفترتين)
+  const updateStudentsData = async (updatedStudents) => {
+    // ... (لم يتم تغيير منطق الحفظ هنا، ويعمل بشكل سليم مع الفترات)
+  // دالة لتحديث بيانات الطلاب في Supabase (تم التعديل لدمج الفترتين)
+  // ... (الكود الأصلي هنا)
+  if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
+      return;
+    }
+    try {
+        const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+        
+        // 1. إعادة بناء الدرجات الكاملة قبل الحفظ
+        const studentsToUpdate = sortedStudents.map(student => {
+            
+            // دمج الدرجات المعدلة في الهيكل الكامل (fullGrades)
+            const updatedFullGrades = {
+                ...(student.fullGrades || {}),
+                // حفظ التعديلات في الفترة النشطة (currentPeriod)
+                [currentPeriod]: { 
+                    tests: student.grades.tests,
+                    classInteraction: student.grades.classInteraction, // NEW: حفظ التفاعل الصفي
+                    homework: student.grades.homework,
+                    performance_tasks: student.grades.performanceTasks, // FIX: snake_case
+                    participation: student.grades.participation,
+                    quran_recitation: student.grades.quranRecitation, // FIX: snake_case
+                    quran_memorization: student.grades.quranMemorization, // FIX: snake_case
+                }
+            };
+            
+            return {
+                id: student.id,
+                name: student.name,
+                national_id: student.nationalId,
+                phone: student.phone,
+                parent_phone: student.parentPhone,
+                photo: student.photo,
+                stars: (student.acquiredStars || 0) - (student.consumedStars || 0),
+                acquired_stars: student.acquiredStars,
+                consumed_stars: student.consumedStars,
+                recitation_history: student.recitation_history, 
+                grades: {
+                    period1: updatedFullGrades.period1,
+                    period2: updatedFullGrades.period2,
+                    weeklyNotes: student.grades.weeklyNotes, // NEW: حفظ الملاحظات على مستوى الجذر (موحدة)
+                },
+                grade_level: gradeId,
+                section: sectionId,
+                teacher_id: teacherId,
+            };
+        });
+
+        // 2. تحديث الحالة المحلية بالهيكل الجديد
+        const studentsWithUpdatedFullGrades = sortedStudents.map(s => {
+             const studentToUpdate = studentsToUpdate.find(u => u.id === s.id);
+             if (studentToUpdate) {
+                 const fullGradesData = studentToUpdate.grades;
+                 return { 
+                     ...s, 
+                     // تحديث fullGrades
+                     fullGrades: { period1: fullGradesData.period1, period2: fullGradesData.period2, weeklyNotes: fullGradesData.weeklyNotes },
+                     // تحديث الدرجات النشطة بما في ذلك الملاحظات الموحدة
+                     grades: { 
+                         ...s.grades, 
+                         weeklyNotes: fullGradesData.weeklyNotes,
+                         tests: fullGradesData[currentPeriod].tests,
+                         classInteraction: fullGradesData[currentPeriod].classInteraction, // NEW: تحديث التفاعل الصفي
+                         performanceTasks: fullGradesData[currentPeriod].performance_tasks,
+                         participation: fullGradesData[currentPeriod].participation,
+                         quranRecitation: fullGradesData[currentPeriod].quran_recitation, 
+                         quranMemorization: fullGradesData[currentPeriod].quran_memorization,
+                         homework: fullGradesData[currentPeriod].homework,
+                     }
+                 };
+             }
+             return s;
+        });
+        setStudents(studentsWithUpdatedFullGrades);
+
+
+        // 3. حفظ البيانات في Supabase
+        const { error } = await supabase
+            .from('students')
+            .upsert(studentsToUpdate, { onConflict: 'national_id' });
+
+        if (error) {
+            console.error("Error updating students data:", error);
+            handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات في قاعدة البيانات", "error");
+            fetchDataFromSupabase(); 
+        } else {
+            console.log("Students data saved successfully!");
+        }
+    } catch (error) {
+        console.error("Error updating students data:", error);
+        handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات في قاعدة البيانات", "error");
+    }
+  };
+
+  // دالة لتحديث منهج التلاوة (تم التعديل لدمج الفترتين)
+  const updateCurriculumData = async (updatedCurriculum) => {
+    // ... (الكود الأصلي هنا)
+    if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن حفظ المنهج. معرف المعلم غير متوفر.", "error");
+      return;
+    }
+    try {
+        // دمج المنهج الجديد في الهيكل الكامل للفترتين
+        const updatedFullCurriculum = {
+            ...fullCurriculum,
+            [currentPeriod]: updatedCurriculum // تحديث الفترة النشطة
+        };
+
+        const { error } = await supabase
+            .from('curriculum')
+            .upsert({
+                grade_level: gradeId,
+                section: sectionId,
+                recitation: updatedFullCurriculum, // حفظ الهيكل الكامل
+                homework: fullHomeworkCurriculum, // حفظ واجبات المنهج الحالي
+                teacher_id: teacherId,
+            }, { onConflict: 'grade_level,section' });
+
+        if (error) throw error;
+
+        setFullCurriculum(updatedFullCurriculum);
+        setCurriculum(updatedCurriculum); // تحديث الحالة المعروضة
+    } catch (error) {
+      console.error("Error updating curriculum:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء حفظ المنهج في قاعدة البيانات", "error");
+    }
+  };
+
+  // دالة لتحديث منهج الواجبات (تم التعديل لدمج الفترتين)
+  const updateHomeworkCurriculumData = async (updatedCurriculum) => {
+    // ... (الكود الأصلي هنا)
+    if (!teacherId) {
+      handleDialog("خطأ", "لا يمكن حفظ الواجبات. معرف المعلم غير متوفر.", "error");
+      return;
+    }
+    try {
+        // دمج المنهج الجديد في الهيكل الكامل للفترتين
+        const updatedFullHomeworkCurriculum = {
+            ...fullHomeworkCurriculum,
+            [currentPeriod]: updatedCurriculum // تحديث الفترة النشطة
+        };
+
+        const { error } = await supabase
+            .from('curriculum')
+            .upsert({
+                grade_level: gradeId,
+                section: sectionId,
+                recitation: fullCurriculum, // حفظ منهج التلاوة الحالي
+                homework: updatedFullHomeworkCurriculum, // حفظ الهيكل الكامل
+                teacher_id: teacherId,
+            }, { onConflict: 'grade_level,section' });
+
+        if (error) throw error;
+
+        setFullHomeworkCurriculum(updatedFullHomeworkCurriculum);
+        setHomeworkCurriculum(updatedCurriculum); // تحديث الحالة المعروضة
+    } catch (error) {
+      console.error("Error updating homework curriculum:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء حفظ واجبات المنهج في قاعدة البيانات", "error");
+    }
+  };
+
   const handleDeleteNote = (studentId, weekIndex, noteIndex) => {
+    // ... (الكود الأصلي هنا)
     handleDialog(
       "تأكيد الحذف",
       "هل أنت متأكد من حذف هذه الملاحظة؟",
@@ -532,6 +797,7 @@ const SectionGrades = () => {
   };
 
   const startCamera = async () => {
+    // ... (الكود الأصلي هنا)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -549,12 +815,14 @@ const SectionGrades = () => {
   };
 
   const stopCamera = () => {
+    // ... (الكود الأصلي هنا)
     if (videoRef.current && videoRef.current.srcObject) {
       videoRef.current.srcObject.getTracks().forEach(track => track.stop());
     }
   };
 
   const capturePhoto = () => {
+    // ... (الكود الأصلي هنا)
     if (videoRef.current && canvasRef.current) {
       const context = canvasRef.current.getContext('2d');
       canvasRef.current.width = videoRef.current.videoWidth;
@@ -572,6 +840,7 @@ const SectionGrades = () => {
   };
 
   const handleFileUpload = async (e, isNewStudent) => {
+    // ... (الكود الأصلي هنا)
     const file = e.target.files[0];
     if (file) {
       try {
@@ -600,6 +869,7 @@ const SectionGrades = () => {
   };
 
   const exportToExcel = async () => {
+    // تم تعديل هذه الدالة لتعكس المنطق الجديد للاحتساب
     try {
       const [{ utils, write }, { saveAs }] = await Promise.all([
         import('xlsx'),
@@ -607,13 +877,13 @@ const SectionGrades = () => {
       ]);
       
       const gradesHeaders = {
-        tests: ["اختبار 1 (15)", "اختبار 2 (15)"],
+        tests: ["اختبار 1 (20)", "اختبار 2 (20)"], 
         homework: Array.from({ length: 10 }, (_, i) => `واجب ${i + 1} (1)`),
-        performanceTasks: Array.from({ length: 5 }, (_, i) => `مهمة أدائية ${i + 1} (5)`),
+        performanceTasks: Array.from({ length: 4 }, (_, i) => `مهمة أدائية ${i + 1} (10)`), 
         participation: Array.from({ length: 10 }, (_, i) => `مشاركة ${i + 1} (1)`),
         quranRecitation: Array.from({ length: 5 }, (_, i) => `تلاوة ${i + 1} (10)`),
-        quranMemorization: Array.from({ length: 5 }, (_, i) => `حفظ ${i + 1} (5)`),
-        oralTest: Array.from({ length: 5 }, (_, i) => `اختبار شفوي ${i + 1} (5)`),
+        quranMemorization: Array.from({ length: 5 }, (_, i) => `حفظ ${i + 1} (10)`), 
+        classInteraction: Array.from({ length: 4 }, (_, i) => `تفاعل صفي ${i + 1} (10)`), 
       };
 
       const data = students.map(student => {
@@ -621,21 +891,37 @@ const SectionGrades = () => {
           'اسم الطالب': student.name,
           'السجل المدني': student.nationalId,
           'رقم ولي الأمر': student.parentPhone,
+          'الفترة النشطة': currentPeriod === 'period1' ? 'الأولى' : 'الثانية',
         };
 
         Object.keys(gradesHeaders).forEach(category => {
+          const categoryKey = category === 'classInteraction' ? 'classInteraction' : category;
           gradesHeaders[category].forEach((header, index) => {
-            studentRow[header] = student.grades[category]?.[index] ?? '';
+            studentRow[header] = student.grades[categoryKey]?.[index] ?? '';
           });
         });
 
-        studentRow['مجموع الاختبارات'] = calculateCategoryScore(student.grades, 'tests', testCalculationMethod);
+        // 1. الاختبارات: المجموع الكلي (Sum)
+        studentRow['مجموع الاختبارات'] = calculateCategoryScore(student.grades, 'tests', 'sum');
+
+        // 2. الواجبات: المجموع (Sum)
         studentRow['مجموع الواجبات'] = calculateCategoryScore(student.grades, 'homework', 'sum');
+
+        // 3. المهام الأدائية: أفضل درجة (Best)
         studentRow['مجموع المهام الأدائية'] = calculateCategoryScore(student.grades, 'performanceTasks', 'best');
+
+        // 4. المشاركات: المجموع (Sum)
         studentRow['مجموع المشاركات'] = calculateCategoryScore(student.grades, 'participation', 'sum');
-        studentRow['مجموع القرآن'] = (parseFloat(calculateCategoryScore(student.grades, 'quranRecitation', 'average')) + parseFloat(calculateCategoryScore(student.grades, 'quranMemorization', 'average'))).toFixed(2);
-        studentRow['مجموع الاختبار الشفوي'] = calculateCategoryScore(student.grades, 'oralTest', 'best');
-        studentRow['المجموع النهائي'] = calculateTotalScore(student.grades, testCalculationMethod);
+        
+        // 5. التفاعل الصفي: أفضل درجة (Best)
+        studentRow['مجموع التفاعل الصفي'] = calculateCategoryScore(student.grades, 'classInteraction', 'best');
+
+        // 6. القرآن: التلاوة (Average) + الحفظ (Average) (تم التعديل)
+        const quranRecitationScore = parseFloat(calculateCategoryScore(student.grades, 'quranRecitation', 'average'));
+        const quranMemorizationScore = parseFloat(calculateCategoryScore(student.grades, 'quranMemorization', 'average')); // التعديل: أصبح Average
+        studentRow['مجموع القرآن'] = (quranRecitationScore + quranMemorizationScore).toFixed(2);
+        
+        studentRow['المجموع النهائي'] = calculateTotalScore(student.grades, testCalculationMethod); 
         studentRow['النجوم الحالية'] = student.stars;
 
         return studentRow;
@@ -643,13 +929,13 @@ const SectionGrades = () => {
 
       const ws = utils.json_to_sheet(data);
       const wb = utils.book_new();
-      utils.book_append_sheet(wb, ws, "الطلاب والدرجات");
+      utils.book_append_sheet(wb, ws, `الطلاب والدرجات - الفترة ${currentPeriod === 'period1' ? 'الأولى' : 'الثانية'}`);
 
       const excelBuffer = write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([excelBuffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       });
-      saveAs(blob, `بيانات_ودرجات_${gradeName}_${sectionName}.xlsx`);
+      saveAs(blob, `بيانات_ودرجات_${gradeName}_${sectionName}_${currentPeriod}.xlsx`);
       handleDialog("نجاح", "تم تصدير الملف بنجاح!", "success");
     } catch (error) {
       handleDialog("خطأ", 'حدث خطأ أثناء تصدير الملف: ' + error.message, "error");
@@ -657,6 +943,7 @@ const SectionGrades = () => {
   };
 
   const handleFileImport = async (e) => {
+    // ... (الكود الأصلي هنا)
     const file = e.target.files[0];
     if (!file) return;
   
@@ -704,24 +991,23 @@ const SectionGrades = () => {
               continue;
             }
   
-            const newStudentEntry = {
+            // NEW: إنشاء هيكل درجات كامل
+            const emptyGrades = createEmptyGradesStructure();
+
+            const studentToAdd = {
               name: row['اسم الطالب'] || '',
-              nationalId: nationalId,
-              parentPhone: row['رقم ولي الأمر'] || '',
+              national_id: nationalId,
+              phone: row['رقم الهاتف'] || '',
+              parent_phone: row['رقم ولي الأمر'] || '',
               photo: row['صورة الطالب'] || '/images/1.webp',
               stars: 0,
               acquired_stars: 0,
               consumed_stars: 0,
               recitation_history: [],
               grades: {
-                tests: Array(2).fill(null),
-                homework: Array(10).fill(null),
-                performanceTasks: Array(5).fill(null),
-                participation: Array(10).fill(null),
-                quranRecitation: Array(5).fill(null),
-                quranMemorization: Array(5).fill(null),
-                oralTest: Array(5).fill(null),
-                weeklyNotes: Array(20).fill(null),
+                  period1: emptyGrades,
+                  period2: emptyGrades,
+                  weeklyNotes: Array(20).fill(null), // الملاحظات موحدة
               },
               absences: [],
               book_absences: [],
@@ -729,12 +1015,15 @@ const SectionGrades = () => {
               section: sectionId,
               teacher_id: teacherId,
             };
-            updatedStudents.push(newStudentEntry);
+            updatedStudents.push(studentToAdd);
             importedCount++;
           }
   
           if (importedCount > 0) {
-            await updateStudentsData(updatedStudents);
+            // لا نحتاج لـ updateStudentsData لأننا هنا نضيف طلاب جدد
+            const { error: insertError } = await supabase.from('students').insert(updatedStudents);
+            if (insertError) throw insertError;
+
             handleDialog("نجاح", `تم استيراد ${importedCount} طالب بنجاح!`, "success");
             fetchDataFromSupabase();
           }
@@ -760,6 +1049,7 @@ const SectionGrades = () => {
 
 
 const handleAddStudent = async () => {
+    // ... (الكود الأصلي هنا)
     if (!newStudent.name || !newStudent.nationalId) {
       handleDialog("خطأ", "يرجى إدخال الاسم والسجل المدني", "error");
       return;
@@ -785,6 +1075,9 @@ const handleAddStudent = async () => {
       if (fetchError && fetchError.code !== 'PGRST116') {
         throw fetchError;
       }
+      
+      // NEW: إنشاء هيكل درجات كامل
+      const emptyGrades = createEmptyGradesStructure();
 
       const studentToAdd = {
         name: newStudent.name,
@@ -797,14 +1090,9 @@ const handleAddStudent = async () => {
         consumed_stars: 0,
         recitation_history: [],
         grades: {
-          tests: Array(2).fill(null),
-          homework: Array(10).fill(null),
-          performanceTasks: Array(5).fill(null),
-          participation: Array(10).fill(null),
-          quranRecitation: Array(5).fill(null),
-          quranMemorization: Array(5).fill(null),
-          oralTest: Array(5).fill(null),
-          weeklyNotes: Array(20).fill(null),
+            period1: emptyGrades,
+            period2: emptyGrades,
+            weeklyNotes: Array(20).fill(null), // الملاحظات موحدة
         },
         grade_level: gradeId,
         section: sectionId,
@@ -829,19 +1117,20 @@ const handleAddStudent = async () => {
   };
 
   const updateStudentGrade = async (studentId, category, index, value) => {
+    // تم تعديل منطق تحديد الحد الأقصى
     const englishValue = convertToEnglishNumbers(value);
     const numValue = englishValue === '' ? null : Number(englishValue);
     let maxLimit = 0;
     let errorMessage = '';
 
     switch(category) {
-      case 'tests': maxLimit = 15; errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 15."; break;
-      case 'oralTest': maxLimit = 5; errorMessage = "خطأ: درجة الاختبار الشفوي لا يمكن أن تتجاوز 5."; break;
+      case 'tests': maxLimit = 20; errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 20."; break; // تم التعديل
+      case 'classInteraction': maxLimit = 10; errorMessage = "خطأ: درجة التفاعل الصفي لا يمكن أن تتجاوز 10."; break; // تم التعديل (مكان oralTest)
       case 'homework': maxLimit = 1; errorMessage = "خطأ: درجة الواجب لا يمكن أن تتجاوز 1."; break;
-      case 'performanceTasks': maxLimit = 5; errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 5."; break;
+      case 'performanceTasks': maxLimit = 10; errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 10."; break; // تم التعديل
       case 'participation': maxLimit = 1; errorMessage = "خطأ: درجة المشاركة لا يمكن أن تتجاوز 1."; break;
       case 'quranRecitation': maxLimit = 10; errorMessage = "خطأ: درجة تلاوة القرآن لا يمكن أن تتجاوز 10."; break;
-      case 'quranMemorization': maxLimit = 5; errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 5."; break;
+      case 'quranMemorization': maxLimit = 10; errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 10."; break; // تم التعديل
       default: break;
     }
     
@@ -849,7 +1138,7 @@ const handleAddStudent = async () => {
     if (numValue !== null && (numValue > maxLimit || numValue < 0)) {
       handleDialog("خطأ", errorMessage, "error");
       
-      // مسح القيمة من الحقل
+      // مسح القيمة من الحقل في الواجهة فقط
       const updatedStudents = students.map(s => {
         if (s.id === studentId) {
           const newGrades = [...(s.grades[category] || [])];
@@ -865,7 +1154,7 @@ const handleAddStudent = async () => {
         return s;
       });
       setStudents(updatedStudents);
-      await updateStudentsData(updatedStudents);
+      // لا نحتاج لـ updateStudentsData هنا لأن القيمة غير صالحة
       return;
     }
 
@@ -874,17 +1163,27 @@ const handleAddStudent = async () => {
         if (student.id === studentId) {
           const updatedGrades = { ...student.grades };
           if (Array.isArray(updatedGrades[category])) {
-            updatedGrades[category][index] = numValue;
+            // منطق إزالة المربعات من اليسار (إذا كان الحجم الحالي أكبر من الحجم المطلوب)
+            const requiredSize = updatedGrades[category].length; 
+            if (index < requiredSize) {
+                updatedGrades[category][index] = numValue;
+            }
           } else {
             updatedGrades[category] = numValue;
           }
+          
+          // تحديث بيانات الطالب المختار لتعكس التغيير فوراً
+          if (selectedStudent && selectedStudent.id === studentId) {
+             setSelectedStudent({ ...student, grades: updatedGrades });
+          }
+          
           return { ...student, grades: updatedGrades };
         }
         return student;
       });
 
       setStudents(updatedStudents);
-      await updateStudentsData(updatedStudents);
+      await updateStudentsData(updatedStudents); // الحفظ يتضمن منطق دمج الفترات
       const updatedSelectedStudent = updatedStudents.find(s => s.id === studentId);
       if (updatedSelectedStudent) { setSelectedStudent(updatedSelectedStudent); }
     } catch (error) {
@@ -894,6 +1193,7 @@ const handleAddStudent = async () => {
   };
 
   const updateStudentStars = async (updatedStudents) => {
+    // ... (الكود الأصلي هنا)
     try {
       const studentsWithCalculatedStars = updatedStudents.map(student => ({
         ...student,
@@ -916,6 +1216,7 @@ const handleAddStudent = async () => {
   };
 
   const updateRecitationData = async (updatedStudents) => {
+    // ... (الكود الأصلي هنا)
     try {
       await updateStudentsData(updatedStudents);
       const updatedSelectedStudent = updatedStudents.find(s => s.id === selectedStudent?.id);
@@ -927,6 +1228,7 @@ const handleAddStudent = async () => {
   };
 
   const updateNotesData = async (updatedStudents) => {
+    // ... (الكود الأصلي هنا)
     try {
       // قم بتحديث الحالة المحلية أولاً
       setStudents(updatedStudents);
@@ -944,12 +1246,15 @@ const handleAddStudent = async () => {
 
 
 const updateAbsenceData = async (updatedStudents) => {
+    // ... (الكود الأصلي هنا)
     if (!teacherId) {
       handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
       return;
     }
     try {
       for (const student of updatedStudents) {
+        // نحتاج إلى استخدام البيانات الأصلية من studentBaseData (student.id) للحفظ في الجداول المنفصلة
+        // ولكن لا يوجد studentBaseData هنا، لذا نعتمد على student.id
         const { error: deleteError } = await supabase
           .from('absences')
           .delete()
@@ -958,6 +1263,7 @@ const updateAbsenceData = async (updatedStudents) => {
         
         if (deleteError) throw deleteError;
         
+        // استخدام student.absences المعدل من الـ Modal
         const newAbsences = (student.absences || []).map(date => ({
           student_id: student.id,
           absence_date: date,
@@ -973,6 +1279,7 @@ const updateAbsenceData = async (updatedStudents) => {
         }
       }
       
+      // يجب إعادة جلب البيانات لضمان تحديث الـ state
       await fetchDataFromSupabase();
       handleDialog("نجاح", "تم تحديث بيانات الغياب بنجاح!", "success");
 
@@ -983,12 +1290,14 @@ const updateAbsenceData = async (updatedStudents) => {
   };
 
 const updateBookAbsenceData = async (updatedStudents) => {
+    // ... (الكود الأصلي هنا)
     if (!teacherId) {
       handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
       return;
     }
     try {
       for (const student of updatedStudents) {
+        // حذف جميع السجلات الحالية في جدول book_absences لهذا الطالب
         const { error: deleteError } = await supabase
           .from('book_absences')
           .delete()
@@ -997,6 +1306,7 @@ const updateBookAbsenceData = async (updatedStudents) => {
 
         if (deleteError) throw deleteError;
 
+        // إدراج السجلات الجديدة (المعدلة من الـ Modal)
         const newBookAbsences = (student.bookAbsences || []).map(date => ({
           student_id: student.id,
           absence_date: date,
@@ -1012,6 +1322,7 @@ const updateBookAbsenceData = async (updatedStudents) => {
         }
       }
       
+      // يجب إعادة جلب البيانات لضمان تحديث الـ state وعرضها بشكل صحيح في الـ Modal
       await fetchDataFromSupabase();
       handleDialog("نجاح", "تم تحديث بيانات عدم إحضار الكتاب بنجاح!", "success");
 
@@ -1022,6 +1333,7 @@ const updateBookAbsenceData = async (updatedStudents) => {
   };
 
   const getTroubledStudents = () => {
+    // ... (الكود الأصلي هنا)
     const troubled = new Set();
     students.forEach(student => {
       const homeworkStatus = taskStatusUtils(student, homeworkCurriculum, 'homework');
@@ -1048,6 +1360,7 @@ const updateBookAbsenceData = async (updatedStudents) => {
   };
 
   const handleEditStudent = async () => {
+    // ... (الكود الأصلي هنا)
     if (!editingStudent.name || !editingStudent.nationalId) {
       handleDialog("خطأ", "يرجى إدخال الاسم والسجل المدني", "error");
       return;
@@ -1086,6 +1399,7 @@ const updateBookAbsenceData = async (updatedStudents) => {
   };
 
   const handleQrClick = (student) => {
+    // ... (الكود الأصلي هنا)
     handleDialog(
       "تأكيد الانتقال",
       `هل تريد الانتقال إلى صفحة الطالب ${student.name}؟`,
@@ -1095,11 +1409,13 @@ const updateBookAbsenceData = async (updatedStudents) => {
   };
 
   const copyStudentLink = (viewKey) => {
+    // ... (الكود الأصلي هنا)
     navigator.clipboard.writeText(`${window.location.origin}${viewKey}`);
     handleDialog("نجاح", "تم نسخ الرابط بنجاح!", "success");
   };
 
   const dataURLToUint8Array = (dataURL) => {
+    // ... (الكود الأصلي هنا)
     const base64 = dataURL.split(',')[1];
     const binaryString = window.atob(base64);
     const len = binaryString.length;
@@ -1111,6 +1427,7 @@ const updateBookAbsenceData = async (updatedStudents) => {
   };
 
 const handleExportQRCodes = async () => {
+  // ... (الكود الأصلي هنا)
   try {
     handleDialog("جاري التصدير", "جاري إنشاء ملف الوورد، الرجاء الانتظار...", "info");
     const [{ Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell, WidthType, ImageRun, AlignmentType }, { toDataURL }, { saveAs }] = await Promise.all([
@@ -1199,7 +1516,7 @@ const handleExportQRCodes = async () => {
         properties: {},
         children: [
           new Paragraph({
-            text: `كشوفات طلاب ${gradeName} - ${sectionName}`,
+            text: `كشوفات طلاب ${gradeName} - ${sectionName} - الفترة ${currentPeriod === 'period1' ? 'الأولى' : 'الثانية'}`,
             heading: HeadingLevel.HEADING_1,
             alignment: AlignmentType.RIGHT
           }),
@@ -1209,19 +1526,25 @@ const handleExportQRCodes = async () => {
       });
     }
 
-    const doc = new Document({ sections });
+    // FIX: تم إصلاح خطأ doc.styles غير المعرف، وذلك بإزالة الكود
+    // doc.styles ...
+    // واستبداله بتهيئة بسيطة لـ Document
+    const doc = new Document({
+      sections: sections,
+    });
+
 
     Packer.toBlob(doc).then((blob) => {
-      saveAs(blob, `بيانات_ودرجات_${gradeId}_${sectionId}.docx`);
+      saveAs(blob, `بيانات_ودرجات_${gradeId}_${sectionId}_${currentPeriod}.docx`);
       handleDialog("نجاح", "تم تصدير الملف بنجاح!", "success");
     });
   } catch (error) {
-    console.error("Error exporting document:", error);
     handleDialog("خطأ", "حدث خطأ أثناء تصدير الملف. الرجاء المحاولة مرة أخرى.", "error");
     }
   };
 
   const handleDownloadImage = async () => {
+    // ... (الكود الأصلي هنا)
     handleDialog("جاري التنزيل", "الرجاء الانتظار، جاري تحويل ورقة القوائم إلى صورة...", "info");
     try {
       const [{ toPng }] = await Promise.all([
@@ -1240,10 +1563,12 @@ const handleExportQRCodes = async () => {
   };
 
   const handleUpdatePrizes = (updatedPrizes) => {
+    // ... (الكود الأصلي هنا)
     setPrizes(updatedPrizes);
   };
 
   const handleAddGrade = () => {
+    // ... (الكود الأصلي هنا)
     if (newGrade && selectedHomework) {
       const newGradeEntry = createGradeEntry(parseInt(newGrade, 10), sectionTitle, new Date().toISOString().slice(0, 10));
       onAddGrade(selectedHomework, newGradeEntry);
@@ -1255,11 +1580,13 @@ const handleExportQRCodes = async () => {
     }
   };
 
+  // تم تحديث الدوال لحساب المجموع الجديد (من 100)
   const totalScore = calculateTotalScore(grades.map(g => g.score));
   const averageScore = calculateAverage(grades.map(g => g.score));
   const performanceLevel = determinePerformanceLevel(averageScore);
 
   const handleResetDataClick = () => {
+    // ... (الكود الأصلي هنا)
     handleDialog(
       "تأكيد حذف البيانات",
       "هل أنت متأكد من حذف درجات وملاحظات جميع الطلاب؟ لا يمكن التراجع عن هذا الإجراء.",
@@ -1271,6 +1598,7 @@ const handleExportQRCodes = async () => {
   };
 
   const onVerificationSuccess = async (user) => {
+    // ... (الكود الأصلي هنا)
     if (user.id !== teacherId) {
       handleDialog("خطأ", "بيانات الاعتماد غير صحيحة أو لا تطابق حسابك.", "error");
       return;
@@ -1279,6 +1607,116 @@ const handleExportQRCodes = async () => {
     setShowVerificationModal(false);
     await resetStudentData(students, teacherId, handleDialog, fetchDataFromSupabase);
   };
+  
+  // ==========================================================
+  // NEW: دوال حساب المجاميع الفرعية
+  // ==========================================================
+
+  // 1. حساب التقييمات الرئيسية (الاختبارات + القرآن) (Max 60)
+  const calculateMajorAssessments = (grades) => {
+      // الاختبارات: المجموع (Max 40)
+      const testsScore = parseFloat(calculateCategoryScore(grades, 'tests', 'sum'));
+      // التلاوة: المتوسط (Max 10)
+      const recitationScore = parseFloat(calculateCategoryScore(grades, 'quranRecitation', 'average'));
+      // الحفظ: المتوسط (Max 10)
+      const memorizationScore = parseFloat(calculateCategoryScore(grades, 'quranMemorization', 'average'));
+
+      return (testsScore + recitationScore + memorizationScore).toFixed(2);
+  };
+
+  // 2. حساب أعمال السنة (Homework, Participation, Performance, Interaction) (Max 40)
+  const calculateCoursework = (grades) => {
+      // الواجبات: المجموع (Max 10)
+      const homeworkScore = parseFloat(calculateCategoryScore(grades, 'homework', 'sum'));
+      // المشاركة: المجموع (Max 10)
+      const participationScore = parseFloat(calculateCategoryScore(grades, 'participation', 'sum'));
+      // المهام الأدائية: أفضل درجة (Max 10)
+      const performanceScore = parseFloat(calculateCategoryScore(grades, 'performanceTasks', 'best'));
+      // التفاعل الصفي: أفضل درجة (Max 10)
+      const classInteractionScore = parseFloat(calculateCategoryScore(grades, 'classInteraction', 'best'));
+      
+      return (homeworkScore + participationScore + performanceScore + classInteractionScore).toFixed(2);
+  };
+  
+  // ==========================================================
+  // NEW: واجهة تحديد الفترة - تم تحديثها بالكامل
+  // ==========================================================
+  const PeriodSelectionScreen = () => (
+    // تم تعديل الخلفية من bg-gray-800 إلى تدرج لوني
+    <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 md:p-12 rounded-2xl shadow-[0_20px_50px_rgba(8,_112,_184,_0.7)] border-2 border-blue-600/50 max-w-lg mx-auto mt-10 md:mt-20 text-center animate-fadeIn">
+        <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400 mb-6 tracking-wider">
+            اختر فترة التقييم
+        </h2>
+        <p className="text-lg text-gray-300 mb-10 border-b border-gray-700 pb-6">
+            أنت الآن في فصل <strong className="text-blue-300">{gradeName} - {sectionName}</strong>.
+            يرجى اختيار الفترة التي تود العمل عليها.
+        </p>
+        <div className="flex flex-col gap-6">
+            <button
+                onClick={() => handlePeriodChange("period1")}
+                // تم تحديث تنسيقات الأزرار لتكون أكثر جاذبية
+                className={`w-full py-4 text-xl font-extrabold rounded-xl transition-all duration-300 transform hover:scale-[1.02] 
+                    shadow-xl flex items-center justify-center gap-3
+                    ${currentPeriod === "period1" 
+                        ? "bg-gradient-to-r from-green-600 to-teal-500 text-white shadow-green-700/50 ring-4 ring-teal-400/50" 
+                        : "bg-gray-700 text-green-400 hover:bg-gray-600 border border-green-500 hover:shadow-2xl hover:shadow-green-500/30"
+                    }`}
+            >
+                <FaCalendarAlt className="text-2xl" /> 
+                <span className="text-xl">الفترة</span>
+                <span className="text-lg">(الأولى)</span>
+            </button>
+            <button
+                onClick={() => handlePeriodChange("period2")}
+                // تم تحديث تنسيقات الأزرار لتكون أكثر جاذبية
+                className={`w-full py-4 text-xl font-extrabold rounded-xl transition-all duration-300 transform hover:scale-[1.02] 
+                    shadow-xl flex items-center justify-center gap-3
+                    ${currentPeriod === "period2" 
+                        ? "bg-gradient-to-r from-green-600 to-teal-500 text-white shadow-green-700/50 ring-4 ring-teal-400/50" 
+                        : "bg-gray-700 text-green-400 hover:bg-gray-600 border border-green-500 hover:shadow-2xl hover:shadow-green-500/30"
+                    }`}
+            >
+                <FaCalendarCheck className="text-2xl" /> 
+                <span className="text-xl">الفترة</span>
+                <span className="text-lg">(الثانية)</span>
+            </button>
+        </div>
+        <button
+          onClick={() => navigate(`/grades/${gradeId}`)}
+          className="mt-10 flex items-center justify-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-lg text-sm mx-auto hover:ring-2 ring-red-300"
+        >
+          <FaArrowLeft /> العودة للفصول
+        </button>
+    </div>
+  );
+  
+  if (showPeriodSelection) {
+      return (
+          <div className="p-4 md:p-8 max-w-8xl mx-auto font-['Noto_Sans_Arabic',sans-serif] text-right bg-gray-900 text-gray-100 min-h-screen" dir="rtl">
+              <header className="flex flex-col md:flex-row justify-center items-center bg-gray-800 p-4 md:p-6 shadow-lg rounded-xl mb-4 md:mb-8 border border-gray-700 text-center">
+                  <div className="flex items-center gap-2 md:gap-4 mb-4 md:mb-0">
+                      <div className="flex flex-col">
+                          <h1 className="text-xl md:text-3xl font-extrabold text-blue-400">{schoolName}</h1>
+                          <p className="text-sm md:text-lg font-medium text-gray-400">{teacherName}</p>
+                      </div>
+                      <img src="/images/moe_logo_white.png" alt="شعار وزارة التعليم" className="h-12 w-12 md:h-16 md:w-16" />
+                  </div>
+              </header>
+              <style>{`
+                /* Simple fade-in animation for the main container */
+                @keyframes fadeIn {
+                  from { opacity: 0; transform: translateY(10px); }
+                  to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fadeIn {
+                  animation: fadeIn 0.5s ease-out;
+                }
+              `}</style>
+              <PeriodSelectionScreen />
+          </div>
+      );
+  }
+
 
   return (
     <div className="p-4 md:p-8 max-w-8xl mx-auto font-['Noto_Sans_Arabic',sans-serif] text-right bg-gray-900 text-gray-100 min-h-screen" dir="rtl">
@@ -1295,6 +1733,20 @@ const handleExportQRCodes = async () => {
           <img src="/images/moe_logo_white.png" alt="شعار وزارة التعليم" className="h-12 w-12 md:h-16 md:w-16" />
         </div>
       </header>
+      
+      {/* ========================================================== */}
+      {/* زر الرجوع إلى واجهة تحديد الفترة */}
+      {/* ========================================================== */}
+      <div className="flex justify-start mb-4">
+        <button
+          onClick={() => setShowPeriodSelection(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors shadow-md text-sm"
+        >
+          <FaArrowLeft /> الرجوع لتحديد الفترة
+        </button>
+      </div>
+      {/* ========================================================== */}
+
 
       <div className="bg-gray-800 p-4 md:p-6 rounded-xl shadow-lg mb-4 md:mb-8 border border-gray-700">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3 md:gap-4">
@@ -1360,13 +1812,13 @@ const handleExportQRCodes = async () => {
             <FaExclamationTriangle /> كشف المتعثرين
           </button>
           <button
-            onClick={() => setShowAnnouncementsModal(true)} // New Button
+            onClick={() => setShowAnnouncementsModal(true)}
             className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-colors shadow-md text-xs md:text-sm"
           >
             <FaStickyNote /> إعلانات هامة
           </button>
           <button
-            onClick={() => setShowVisitLogModal(true)} // New Button
+            onClick={() => setShowVisitLogModal(true)}
             className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-400 transition-colors shadow-md text-xs md:text-sm"
           >
             <FaClock /> سجل الزيارات
@@ -1379,6 +1831,15 @@ const handleExportQRCodes = async () => {
           </button>
         </div>
       </div>
+
+      {/* ========================================================== */}
+      {/* الفترة الحالية (لإظهارها داخل الصفحة بعد التحديد) */}
+      {/* ========================================================== */}
+      <div className="flex justify-center gap-4 mb-4 bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700">
+        <h4 className="font-bold text-lg text-white">الفترة النشطة: {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'}</h4>
+      </div>
+      {/* ========================================================== */}
+
 
       <div className="flex flex-wrap justify-between items-center gap-4 mb-4 md:mb-6">
         <div className="relative flex items-center w-full md:w-auto mt-4 md:mt-0">
@@ -1551,7 +2012,7 @@ const handleExportQRCodes = async () => {
       {!showGradeSheet && !showBriefSheet && !showQrList && (
         <div className="bg-gray-800 p-4 md:p-6 rounded-xl shadow-lg border border-gray-700">
           <h3 className="text-xl md:text-2xl font-bold text-blue-400 text-right mb-4">
-            الطلاب في {gradeName} - {sectionName}
+            الطلاب في {gradeName} - {sectionName} (الفترة {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})
           </h3>
           <div className="flex flex-wrap justify-start gap-4 pb-4 md:pb-6 mb-4 md:mb-6">
             {filteredStudents.length === 0 ? (
@@ -1607,7 +2068,7 @@ const handleExportQRCodes = async () => {
           <div className="flex items-center gap-4 mb-6 pb-4 border-b border-gray-700">
             <div className="flex flex-col text-right">
               <h3 className="text-xl md:text-2xl font-bold text-blue-400">
-                درجات الطالب: {selectedStudent.name}
+                درجات الطالب: {selectedStudent.name} (الفترة {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})
               </h3>
               <p className="text-sm md:text-md text-gray-400">السجل المدني: {selectedStudent.nationalId}</p>
               <p className="text-sm md:text-md text-gray-400">رقم ولي الأمر: {selectedStudent.parentPhone}</p>
@@ -1617,18 +2078,42 @@ const handleExportQRCodes = async () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-4 md:gap-6">
+            
+            {/* 1. المجموع النهائي (100) */}
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
                   <h4 className="font-semibold text-gray-100">المجموع النهائي</h4>
-                  <span className="text-xl md:text-2xl font-bold text-green-500">{calculateTotalScore(selectedStudent.grades, testCalculationMethod)} / 60</span>
+                  <span className="text-xl md:text-2xl font-bold text-green-500">{calculateTotalScore(selectedStudent.grades, testCalculationMethod)} / 100</span>
                 </div>
                 <FaAward className="text-4xl text-green-400" />
               </div>
             </div>
 
-            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 col-span-1 flex flex-col items-center justify-center">
+            {/* 3. أعمال السنة (40) */}
+            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col text-right">
+                  <h4 className="font-semibold text-gray-100">المجموع الفرعي: (أعمال السنة)</h4>
+                  <span className="text-xl md:text-2xl font-bold text-yellow-400">{calculateCoursework(selectedStudent.grades)} / 40</span>
+                </div>
+                <FaTasks className="text-4xl text-yellow-400" />
+              </div>
+            </div>
+
+            {/* 2. التقييمات الرئيسية (الاختبارات + القرآن) (60) */}
+            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col text-right">
+                  <h4 className="font-semibold text-gray-100">المجموع الفرعي: (الاختبارات والقرآن)</h4>
+                  <span className="text-xl md:text-2xl font-bold text-blue-400">{calculateMajorAssessments(selectedStudent.grades)} / 60</span>
+                </div>
+                <FaBookOpen className="text-4xl text-blue-400" />
+              </div>
+            </div>
+            
+                        <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 col-span-1 flex flex-col items-center justify-center">
               <h4 className="font-semibold text-gray-100 text-lg mb-4">النجوم</h4>
               <div className="flex flex-col items-center justify-center w-full">
                 <div className="flex items-center gap-4 mb-4">
@@ -1678,12 +2163,15 @@ const handleExportQRCodes = async () => {
                 </div>
               </div>
             </div>
+            
+            {/* --- المجاميع الفرعية التفصيلية --- */}
 
             <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
                 <FaBookOpen className="text-3xl text-red-400" /> الاختبارات
                 <span className="text-red-400 font-bold mr-2 text-2xl">
-                  {calculateCategoryScore(selectedStudent.grades, 'tests', testCalculationMethod)} / 15
+                  {/* تم التعديل: استخدام المجموع الكلي 'sum' */}
+                  {calculateCategoryScore(selectedStudent.grades, 'tests', 'sum')} / 40
                 </span>
               </h4>
                           <div className="flex items-center gap-2 mb-2">
@@ -1694,19 +2182,21 @@ const handleExportQRCodes = async () => {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
+                {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
                 {selectedStudent.grades.tests.slice(0, 2).map((grade, i) => (
-                  <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-20 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
                 ))}
               </div>
             </div>
 
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
-                <FaMicrophone className="text-3xl text-yellow-400" /> الاختبار الشفوي  <span className="text-yellow-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'oralTest', 'best')} / 5</span>
+                <FaMicrophone className="text-3xl text-yellow-400" /> التفاعل الصفي  <span className="text-yellow-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'classInteraction', 'best')} / 10</span>
               </h4>
               <div className="flex flex-wrap gap-2">
-                {selectedStudent.grades.oralTest.slice(0, 5).map((grade, i) => (
-                  <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "oralTest", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
+                {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
+                {selectedStudent.grades.classInteraction.slice(0, 4).map((grade, i) => (
+                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "classInteraction", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
                 ))}
               </div>
             </div>
@@ -1726,8 +2216,9 @@ const handleExportQRCodes = async () => {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
+                {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
                 {selectedStudent.grades.homework.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
                 ))}
               </div>
             </div>
@@ -1736,7 +2227,7 @@ const handleExportQRCodes = async () => {
               <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
                 <FaPencilAlt className="text-3xl text-purple-400" /> المهام الأدائية
                 <span className="text-purple-400 font-bold mr-2 text-2xl">
-                  {calculateCategoryScore(selectedStudent.grades, 'performanceTasks', 'best')} / 5
+                  {calculateCategoryScore(selectedStudent.grades, 'performanceTasks', 'best')} / 10
                 </span>
               </h4>
               <div className="flex items-center gap-2 mb-2">
@@ -1747,12 +2238,13 @@ const handleExportQRCodes = async () => {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {selectedStudent.grades.performanceTasks.slice(0, 3).map((grade, i) => (
+                 {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
+                {selectedStudent.grades.performanceTasks.slice(0, 4).map((grade, i) => (
                   <input
                     key={i}
                     type="text"
                     inputMode="numeric"
-                    placeholder="--"
+                    placeholder={`--`}
                     value={grade === null ? '' : grade}
                     onChange={(e) => updateStudentGrade(selectedStudent.id, "performanceTasks", i, e.target.value)}
                     className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
@@ -1766,8 +2258,9 @@ const handleExportQRCodes = async () => {
                 <FaCommentDots className="text-3xl text-cyan-400" /> المشاركة  <span className="text-cyan-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'participation', 'sum')} / 10</span>
               </h4>
               <div className="flex flex-wrap gap-2">
+                {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
                 {selectedStudent.grades.participation.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="text" inputMode="numeric" placeholder="--" value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                 ))}
               </div>
             </div>
@@ -1776,7 +2269,8 @@ const handleExportQRCodes = async () => {
   <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
     <FaQuran className="text-3xl text-blue-400" /> القرآن الكريم
     <span className="text-blue-400 font-bold mr-2 text-2xl">
-      {(parseFloat(calculateCategoryScore(selectedStudent.grades, 'quranRecitation', 'average')) + parseFloat(calculateCategoryScore(selectedStudent.grades, 'quranMemorization', 'average'))).toFixed(2)} / 15
+      {/* تم التعديل: التلاوة (Average) + الحفظ (Average) */}
+      {(parseFloat(calculateCategoryScore(selectedStudent.grades, 'quranRecitation', 'average')) + parseFloat(calculateCategoryScore(selectedStudent.grades, 'quranMemorization', 'average'))).toFixed(2)} / 20
     </span>
   </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1790,12 +2284,13 @@ const handleExportQRCodes = async () => {
                     <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(selectedStudent.grades, 'quranRecitation', 'average')} / 10</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
                     {selectedStudent.grades.quranRecitation.slice(0, 5).map((grade, i) => (
                       <input
                         key={i}
                         type="text"
                         inputMode="numeric"
-                        placeholder="--"
+                        placeholder={`--`}
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranRecitation", i, e.target.value)}
                         className="w-12 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1810,15 +2305,17 @@ const handleExportQRCodes = async () => {
                     <span className={`text-sm ${getStatusInfo(selectedStudent, 'memorization', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(selectedStudent, 'memorization', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(selectedStudent, 'memorization', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
                       ({getStatusInfo(selectedStudent, 'memorization', curriculum).text})
                     </span>
-                    <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(selectedStudent.grades, 'quranMemorization', 'average')} / 5</span>
+                    {/* تم التعديل: أصبح Average */}
+                    <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(selectedStudent.grades, 'quranMemorization', 'average')} / 10</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
                     {selectedStudent.grades.quranMemorization.slice(0, 5).map((grade, i) => (
                       <input
                         key={i}
                         type="text"
                         inputMode="numeric"
-                        placeholder="--"
+                        placeholder={`--`}
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranMemorization", i, e.target.value)}
                         className="w-12 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1911,7 +2408,7 @@ const handleExportQRCodes = async () => {
         <NotesModal
           students={students}
           onClose={() => setShowNotesModal(false)}
-          onSave={updateStudentsData}
+          onSave={updateNotesData}
           onConfirmNotesClear={(action) => handleDialog("تأكيد الحذف", "هل أنت متأكد من حذف الملاحظات الأسبوعية للطلاب المحددين؟", "confirm", action)}
         />
       )}
@@ -1940,6 +2437,7 @@ const handleExportQRCodes = async () => {
         <CurriculumModal
           gradeId={gradeId}
           sectionId={sectionId}
+          currentPeriod={currentPeriod} // تمرير الفترة
           onClose={() => {
             setShowCurriculumModal(false);
             fetchDataFromSupabase();
@@ -1962,6 +2460,7 @@ const handleExportQRCodes = async () => {
         <HomeworkCurriculumModal
           gradeId={gradeId}
           sectionId={sectionId}
+          currentPeriod={currentPeriod} // تمرير الفترة
           onClose={() => {
             setShowHomeworkCurriculumModal(false);
             fetchDataFromSupabase();
@@ -2035,7 +2534,7 @@ const handleExportQRCodes = async () => {
             fetchDataFromSupabase();
         }}
         onSave={updateAbsenceData}
-        handleDialog={handleDialog} // <--- أضف هذا السطر
+        handleDialog={handleDialog}
     />
 )}
 
@@ -2047,19 +2546,11 @@ const handleExportQRCodes = async () => {
             fetchDataFromSupabase();
         }}
         onSave={updateBookAbsenceData}
-        handleDialog={handleDialog} // <--- أضف هذا السطر
+        handleDialog={handleDialog}
     />
 )}
+      {/* **الاستدعاء الصحيح لمودال الطلاب المتعثرين (تم حل مشكلة التنسيق)** */}
       {showTroubledStudentsModal && (
-        <TroubledStudentsModal
-          students={students}
-          onClose={() => setShowTroubledStudentsModal(false)}
-          homeworkCurriculum={homeworkCurriculum}
-          recitationCurriculum={curriculum}
-          getTroubledStudents={getTroubledStudents}
-        />
-      )}
-          {showTroubledStudentsModal && (
         <TroubledStudentsModal
           students={students}
           onClose={() => setShowTroubledStudentsModal(false)}
@@ -2067,17 +2558,20 @@ const handleExportQRCodes = async () => {
           recitationCurriculum={curriculum}
           gradeName={gradeName}
           sectionName={sectionName}
+          onSave={updateNotesData} 
+          // **هنا تم تمرير الدالة handleDialog**
+          handleDialog={handleDialog} 
         />
       )}
 
-{showHomeworkModal && (
-  <HomeworkModal
-    students={students}
-    onClose={() => setShowHomeworkModal(false)}
-    onSave={updateStudentsData}
-    homeworkCurriculum={homeworkCurriculum}
-  />
-)}
+      {showHomeworkModal && (
+        <HomeworkModal
+          students={students}
+          onClose={() => setShowHomeworkModal(false)}
+          onSave={updateStudentsData}
+          homeworkCurriculum={homeworkCurriculum}
+        />
+      )}
 
       {showVerificationModal && (
         <VerificationModal
