@@ -1,5 +1,4 @@
 // src/pages/SectionGrades.jsx
-// ... (باقي الاستيرادات والدوال المساعدة كما هي)
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import NotesModal from "../components/NotesModal";
@@ -401,7 +400,8 @@ const SectionGrades = () => {
             const oldPeriod1 = {
                 tests: ensureGradesArraySize(oldGradesWithoutNotes.tests, 2),
                 homework: ensureGradesArraySize(oldGradesWithoutNotes.homework, 10),
-                performanceTasks: ensureGradesArraySize(oldGradesWithoutNotes.performanceTasks, 4), 
+                // **تأكيد قراءة المهام الأدائية من المفتاحين (camelCase أو snake_case)**
+                performanceTasks: ensureGradesArraySize(oldGradesWithoutNotes.performanceTasks || oldGradesWithoutNotes.performance_tasks, 4), 
                 participation: ensureGradesArraySize(oldGradesWithoutNotes.participation, 10),
                 // FIX: قراءة الحقول بالصيغة snake_case أو camelCase (للتوافق)
                 quranRecitation: ensureGradesArraySize(oldGradesWithoutNotes.quranRecitation || oldGradesWithoutNotes.quran_recitation, 5),
@@ -420,7 +420,8 @@ const SectionGrades = () => {
                 period1: {
                     tests: ensureGradesArraySize(grades.period1?.tests, 2),
                     homework: ensureGradesArraySize(grades.period1?.homework, 10),
-                    performanceTasks: ensureGradesArraySize(grades.period1?.performanceTasks, 4),
+                     // **تأكيد قراءة المهام الأدائية من المفتاحين (camelCase أو snake_case)**
+                    performanceTasks: ensureGradesArraySize(grades.period1?.performanceTasks || grades.period1?.performance_tasks, 4),
                     participation: ensureGradesArraySize(grades.period1?.participation, 10),
                     // FIX: قراءة الحقول بالصيغة snake_case أو camelCase (للتوافق)
                     quranRecitation: ensureGradesArraySize(grades.period1?.quranRecitation || grades.period1?.quran_recitation, 5),
@@ -431,7 +432,8 @@ const SectionGrades = () => {
                 period2: {
                     tests: ensureGradesArraySize(grades.period2?.tests, 2),
                     homework: ensureGradesArraySize(grades.period2?.homework, 10),
-                    performanceTasks: ensureGradesArraySize(grades.period2?.performanceTasks, 4),
+                     // **تأكيد قراءة المهام الأدائية من المفتاحين (camelCase أو snake_case)**
+                    performanceTasks: ensureGradesArraySize(grades.period2?.performanceTasks || grades.period2?.performance_tasks, 4),
                     participation: ensureGradesArraySize(grades.period2?.participation, 10),
                     // FIX: قراءة الحقول بالصيغة snake_case أو camelCase (للتوافق)
                     quranRecitation: ensureGradesArraySize(grades.period2?.quranRecitation || grades.period2?.quran_recitation, 5),
@@ -448,10 +450,10 @@ const SectionGrades = () => {
           // تعيين حقول الدرجات (في الـ State) مع الأحجام الجديدة
           tests: activeGrades?.tests,
           homework: activeGrades?.homework,
-          performanceTasks: activeGrades?.performanceTasks, 
+          performanceTasks: activeGrades?.performanceTasks, // الدرجات النشطة
           participation: activeGrades?.participation,
-          quranRecitation: activeGrades?.quranRecitation, // FIX: استخدام الحقل الذي تم تهيئته بشكل صحيح
-          quranMemorization: activeGrades?.quranMemorization, // FIX: استخدام الحقل الذي تم تهيئته بشكل صحيح
+          quranRecitation: activeGrades?.quranRecitation, 
+          quranMemorization: activeGrades?.quranMemorization, 
           classInteraction: activeGrades?.classInteraction, 
           weeklyNotes: ensureGradesArraySize(weeklyNotes, 20), // استخدام الملاحظات الموحدة
         };
@@ -588,10 +590,7 @@ const SectionGrades = () => {
 
   // دالة لتحديث بيانات الطلاب في Supabase (تم التعديل لدمج الفترتين)
   const updateStudentsData = async (updatedStudents) => {
-    // ... (لم يتم تغيير منطق الحفظ هنا، ويعمل بشكل سليم مع الفترات)
-  // دالة لتحديث بيانات الطلاب في Supabase (تم التعديل لدمج الفترتين)
-  // ... (الكود الأصلي هنا)
-  if (!teacherId) {
+    if (!teacherId) {
       handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
       return;
     }
@@ -609,7 +608,7 @@ const SectionGrades = () => {
                     tests: student.grades.tests,
                     classInteraction: student.grades.classInteraction, // NEW: حفظ التفاعل الصفي
                     homework: student.grades.homework,
-                    performance_tasks: student.grades.performanceTasks, // FIX: snake_case
+                    performance_tasks: student.grades.performanceTasks, // **الحفظ بصيغة snake_case ليتوافق مع DB**
                     participation: student.grades.participation,
                     quran_recitation: student.grades.quranRecitation, // FIX: snake_case
                     quran_memorization: student.grades.quranMemorization, // FIX: snake_case
@@ -638,11 +637,13 @@ const SectionGrades = () => {
             };
         });
 
-        // 2. تحديث الحالة المحلية بالهيكل الجديد
+        // 2. تحديث الحالة المحلية بالهيكل الجديد (لضمان التزامن الفوري)
         const studentsWithUpdatedFullGrades = sortedStudents.map(s => {
              const studentToUpdate = studentsToUpdate.find(u => u.id === s.id);
              if (studentToUpdate) {
                  const fullGradesData = studentToUpdate.grades;
+                 const activePeriodGradesFromDB = fullGradesData[currentPeriod];
+
                  return { 
                      ...s, 
                      // تحديث fullGrades
@@ -651,13 +652,14 @@ const SectionGrades = () => {
                      grades: { 
                          ...s.grades, 
                          weeklyNotes: fullGradesData.weeklyNotes,
-                         tests: fullGradesData[currentPeriod].tests,
-                         classInteraction: fullGradesData[currentPeriod].classInteraction, // NEW: تحديث التفاعل الصفي
-                         performanceTasks: fullGradesData[currentPeriod].performance_tasks,
-                         participation: fullGradesData[currentPeriod].participation,
-                         quranRecitation: fullGradesData[currentPeriod].quran_recitation, 
-                         quranMemorization: fullGradesData[currentPeriod].quran_memorization,
-                         homework: fullGradesData[currentPeriod].homework,
+                         tests: activePeriodGradesFromDB.tests,
+                         classInteraction: activePeriodGradesFromDB.classInteraction, 
+                         // **التعديل لضمان قراءة المفتاح المحفوظ (performance_tasks) وتعيينه للحالة المحلية (performanceTasks)**
+                         performanceTasks: activePeriodGradesFromDB.performance_tasks,
+                         participation: activePeriodGradesFromDB.participation,
+                         quranRecitation: activePeriodGradesFromDB.quran_recitation, 
+                         quranMemorization: activePeriodGradesFromDB.quran_memorization,
+                         homework: activePeriodGradesFromDB.homework,
                      }
                  };
              }
@@ -902,26 +904,35 @@ const SectionGrades = () => {
         });
 
         // 1. الاختبارات: المجموع الكلي (Sum)
-        studentRow['مجموع الاختبارات'] = calculateCategoryScore(student.grades, 'tests', 'sum');
+        const testsScore = parseFloat(calculateCategoryScore(student.grades, 'tests', 'sum'));
+        studentRow['مجموع الاختبارات (40)'] = testsScore;
 
         // 2. الواجبات: المجموع (Sum)
-        studentRow['مجموع الواجبات'] = calculateCategoryScore(student.grades, 'homework', 'sum');
+        const homeworkScore = parseFloat(calculateCategoryScore(student.grades, 'homework', 'sum'));
+        studentRow['مجموع الواجبات (10)'] = homeworkScore;
 
         // 3. المهام الأدائية: أفضل درجة (Best)
-        studentRow['مجموع المهام الأدائية'] = calculateCategoryScore(student.grades, 'performanceTasks', 'best');
+        const performanceScore = parseFloat(calculateCategoryScore(student.grades, 'performanceTasks', 'best'));
+        studentRow['مجموع المهام الأدائية (10)'] = performanceScore;
 
         // 4. المشاركات: المجموع (Sum)
-        studentRow['مجموع المشاركات'] = calculateCategoryScore(student.grades, 'participation', 'sum');
+        const participationScore = parseFloat(calculateCategoryScore(student.grades, 'participation', 'sum'));
+        studentRow['مجموع المشاركات (10)'] = participationScore;
         
         // 5. التفاعل الصفي: أفضل درجة (Best)
-        studentRow['مجموع التفاعل الصفي'] = calculateCategoryScore(student.grades, 'classInteraction', 'best');
+        const classInteractionScore = parseFloat(calculateCategoryScore(student.grades, 'classInteraction', 'best'));
+        studentRow['مجموع التفاعل الصفي (10)'] = classInteractionScore;
 
         // 6. القرآن: التلاوة (Average) + الحفظ (Average) (تم التعديل)
         const quranRecitationScore = parseFloat(calculateCategoryScore(student.grades, 'quranRecitation', 'average'));
-        const quranMemorizationScore = parseFloat(calculateCategoryScore(student.grades, 'quranMemorization', 'average')); // التعديل: أصبح Average
-        studentRow['مجموع القرآن'] = (quranRecitationScore + quranMemorizationScore).toFixed(2);
+        const quranMemorizationScore = parseFloat(calculateCategoryScore(student.grades, 'quranMemorization', 'average')); 
+        studentRow['مجموع التلاوة (10)'] = quranRecitationScore.toFixed(2);
+        studentRow['مجموع الحفظ (10)'] = quranMemorizationScore.toFixed(2);
+        studentRow['مجموع القرآن (20)'] = (quranRecitationScore + quranMemorizationScore).toFixed(2);
         
-        studentRow['المجموع النهائي'] = calculateTotalScore(student.grades, testCalculationMethod); 
+        // **الإصلاح للمجموع النهائي:**
+        const totalScore = testsScore + homeworkScore + performanceScore + participationScore + classInteractionScore + quranRecitationScore + quranMemorizationScore;
+        studentRow['المجموع النهائي (100)'] = totalScore.toFixed(2);
         studentRow['النجوم الحالية'] = student.stars;
 
         return studentRow;
@@ -1581,9 +1592,7 @@ const handleExportQRCodes = async () => {
   };
 
   // تم تحديث الدوال لحساب المجموع الجديد (من 100)
-  const totalScore = calculateTotalScore(grades.map(g => g.score));
-  const averageScore = calculateAverage(grades.map(g => g.score));
-  const performanceLevel = determinePerformanceLevel(averageScore);
+  // **تم إزالة الدوال الغير مستخدمة**
 
   const handleResetDataClick = () => {
     // ... (الكود الأصلي هنا)
@@ -1609,7 +1618,7 @@ const handleExportQRCodes = async () => {
   };
   
   // ==========================================================
-  // NEW: دوال حساب المجاميع الفرعية
+  // NEW: دوال حساب المجاميع الفرعية (لحل مشكلة المجموع النهائي)
   // ==========================================================
 
   // 1. حساب التقييمات الرئيسية (الاختبارات + القرآن) (Max 60)
@@ -1636,6 +1645,31 @@ const handleExportQRCodes = async () => {
       const classInteractionScore = parseFloat(calculateCategoryScore(grades, 'classInteraction', 'best'));
       
       return (homeworkScore + participationScore + performanceScore + classInteractionScore).toFixed(2);
+  };
+  
+  // **حل مشكلة المجموع النهائي: استخدام المجاميع الفرعية الجديدة**
+  const calculateFinalTotalScore = (grades) => {
+      const majorAssessments = parseFloat(calculateMajorAssessments(grades));
+      const coursework = parseFloat(calculateCoursework(grades));
+      
+      // يجب إضافة الواجبات والقرآن من أعمال السنة الكبرى لحساب المجموع الكلي (100)
+      // المجموع = الاختبارات (40) + الواجبات (10) + المهام الأدائية (10) + المشاركة (10) + التفاعل الصفي (10) + التلاوة (10) + الحفظ (10) = 100
+      
+      // نعتمد على دالة calculateTotalScore الأصلية في gradeUtils للتأكد
+      const totalScoreFromUtils = parseFloat(calculateTotalScore(grades, testCalculationMethod));
+      
+      // نستخدم الحساب اليدوي لضمان التوافق مع الشاشة الجديدة
+      const testsScore = parseFloat(calculateCategoryScore(grades, 'tests', 'sum'));
+      const recitationScore = parseFloat(calculateCategoryScore(grades, 'quranRecitation', 'average'));
+      const memorizationScore = parseFloat(calculateCategoryScore(grades, 'quranMemorization', 'average'));
+      const homeworkScore = parseFloat(calculateCategoryScore(grades, 'homework', 'sum'));
+      const participationScore = parseFloat(calculateCategoryScore(grades, 'participation', 'sum'));
+      const performanceScore = parseFloat(calculateCategoryScore(grades, 'performanceTasks', 'best'));
+      const classInteractionScore = parseFloat(calculateCategoryScore(grades, 'classInteraction', 'best'));
+
+      const finalTotal = testsScore + recitationScore + memorizationScore + homeworkScore + participationScore + performanceScore + classInteractionScore;
+      
+      return finalTotal.toFixed(2);
   };
   
   // ==========================================================
@@ -2085,7 +2119,8 @@ const handleExportQRCodes = async () => {
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
                   <h4 className="font-semibold text-gray-100">المجموع النهائي</h4>
-                  <span className="text-xl md:text-2xl font-bold text-green-500">{calculateTotalScore(selectedStudent.grades, testCalculationMethod)} / 100</span>
+                  {/* **تطبيق دالة الحساب الجديدة/المؤكدة للمجموع النهائي** */}
+                  <span className="text-xl md:text-2xl font-bold text-green-500">{calculateFinalTotalScore(selectedStudent.grades)} / 100</span>
                 </div>
                 <FaAward className="text-4xl text-green-400" />
               </div>
@@ -2472,7 +2507,7 @@ const handleExportQRCodes = async () => {
       {showGradeSheet && (
         <GradesSheet
           students={students}
-          calculateTotalScore={calculateTotalScore}
+          calculateTotalScore={calculateFinalTotalScore} // استخدام دالة الحساب الجديدة
           calculateCategoryScore={calculateCategoryScore}
           gradeName={gradeName}
           sectionName={sectionName}
@@ -2493,7 +2528,7 @@ const handleExportQRCodes = async () => {
       {showBriefSheet && (
         <BriefSheet
           students={students}
-          calculateTotalScore={calculateTotalScore}
+          calculateTotalScore={calculateFinalTotalScore} // استخدام دالة الحساب الجديدة
           calculateCategoryScore={calculateCategoryScore}
           gradeName={gradeName}
           sectionName={sectionName}
