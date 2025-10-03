@@ -4,6 +4,8 @@ import { FaBookOpen, FaStickyNote, FaSave, FaTimes, FaCheckCircle, FaTimesCircle
 import { getRecitationStatus } from '../utils/recitationUtils';
 
 const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
+    // تم الإبقاء على الوضع الافتراضي 'note' لتجنب كسر منطق الإضافة المخصص
+    // لكن سيتم فرض العرض على أساس وضع الملاحظات فقط بعد حذف أزرار التبديل.
     const [mode, setMode] = useState('note'); // 'recitation' or 'note'
     const [recitationType, setRecitationType] = useState('memorization');
     
@@ -238,34 +240,8 @@ const noteTemplates = [
                             <FaBookOpen />
                             تلاوة القرآن
                         </button>
-                        <button
-                            onClick={() => {
-                                setMode('note');
-                                setNoteType('custom');
-                            }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                mode === 'note' && noteType === 'custom'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                            }`}
-                        >
-                            <FaStickyNote />
-                            ملاحظة مخصصة
-                        </button>
-                        <button
-                            onClick={() => {
-                                setMode('note');
-                                setNoteType('template');
-                            }}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                                mode === 'note' && noteType === 'template'
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                            }`}
-                        >
-                            <FaStickyNote />
-                            ملاحظة جاهزة
-                        </button>
+                        {/* تم حذف زر ملاحظة مخصصة */}
+                        {/* تم حذف زر ملاحظة جاهزة */}
                     </div>
 
                     {/* Student Status Display Section */}
@@ -308,6 +284,7 @@ const noteTemplates = [
                     </div>
 
                     {/* Action Section */}
+                    {/* سيتم إبقاء هذا القسم على حاله لغرض إضافة الملاحظات */}
                     <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
                         <h4 className="text-lg font-bold mb-4 text-gray-100">إضافة ملاحظة</h4>
                         <>
@@ -347,6 +324,7 @@ const noteTemplates = [
                                         placeholder="اكتب ملاحظة..."
                                         rows="4"
                                         className="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        style={{ touchAction: 'manipulation' }}
                                     ></textarea>
                                 </div>
                             ) : (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FaClock } from "react-icons/fa"; 
 
 // دالة تحويل الأرقام (لم تتغير)
@@ -41,8 +41,8 @@ const StudentRowComponent = ({
                     inputMode="numeric"
                     value={student.grades[category]?.[i] ?? ''} 
                     onChange={(e) => handleGradeChange(student.id, category, i, e.target.value)}
-                    // تم التعديل: w-16 إلى w-10 و p-2 إلى p-1 لتصغير المربعات في الجوال
-                    className={`w-10 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
+                    className={`w-10 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500 text-sm`}
+                    style={{ touchAction: 'manipulation' }}
                 />
             </td>
         ));
@@ -483,7 +483,7 @@ const GradesModal = ({
                     <h3 className="text-xl font-bold text-red-400 mb-4">{title}</h3>
                     <p className="text-gray-300 mb-6">{message}</p>
                     <button
-                        onClick={onClose}
+                        onClick={() => onClose()}
                         className="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
                     >
                         فهمت
@@ -521,6 +521,7 @@ const GradesModal = ({
                     value={searchQueries.tests}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{ touchAction: 'manipulation' }}
                 />
             </div>
             {/* تم إزالة خيار طريقة الاحتساب من الاختبارات لأنها أصبحت مجموع (Sum) */}
@@ -544,7 +545,8 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    style={{ touchAction: 'manipulation' }}
                 />
                 <button
                     onClick={applyBatchGrade}
@@ -591,6 +593,7 @@ const GradesModal = ({
                     value={searchQueries.classInteraction}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    style={{ touchAction: 'manipulation' }}
                 />
             </div>
             <div className="flex flex-col md:flex-row items-center gap-4">
@@ -614,7 +617,8 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                    style={{ touchAction: 'manipulation' }}
                 />
                 <button
                     onClick={applyBatchGrade}
@@ -662,6 +666,7 @@ const GradesModal = ({
                     value={searchQueries.homework}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    style={{ touchAction: 'manipulation' }}
                 />
             </div>
             <div className="flex flex-col md:flex-row items-center gap-4">
@@ -685,7 +690,8 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    style={{ touchAction: 'manipulation' }}
                 />
                 <button
                     onClick={applyBatchGrade}
@@ -732,6 +738,7 @@ const GradesModal = ({
                     value={searchQueries.performanceTasks}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    style={{ touchAction: 'manipulation' }}
                 />
             </div>
             <div className="flex flex-col md:flex-row items-center gap-4">
@@ -755,7 +762,8 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                    style={{ touchAction: 'manipulation' }}
                 />
                 <button
                     onClick={applyBatchGrade}
@@ -802,6 +810,7 @@ const GradesModal = ({
                     value={searchQueries.participation}
                     onChange={handleSearchChange}
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    style={{ touchAction: 'manipulation' }}
                 />
             </div>
             <div className="flex flex-col md:flex-row items-center gap-4">
@@ -810,7 +819,8 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm"
+                    style={{ touchAction: 'manipulation' }}
                 />
                 <button
                     onClick={applyBatchGrade}
@@ -857,6 +867,7 @@ const GradesModal = ({
                     value={searchQueries[category]}
                     onChange={handleSearchChange}
                     className={`w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-${color}-500`}
+                    style={{ touchAction: 'manipulation' }}
                 />
             </div>
             <div className="flex flex-col md:flex-row items-center gap-4">
@@ -880,7 +891,8 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    className={`w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
+                    className={`w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500 text-sm`}
+                    style={{ touchAction: 'manipulation' }}
                 />
                 <button
                     onClick={applyBatchGrade}
