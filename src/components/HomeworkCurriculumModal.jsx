@@ -80,6 +80,7 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose })
         fetchHomeworkCurriculum();
     }, [gradeId, sectionId, currentPeriod]);
 
+    // **الدالة المعدلة لإخفاء الخيارات المضافة**
     const getOptionsForType = (type) => {
         let count = 0;
         let prefix = '';
@@ -94,15 +95,24 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose })
             prefix = 'اختبار ';
         }
         
-        const existingNames = homeworkCurriculum.filter(p => p.type === type).map(p => p.name);
+        // استخراج أسماء المهام الموجودة من نفس النوع، مع استثناء المهمة التي يتم تعديلها حالياً
+        const existingNames = homeworkCurriculum
+            .filter(p => p.type === type)
+            .filter(p => !editingPart || p.id !== editingPart.id) // تجاهل المهمة التي يتم تعديلها
+            .map(p => p.name);
         
         const options = [];
         for (let i = 1; i <= count; i++) {
             const optionName = `${prefix}${i}`;
-            options.push(optionName);
+            
+            // إضافة الاسم للقائمة فقط إذا لم يكن موجوداً بالفعل
+            if (!existingNames.includes(optionName)) {
+                options.push(optionName);
+            }
         }
         return options;
     };
+    // **نهاية الدالة المعدلة**
 
     const handleAddPart = async () => {
         if (!newPart.name || !newPart.dueDate) return;
@@ -137,7 +147,8 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose })
             if (error) throw error;
             
             setHomeworkCurriculum(newHomeworkCurriculumPart);
-            setNewPart({ name: '', type: 'homework', dueDate: getHijriToday() });
+            // إعادة تعيين 'name' لتظهر القائمة المنسدلة محدثة
+            setNewPart({ name: '', type: 'homework', dueDate: getHijriToday() }); 
 
         } catch (error) {
             console.error("Error adding homework curriculum part:", error);
@@ -225,6 +236,11 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose })
             if (error) throw error;
             
             setHomeworkCurriculum(updatedHomeworkCurriculum);
+            // إذا كان يتم تعديل العنصر المحذوف، يجب إعادة تعيين وضع التعديل
+            if (editingPart && editingPart.id === id) {
+                setEditingPart(null);
+                setNewPart({ name: '', type: 'homework', dueDate: getHijriToday() });
+            }
         } catch (error) {
             console.error("Error deleting homework curriculum part:", error);
         } finally {
