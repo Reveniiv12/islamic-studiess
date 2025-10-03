@@ -74,7 +74,6 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
             value={newAnnouncement}
             onChange={(e) => setNewAnnouncement(e.target.value)}
             className="flex-grow p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-right text-sm"
-            style={{ touchAction: 'manipulation' }}
           />
           <button
             onClick={handleAddAnnouncement}

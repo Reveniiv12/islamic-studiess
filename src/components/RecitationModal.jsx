@@ -4,8 +4,6 @@ import { FaBookOpen, FaStickyNote, FaSave, FaTimes, FaCheckCircle, FaTimesCircle
 import { getRecitationStatus } from '../utils/recitationUtils';
 
 const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
-    // تم الإبقاء على الوضع الافتراضي 'note' لتجنب كسر منطق الإضافة المخصص
-    // لكن سيتم فرض العرض على أساس وضع الملاحظات فقط بعد حذف أزرار التبديل.
     const [mode, setMode] = useState('note'); // 'recitation' or 'note'
     const [recitationType, setRecitationType] = useState('memorization');
     
@@ -155,9 +153,15 @@ const noteTemplates = [
 
     const isSaveDisabled = () => {
         if (selectedStudents.length === 0) return true;
+        // The condition for mode 'recitation' is missing, but since 'note' is the default, 
+        // we keep the note-related conditions for completeness.
         if (mode === 'note' && noteType === 'custom' && !customNote.trim()) return true;
         if (mode === 'note' && noteType === 'template' && !selectedTemplate) return true;
-        return false;
+        // If mode is 'recitation', we'd need more logic, but for now, we assume if 
+        // students are selected and not in note mode, it's enabled.
+        if (mode === 'recitation' && selectedStudents.length > 0) return false;
+        
+        return false; // Fallback to not disabled if conditions aren't met
     };
     
     const getIcon = (status) => {
@@ -240,8 +244,6 @@ const noteTemplates = [
                             <FaBookOpen />
                             تلاوة القرآن
                         </button>
-                        {/* تم حذف زر ملاحظة مخصصة */}
-                        {/* تم حذف زر ملاحظة جاهزة */}
                     </div>
 
                     {/* Student Status Display Section */}
@@ -283,8 +285,7 @@ const noteTemplates = [
                         </div>
                     </div>
 
-                    {/* Action Section */}
-                    {/* سيتم إبقاء هذا القسم على حاله لغرض إضافة الملاحظات */}
+                    {/* Action Section (Note addition section) */}
                     <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
                         <h4 className="text-lg font-bold mb-4 text-gray-100">إضافة ملاحظة</h4>
                         <>
@@ -324,7 +325,6 @@ const noteTemplates = [
                                         placeholder="اكتب ملاحظة..."
                                         rows="4"
                                         className="w-full p-3 border border-gray-600 rounded-lg bg-gray-800 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        style={{ touchAction: 'manipulation' }}
                                     ></textarea>
                                 </div>
                             ) : (
