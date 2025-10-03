@@ -1,8 +1,58 @@
 // src/components/NotesModal.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { FaPlus, FaTrash } from 'react-icons/fa';
 
-// تأكد من استقبال الخاصية الجديدة هنا
+// ----------------------------------------------------------------------
+// 1. مكون فرعي مُذَكَّر لعرض قائمة الطلاب (Memoized Component)
+// ----------------------------------------------------------------------
+
+const StudentListRenderer = ({ students, selectedStudents, toggleSelectAll, toggleStudent, allStudentsSelected }) => {
+    return (
+        <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
+            <h4 className="font-semibold text-gray-100 mb-4">الطلاب</h4>
+            <div className="flex items-center mb-4 pb-2 border-b border-gray-600">
+                <input
+                    type="checkbox"
+                    checked={allStudentsSelected}
+                    onChange={toggleSelectAll}
+                    className="accent-blue-500 ml-2"
+                />
+                <label className="font-semibold text-gray-300">تحديد الكل</label>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+                {(students || []).map(student => (
+                    <div
+                        key={student.id}
+                        className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${selectedStudents.includes(student.id) ? 'bg-gray-600' : 'hover:bg-gray-600'}`}
+                        onClick={() => toggleStudent(student.id)}
+                    >
+                        {/* الإضافة المطلوبة: عرض صورة الطالب */}
+                        <img 
+                            src={student.photo || '/images/1.webp'} 
+                            alt={student.name} 
+                            className="w-8 h-8 rounded-full object-cover border border-gray-500 ml-2"
+                        />
+                        <input
+                            type="checkbox"
+                            checked={selectedStudents.includes(student.id)}
+                            readOnly
+                            className="accent-blue-500 ml-2"
+                        />
+                        <span className="text-gray-100">{student.name}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// استخدام React.memo لمنع إعادة تصيير هذا المكون ما لم تتغير خصائصه الضرورية
+const MemoizedStudentList = memo(StudentListRenderer);
+
+// ----------------------------------------------------------------------
+// 2. المكون الرئيسي NotesModal (تم تطبيق useCallback على الدوال الممررة)
+// ----------------------------------------------------------------------
+
 const NotesModal = ({ students = [], onClose, onSave, onConfirmNotesClear }) => {
   const [currentWeek, setCurrentWeek] = useState(1);
   const [noteType, setNoteType] = useState('custom');
@@ -15,16 +65,15 @@ const noteTemplates = [
   { id: 'excellent', text: 'أداء ممتاز ومتفوق' },
   { id: 'sleeping', text: 'يغلب عليه النوم في الفصل' },
   { id: 'distracted', text: 'غير منتبه أثناء الشرح' },
-  { id: 'late_general', text: 'يتأخر في الحضور' }, // تم تعديل الـ id لتفادي تكرار استخدام 'late'
+  { id: 'late_general', text: 'يتأخر في الحضور' }, 
   { id: 'improved', text: 'ظهر تحسن ملحوظ في الأداء' },
-  // العبارات الجديدة
   { id: 'late_note1', text: 'لوحظ عليك التأخر في الحضور للحصة الدراسية - ارجو الاهتمام' },
   { id: 'late_note2', text: 'التأخر عن الحصة الدراسية يؤثر سلباً على مستواك الدراسي - ارجو الاهتمام' },
   { id: 'quran_hw_thank', text: 'شكرا لك على حرصك واهتمامك بحل واجبات مادة القرآن الكريم والدراسات الإسلامية في منصة مدرستي' },
   { id: 'quran_hw_attention', text: 'ارجو الاهتمام بحل واجبات مادة القرآن الكريم والدراسات الإسلامية في منصة مدرستي' },
   { id: 'quran_hw_missing', text: 'لوحظ عليك عدم حل واجب مادة القرآن الكريم والدراسات الإسلامية - ارجو الاهتمام بحل الواجبات في منصة مدرستي' },
   { id: 'eating', text: 'لوحظ عليك تناول الطعام أثناء الدرس بدون استئذان - ارجو الالتزام والاهتمام' },
-  { id: 'sleeping_note', text: 'نوم أثناء الحصة الدراسية' }, // تم إضافة id جديد
+  { id: 'sleeping_note', text: 'نوم أثناء الحصة الدراسية' }, 
   { id: 'missing_book', text: 'عدم الاهتمام بإحضار الكتاب في الحصة الدراسية' },
   { id: 'missing_quran', text: 'عدم الاهتمام بإحضار القرآن الكريم في الحصة الدراسية' },
   { id: 'talking', text: 'كثرة كلام وإشغال زملائك عن الدرس' }
@@ -119,22 +168,32 @@ const noteTemplates = [
     });
   };
 
-  const toggleSelectAll = () => {
+    // استخدام useCallback لضمان ثبات مرجع الدالة عند تمريره للمكون المذكر
+  const toggleSelectAll = useCallback(() => {
     if (allStudentsSelected) {
       setSelectedStudents([]);
     } else {
       setSelectedStudents((students || []).map(s => s.id));
     }
-    setAllStudentsSelected(!allStudentsSelected);
-  };
+    setAllStudentsSelected(prev => !prev);
+  }, [allStudentsSelected, students]);
 
-  const toggleStudent = (studentId) => {
-    if (selectedStudents.includes(studentId)) {
-      setSelectedStudents(selectedStudents.filter(id => id !== studentId));
-    } else {
-      setSelectedStudents([...selectedStudents, studentId]);
-    }
-  };
+  // استخدام useCallback لضمان ثبات مرجع الدالة عند تمريره للمكون المذكر
+  const toggleStudent = useCallback((studentId) => {
+    setSelectedStudents(prevSelected => {
+        const isSelected = prevSelected.includes(studentId);
+        const newSelected = isSelected
+            ? prevSelected.filter(id => id !== studentId)
+            : [...prevSelected, studentId];
+        
+        // تحديث حالة تحديد الكل
+        const allCurrentlySelected = students.length > 0 && newSelected.length === students.length;
+        setAllStudentsSelected(allCurrentlySelected);
+
+        return newSelected;
+    });
+  }, [students.length]);
+
 
   const isAddNoteDisabled = () => {
     return selectedStudents.length === 0 ||
@@ -239,35 +298,18 @@ const noteTemplates = [
               </div>
             </div>
 
-            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-              <h4 className="font-semibold text-gray-100 mb-4">الطلاب</h4>
-              <div className="flex items-center mb-4 pb-2 border-b border-gray-600">
-                <input
-                  type="checkbox"
-                  checked={allStudentsSelected}
-                  onChange={toggleSelectAll}
-                  className="accent-blue-500 ml-2"
-                />
-                <label className="font-semibold text-gray-300">تحديد الكل</label>
-              </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {(students || []).map(student => (
-                  <div
-                    key={student.id}
-                    className={`flex items-center p-2 rounded-lg cursor-pointer transition-colors ${selectedStudents.includes(student.id) ? 'bg-gray-600' : 'hover:bg-gray-600'}`}
-                    onClick={() => toggleStudent(student.id)}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedStudents.includes(student.id)}
-                      readOnly
-                      className="accent-blue-500 ml-2"
-                    />
-                    <span className="text-gray-100">{student.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* ---------------------------------------------------------------------- */}
+            {/* استخدام المكون المذّكر MemoizedStudentList هنا */}
+            {/* ---------------------------------------------------------------------- */}
+            <MemoizedStudentList
+                students={students}
+                selectedStudents={selectedStudents}
+                toggleSelectAll={toggleSelectAll}
+                toggleStudent={toggleStudent}
+                allStudentsSelected={allStudentsSelected}
+            />
+            {/* ---------------------------------------------------------------------- */}
+            
           </div>
         </div>
 
