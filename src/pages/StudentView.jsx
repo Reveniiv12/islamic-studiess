@@ -518,6 +518,25 @@ function StudentView() {
       return (homeworkScore + participationScore + performanceScore + classInteractionScore).toFixed(2);
   };
   
+  // **الدالة النهائية للمجموع الكلي (مطابقة للصفحة الأم)**
+  const calculateFinalTotalScore = (grades) => {
+      // التقييمات الرئيسية (60)
+      const testsScore = parseFloat(calculateCategoryScore(grades, 'tests', 'sum')); // Max 40
+      const recitationScore = parseFloat(calculateCategoryScore(grades, 'quranRecitation', 'average')); // Max 10
+      const memorizationScore = parseFloat(calculateCategoryScore(grades, 'quranMemorization', 'average')); // Max 10
+
+      // أعمال السنة (40)
+      const homeworkScore = parseFloat(calculateCategoryScore(grades, 'homework', 'sum')); // Max 10
+      const participationScore = parseFloat(calculateCategoryScore(grades, 'participation', 'sum')); // Max 10
+      const performanceScore = parseFloat(calculateCategoryScore(grades, 'performanceTasks', 'best')); // Max 10
+      const classInteractionScore = parseFloat(calculateCategoryScore(grades, 'classInteraction', 'best')); // Max 10
+
+      // المجموع الكلي (100)
+      const finalTotal = testsScore + recitationScore + memorizationScore + homeworkScore + participationScore + performanceScore + classInteractionScore;
+
+      return finalTotal.toFixed(2);
+  };
+
   return (
     <div className="p-4 md:p-8 bg-gray-900 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100" dir="rtl">
       {/* الشريط العلوي */}
@@ -637,9 +656,9 @@ function StudentView() {
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
                   <h4 className="font-semibold text-gray-100">المجموع النهائي</h4>
-                  {/* تم التعديل: المجموع النهائي من 100 */}
+                  {/* **التعديل هنا: استخدام دالة calculateFinalTotalScore الموحدة** */}
                   <span className="text-xl md:text-2xl font-bold text-green-500">
-                    {calculateTotalScore(studentData.grades, testCalculationMethod)} / 100
+                    {calculateFinalTotalScore(studentData.grades)} / 100
                   </span>
                 </div>
                 <FaAward className="text-4xl text-green-400" />
