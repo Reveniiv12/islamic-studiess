@@ -255,7 +255,15 @@ const noteTemplates = [
 
                                 <div className="flex flex-col flex-grow">
                                     <div className="flex items-center gap-3 w-full">
-                                        <FaUserCircle className="text-gray-400 text-3xl" />
+                                        {/* ========================================================= */}
+                                        {/* الإضافة المطلوبة: عرض صورة الطالب */}
+                                        {/* ========================================================= */}
+                                        <img 
+                                            src={item.student.photo || '/images/1.webp'} 
+                                            alt={item.student.name} 
+                                            className="w-10 h-10 rounded-full object-cover border-2 border-gray-400"
+                                        />
+                                        {/* ========================================================= */}
                                         <div className="flex flex-col">
                                             <span className="text-lg font-semibold text-gray-200">{item.student.name}</span>
                                             <span className="text-sm text-gray-400">({gradeName} - {sectionName})</span>
