@@ -20,17 +20,30 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
 
     const [selectedStudents, setSelectedStudents] = useState([]);
 
-    const noteTemplates = [
-        { id: 'excellent', text: 'أداء ممتاز ومتفوق' },
-        { id: 'sleeping', text: 'يغلب عليه النوم في الفصل' },
-        { id: 'distracted', text: 'غير منتبه أثناء الشرح' },
-        { id: 'late_arrival', text: 'يتأخر في الحضور' },
-        { id: 'improved', text: 'ظهر تحسن ملحوظ في الأداء' },
-        { id: 'tlaawa_excellent', text: 'تلاوة ممتازة' },
-        { id: 'tlaawa_needs_work', text: 'يحتاج تحسين في التلاوة' },
-        { id: 'memorization_excellent', text: 'حفظ ممتاز' },
-        { id: 'memorization_needs_work', text: 'يحتاج تحسين في الحفظ' }
-    ];
+const noteTemplates = [
+    // العبارات الأصلية
+    { id: 'excellent', text: 'أداء ممتاز ومتفوق' },
+    { id: 'sleeping_general', text: 'يغلب عليه النوم في الفصل' }, // تم تعديل ID لتجنب التكرار
+    { id: 'distracted', text: 'غير منتبه أثناء الشرح' },
+    { id: 'late_arrival', text: 'يتأخر في الحضور' },
+    { id: 'improved', text: 'ظهر تحسن ملحوظ في الأداء' },
+    { id: 'tlaawa_excellent', text: 'تلاوة ممتازة' },
+    { id: 'tlaawa_needs_work', text: 'يحتاج تحسين في التلاوة' },
+    { id: 'memorization_excellent', text: 'حفظ ممتاز' },
+    { id: 'memorization_needs_work', text: 'يحتاج تحسين في الحفظ' },
+
+    // العبارات الجديدة المُضافة
+    { id: 'late_note1', text: 'لوحظ عليك التأخر في الحضور للحصة الدراسية - ارجو الاهتمام' },
+    { id: 'late_note2', text: 'التأخر عن الحصة الدراسية يؤثر سلباً على مستواك الدراسي - ارجو الاهتمام' },
+    { id: 'quran_hw_thank', text: 'شكرا لك على حرصك واهتمامك بحل واجبات مادة القرآن الكريم والدراسات الإسلامية في منصة مدرستي' },
+    { id: 'quran_hw_attention', text: 'ارجو الاهتمام بحل واجبات مادة القرآن الكريم والدراسات الإسلامية في منصة مدرستي' },
+    { id: 'quran_hw_missing', text: 'لوحظ عليك عدم حل واجب مادة القرآن الكريم والدراسات الإسلامية - ارجو الاهتمام بحل الواجبات في منصة مدرستي' },
+    { id: 'eating_in_class', text: 'لوحظ عليك تناول الطعام أثناء الدرس بدون استئذان - ارجو الالتزام والاهتمام' },
+    { id: 'sleeping_in_class', text: 'نوم أثناء الحصة الدراسية' },
+    { id: 'missing_book', text: 'عدم الاهتمام بإحضار الكتاب في الحصة الدراسية' },
+    { id: 'missing_quran', text: 'عدم الاهتمام بإحضار القرآن الكريم في الحصة الدراسية' },
+    { id: 'talking_disruptive', text: 'كثرة كلام وإشغال زملائك عن الدرس' }
+];
 
     useEffect(() => {
         const notMemorized = [];
