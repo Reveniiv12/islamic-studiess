@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
-// إضافة FaClock للاستفادة منها إذا لزم الأمر في التبويبات
 import { FaClock } from "react-icons/fa"; 
 
-// دالة تحويل الأرقام
+// دالة تحويل الأرقام (لم تتغير)
 const convertToEnglishNumbers = (input) => {
     if (input === null || input === undefined) {
         return null;
@@ -17,6 +16,142 @@ const convertToEnglishNumbers = (input) => {
 };
 
 
+// ----------------------------------------------------------------------
+// المكون المُذَكَّر (Memoized Component) لصف الطالب الواحد
+// ----------------------------------------------------------------------
+
+const StudentRowComponent = ({ 
+    student, 
+    activeTab, 
+    handleGradeChange, 
+    calculateCategoryScore, 
+    selectedStudents, 
+    toggleStudentSelection,
+    inputCount
+}) => {
+
+    const isSelected = selectedStudents.includes(student.id);
+
+    // دالة مساعدة لتوليد حقول إدخال الدرجات
+    const renderGradeInputs = (category, color, count) => {
+        return Array(count).fill(0).map((_, i) => (
+            <td key={`${category}_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    value={student.grades[category]?.[i] ?? ''} 
+                    onChange={(e) => handleGradeChange(student.id, category, i, e.target.value)}
+                    className={`w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
+                />
+            </td>
+        ));
+    };
+
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'tests':
+                return (
+                    <React.Fragment>
+                        {renderGradeInputs('tests', 'blue', 2)}
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
+                            {calculateCategoryScore(student, 'tests')}
+                        </td>
+                    </React.Fragment>
+                );
+            case 'classInteraction':
+                return (
+                    <React.Fragment>
+                        {renderGradeInputs('classInteraction', 'yellow', 4)}
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
+                            {calculateCategoryScore(student, 'classInteraction')}
+                        </td>
+                    </React.Fragment>
+                );
+            case 'homework':
+                return (
+                    <React.Fragment>
+                        {renderGradeInputs('homework', 'purple', 10)}
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
+                            {calculateCategoryScore(student, 'homework')}
+                        </td>
+                    </React.Fragment>
+                );
+            case 'performanceTasks':
+                return (
+                    <React.Fragment>
+                        {renderGradeInputs('performanceTasks', 'orange', 4)}
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
+                            {calculateCategoryScore(student, 'performanceTasks')}
+                        </td>
+                    </React.Fragment>
+                );
+            case 'participation':
+                return (
+                    <React.Fragment>
+                        {renderGradeInputs('participation', 'cyan', 10)}
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
+                            {calculateCategoryScore(student, 'participation')}
+                        </td>
+                    </React.Fragment>
+                );
+            case 'quranRecitation':
+                return (
+                    <React.Fragment>
+                        {renderGradeInputs('quranRecitation', 'indigo', 5)}
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
+                            {calculateCategoryScore(student, 'quranRecitation')}
+                        </td>
+                    </React.Fragment>
+                );
+            case 'quranMemorization':
+                return (
+                    <React.Fragment>
+                        {renderGradeInputs('quranMemorization', 'emerald', 5)}
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
+                            {calculateCategoryScore(student, 'quranMemorization')}
+                        </td>
+                    </React.Fragment>
+                );
+            default:
+                return null;
+        }
+    };
+
+
+    return (
+        <tr className="hover:bg-gray-700 transition-colors group">
+            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
+                <div className="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleStudentSelection(student.id)}
+                        className="accent-blue-500"
+                    />
+                    {/* ========================================================= */}
+                    {/* الإضافة المطلوبة: عرض صورة الطالب */}
+                    {/* ========================================================= */}
+                    <img 
+                        src={student.photo || '/images/1.webp'} 
+                        alt={student.name} 
+                        className="w-8 h-8 rounded-full object-cover border border-gray-600"
+                    />
+                    {/* ========================================================= */}
+                    <span className="truncate text-gray-100">{student.name}</span>
+                </div>
+            </td>
+            {renderContent()}
+        </tr>
+    );
+};
+
+// تذكير المكون: لن يتم إعادة تصييره إلا إذا تغيرت خصائصه (student object)
+const MemoizedStudentRow = React.memo(StudentRowComponent);
+
+// ----------------------------------------------------------------------
+// المكون الرئيسي GradesModal (تم تبسيط دوال العرض لاستخدام StudentRow)
+// ----------------------------------------------------------------------
+
 const GradesModal = ({
     students,
     onClose,
@@ -24,6 +159,7 @@ const GradesModal = ({
     testCalculationMethod: propTestCalculationMethod,
     onTestCalculationMethodChange
 }) => {
+    
     // تم تغيير 'oralTest' إلى 'classInteraction' لتمثيل التفاعل الصفي
     const initialTabs = ['tests', 'homework', 'performanceTasks', 'participation', 'quranRecitation', 'quranMemorization', 'classInteraction'];
     
@@ -115,7 +251,8 @@ const GradesModal = ({
         setSearchQueries(prev => ({ ...prev, [activeTab]: e.target.value }));
     };
 
-    const handleGradeChange = (studentId, category, index, value) => {
+    // تم تغليف هذه الدالة بـ useCallback للحفاظ على مرجع دالة ثابت
+    const handleGradeChange = React.useCallback((studentId, category, index, value) => {
         // استخدام دالة التحويل لدعم الأرقام العربية
         const englishValue = convertToEnglishNumbers(value);
         const numericValue = englishValue === '' ? null : Number(englishValue);
@@ -181,9 +318,10 @@ const GradesModal = ({
                 return student;
             })
         );
-    };
+    }, [setCustomDialog]);
 
-    const calculateCategoryScore = (student, category) => {
+    // تم تغليف هذه الدالة بـ useCallback للحفاظ على مرجع دالة ثابت
+    const calculateCategoryScore = React.useCallback((student, category) => {
         if (!student.grades || !student.grades[category]) return 0;
 
         const grades = student.grades[category].filter(g => g !== null && g !== undefined && g !== '');
@@ -206,7 +344,7 @@ const GradesModal = ({
         }
 
         return sum.toFixed(2);
-    };
+    }, []);
 
     const toggleSelectAll = () => {
         if (selectedStudentsPerTab[activeTab].length === filteredStudents.length) {
@@ -217,14 +355,16 @@ const GradesModal = ({
         }
     };
 
-    const toggleStudentSelection = (studentId) => {
+    // تم تغليف هذه الدالة بـ useCallback للحفاظ على مرجع دالة ثابت
+    const toggleStudentSelection = React.useCallback((studentId) => {
         setSelectedStudentsPerTab(prev => {
             const newSelected = prev[activeTab].includes(studentId)
                 ? prev[activeTab].filter(id => id !== studentId)
                 : [...prev[activeTab], studentId];
             return { ...prev, [activeTab]: newSelected };
         });
-    };
+    }, [activeTab]);
+
 
     const handleBatchGradeChange = (e) => {
         setBatchGrade(e.target.value);
@@ -352,6 +492,24 @@ const GradesModal = ({
         );
     };
 
+    const renderStudentsTableBody = (category, count) => (
+        <tbody className="bg-gray-800 divide-y divide-gray-700">
+            {filteredStudents.map(student => (
+                <MemoizedStudentRow 
+                    key={student.id} 
+                    student={student} 
+                    activeTab={category} 
+                    handleGradeChange={handleGradeChange}
+                    calculateCategoryScore={calculateCategoryScore}
+                    selectedStudents={selectedStudentsPerTab[category]}
+                    toggleStudentSelection={toggleStudentSelection}
+                    inputCount={count}
+                />
+            ))}
+        </tbody>
+    );
+
+
     const renderTests = () => (
         <div className="space-y-4">
             <div className="mb-4">
@@ -385,7 +543,6 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    placeholder="درجة..."
                     className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
@@ -416,44 +573,7 @@ const GradesModal = ({
                             <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-gray-800 divide-y divide-gray-700">
-                        {filteredStudents.map(student => (
-                            <tr key={student.id} className="hover:bg-gray-700 transition-colors group">
-                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedStudentsPerTab.tests.includes(student.id)}
-                                            onChange={() => toggleStudentSelection(student.id)}
-                                            className="accent-blue-500"
-                                        />
-                                        <span className="truncate text-gray-100">{student.name}</span>
-                                    </div>
-                                </td>
-                                <td className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        value={student.grades.tests[0] ?? ''}
-                                        onChange={(e) => handleGradeChange(student.id, 'tests', 0, e.target.value)}
-                                        className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </td>
-                                <td className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        value={student.grades.tests[1] ?? ''}
-                                        onChange={(e) => handleGradeChange(student.id, 'tests', 1, e.target.value)}
-                                        className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </td>
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
-                                    {calculateCategoryScore(student, 'tests')}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
+                    {renderStudentsTableBody('tests', 2)}
                 </table>
             </div>
         </div>
@@ -493,7 +613,6 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    placeholder="درجة..."
                     className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
                 <button
@@ -525,37 +644,7 @@ const GradesModal = ({
                             <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">أفضل درجة </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-gray-800 divide-y divide-gray-700">
-                        {filteredStudents.map(student => (
-                            <tr key={student.id} className="hover:bg-gray-700 transition-colors group">
-                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedStudentsPerTab.classInteraction.includes(student.id)}
-                                            onChange={() => toggleStudentSelection(student.id)}
-                                            className="accent-blue-500"
-                                        />
-                                        <span className="truncate text-gray-100">{student.name}</span>
-                                    </div>
-                                </td>
-                                {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
-                                    <td key={`classInteraction_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            value={student.grades.classInteraction?.[i] ?? ''}
-                                            onChange={(e) => handleGradeChange(student.id, 'classInteraction', i, e.target.value)}
-                                            className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                        />
-                                    </td>
-                                ))}
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
-                                    {calculateCategoryScore(student, 'classInteraction')}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
+                    {renderStudentsTableBody('classInteraction', 4)}
                 </table>
             </div>
         </div>
@@ -595,7 +684,6 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    placeholder="درجة..."
                     className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
                 />
                 <button
@@ -627,37 +715,7 @@ const GradesModal = ({
                             <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-gray-800 divide-y divide-gray-700">
-                        {filteredStudents.map(student => (
-                            <tr key={student.id} className="hover:bg-gray-700 transition-colors group">
-                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedStudentsPerTab.homework.includes(student.id)}
-                                            onChange={() => toggleStudentSelection(student.id)}
-                                            className="accent-blue-500"
-                                        />
-                                        <span className="truncate text-gray-100">{student.name}</span>
-                                    </div>
-                                </td>
-                                {[...Array(10)].map((_, i) => (
-                                    <td key={`hw_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            value={student.grades.homework[i] ?? ''}
-                                            onChange={(e) => handleGradeChange(student.id, 'homework', i, e.target.value)}
-                                            className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-                                        />
-                                    </td>
-                                ))}
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
-                                    {calculateCategoryScore(student, 'homework')}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
+                    {renderStudentsTableBody('homework', 10)}
                 </table>
             </div>
         </div>
@@ -696,7 +754,6 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    placeholder="درجة..."
                     className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
                 <button
@@ -728,37 +785,7 @@ const GradesModal = ({
                             <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">أفضل درجة </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-gray-800 divide-y divide-gray-700">
-                        {filteredStudents.map(student => (
-                            <tr key={student.id} className="hover:bg-gray-700 transition-colors group">
-                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedStudentsPerTab.performanceTasks.includes(student.id)}
-                                            onChange={() => toggleStudentSelection(student.id)}
-                                            className="accent-blue-500"
-                                        />
-                                        <span className="truncate text-gray-100">{student.name}</span>
-                                    </div>
-                                </td>
-                                {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
-                                    <td key={`pt_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            value={student.grades.performanceTasks[i] ?? ''}
-                                            onChange={(e) => handleGradeChange(student.id, 'performanceTasks', i, e.target.value)}
-                                            className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                        />
-                                    </td>
-                                ))}
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
-                                    {calculateCategoryScore(student, 'performanceTasks')}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
+                    {renderStudentsTableBody('performanceTasks', 4)}
                 </table>
             </div>
         </div>
@@ -782,7 +809,6 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    placeholder="درجة..."
                     className="w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
                 <button
@@ -814,37 +840,7 @@ const GradesModal = ({
                             <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-gray-800 divide-y divide-gray-700">
-                        {filteredStudents.map(student => (
-                            <tr key={student.id} className="hover:bg-gray-700 transition-colors group">
-                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedStudentsPerTab.participation.includes(student.id)}
-                                            onChange={() => toggleStudentSelection(student.id)}
-                                            className="accent-blue-500"
-                                        />
-                                        <span className="truncate text-gray-100">{student.name}</span>
-                                    </div>
-                                </td>
-                                {[...Array(10)].map((_, i) => (
-                                    <td key={`part_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            value={student.grades.participation[i] ?? ''}
-                                            onChange={(e) => handleGradeChange(student.id, 'participation', i, e.target.value)}
-                                            className="w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                        />
-                                    </td>
-                                ))}
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
-                                    {calculateCategoryScore(student, 'participation')}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
+                    {renderStudentsTableBody('participation', 10)}
                 </table>
             </div>
         </div>
@@ -883,7 +879,6 @@ const GradesModal = ({
                     inputMode="numeric"
                     value={batchGrade}
                     onChange={handleBatchGradeChange}
-                    placeholder="درجة..."
                     className={`w-24 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
                 />
                 <button
@@ -915,37 +910,7 @@ const GradesModal = ({
                             <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-gray-800 divide-y divide-gray-700">
-                        {filteredStudents.map(student => (
-                            <tr key={student.id} className="hover:bg-gray-700 transition-colors group">
-                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedStudentsPerTab[category].includes(student.id)}
-                                            onChange={() => toggleStudentSelection(student.id)}
-                                            className="accent-blue-500"
-                                        />
-                                        <span className="truncate text-gray-100">{student.name}</span>
-                                    </div>
-                                </td>
-                                {[...Array(count)].map((_, i) => (
-                                    <td key={`input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            value={student.grades[category]?.[i] ?? ''}
-                                            onChange={(e) => handleGradeChange(student.id, category, i, e.target.value)}
-                                            className={`w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
-                                        />
-                                    </td>
-                                ))}
-                                <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
-                                    {calculateCategoryScore(student, category)}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
+                    {renderStudentsTableBody(category, count)}
                 </table>
             </div>
         </div>
