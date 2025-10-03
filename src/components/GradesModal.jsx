@@ -41,7 +41,8 @@ const StudentRowComponent = ({
                     inputMode="numeric"
                     value={student.grades[category]?.[i] ?? ''} 
                     onChange={(e) => handleGradeChange(student.id, category, i, e.target.value)}
-                    className={`w-16 p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
+                    // تم التعديل: w-16 إلى w-10 و p-2 إلى p-1 لتصغير المربعات في الجوال
+                    className={`w-10 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
                 />
             </td>
         ));
@@ -137,7 +138,7 @@ const StudentRowComponent = ({
                         className="w-8 h-8 rounded-full object-cover border border-gray-600"
                     />
                     {/* ========================================================= */}
-                    <span className="truncate text-gray-100">{student.name}</span>
+                    <span className="whitespace-nowrap text-gray-100">{student.name}</span>
                 </div>
             </td>
             {renderContent()}
