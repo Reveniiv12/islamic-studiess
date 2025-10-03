@@ -2013,10 +2013,12 @@ const handleExportQRCodes = async () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {filteredStudents.map(student => (
               <div key={student.id} onClick={() => handleQrClick(student)} className="bg-gray-700 p-4 rounded-lg shadow-md flex flex-col items-center transition-transform transform hover:scale-105 cursor-pointer">
-                <h4 className="text-lg font-bold text-blue-400 mb-2">{student.name}</h4>
+                {/* تم تعديل حجم الخط إلى text-base */}
+                <h4 className="text-base font-bold text-blue-400 mb-2 break-words text-center">{student.name}</h4>
                 <StudentQrCode viewKey={`/grades/${gradeId}/sections/${sectionId}/students/${student.id}`} size={150} />
-                <span className="mt-2 text-sm text-gray-400">{student.nationalId}</span>
-                <span className="text-sm text-gray-300">{gradeName} - {sectionName}</span>
+                {/* تم تعديل حجم الخط إلى text-sm */}
+                <span className="mt-2 text-sm text-gray-400 break-words text-center">{student.nationalId}</span>
+                <span className="text-sm text-gray-300 break-words text-center">{gradeName} - {sectionName}</span>
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={(e) => {
@@ -2057,12 +2059,13 @@ const handleExportQRCodes = async () => {
                   <div className="flex-shrink-0">
                     <img src={student.photo || '/images/1.webp'} alt={student.name} className="w-16 h-16 rounded-full object-cover border-2 border-gray-600" />
                   </div>
-                  <div className="flex-grow text-right">
-                    <h4 className="font-bold text-lg text-white truncate">{student.name}</h4>
-                    <p className="text-sm text-gray-400 truncate">السجل: {student.nationalId}</p>
+                  {/* تم تعديل حجم الخط للعنوان إلى text-base */}
+                  <div className="flex-grow text-right min-w-0">
+                    <h4 className="font-bold text-base text-white break-words">{student.name}</h4>
+                    <p className="text-sm text-gray-400 break-words">السجل: {student.nationalId}</p>
                     <div className="flex items-center justify-between mt-1">
                       {student.parentPhone && (
-                        <p className="text-xs text-gray-400 truncate">ولي الأمر: {student.parentPhone}</p>
+                        <p className="text-xs text-gray-400 break-words">ولي الأمر: {student.parentPhone}</p>
                       )}
                     </div>
                     <div className="flex justify-between items-center mt-2">
@@ -2100,14 +2103,15 @@ const handleExportQRCodes = async () => {
       {selectedStudent && !showGradeSheet && !showBriefSheet && !showQrList && (
         <div ref={gradesSectionRef} className="bg-gray-800 p-4 md:p-8 rounded-xl shadow-lg mt-4 md:mt-6 border border-gray-700" dir="rtl">
           <div className="flex items-center gap-4 mb-6 pb-4 border-b border-gray-700">
-            <div className="flex flex-col text-right">
-              <h3 className="text-xl md:text-2xl font-bold text-blue-400">
-                درجات الطالب: {selectedStudent.name} (الفترة {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})
+            {/* إصلاح مشكلة الأقواس واستخدام Template Literals */}
+            <div className="flex flex-col text-right min-w-0 flex-grow">
+              <h3 className="text-xl md:text-2xl font-bold text-blue-400 break-words">
+                {`درجات الطالب: ${selectedStudent.name} (الفترة ${currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})`}
               </h3>
-              <p className="text-sm md:text-md text-gray-400">السجل المدني: {selectedStudent.nationalId}</p>
-              <p className="text-sm md:text-md text-gray-400">رقم ولي الأمر: {selectedStudent.parentPhone}</p>
+              <p className="text-sm md:text-md text-gray-400 break-words">السجل المدني: {selectedStudent.nationalId}</p>
+              <p className="text-sm md:text-md text-gray-400 break-words">رقم ولي الأمر: {selectedStudent.parentPhone}</p>
             </div>
-            <div className="relative">
+            <div className="relative flex-shrink-0">
               <img src={selectedStudent.photo || '/images/1.webp'} alt={selectedStudent.name} className="w-16 h-16 rounded-full object-cover border-2 border-gray-600" />
             </div>
           </div>
@@ -2218,9 +2222,9 @@ const handleExportQRCodes = async () => {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
+                {/* تم تغيير text-sm إلى text-base وإضافة touchAction: 'manipulation' */}
                 {selectedStudent.grades.tests.slice(0, 2).map((grade, i) => (
-                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-20 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} className="w-20 p-2 border border-gray-600 rounded-lg text-center text-base bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500" style={{ touchAction: 'manipulation' }} />
                 ))}
               </div>
             </div>
@@ -2230,9 +2234,9 @@ const handleExportQRCodes = async () => {
                 <FaMicrophone className="text-3xl text-yellow-400" /> التفاعل الصفي  <span className="text-yellow-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'classInteraction', 'best')} / 10</span>
               </h4>
               <div className="flex flex-wrap gap-2">
-                {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
+                {/* تم تغيير text-sm إلى text-base وإضافة touchAction: 'manipulation' */}
                 {selectedStudent.grades.classInteraction.slice(0, 4).map((grade, i) => (
-                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "classInteraction", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "classInteraction", i, e.target.value)} className="w-16 p-2 border border-gray-600 rounded-lg text-center text-base bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500" style={{ touchAction: 'manipulation' }} />
                 ))}
               </div>
             </div>
@@ -2252,9 +2256,9 @@ const handleExportQRCodes = async () => {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
+                {/* تم تغيير text-sm إلى text-base وإضافة touchAction: 'manipulation' */}
                 {selectedStudent.grades.homework.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-base bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500" style={{ touchAction: 'manipulation' }} />
                 ))}
               </div>
             </div>
@@ -2274,7 +2278,7 @@ const handleExportQRCodes = async () => {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                 {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
+                 {/* تم تغيير text-sm إلى text-base وإضافة touchAction: 'manipulation' */}
                 {selectedStudent.grades.performanceTasks.slice(0, 4).map((grade, i) => (
                   <input
                     key={i}
@@ -2283,7 +2287,8 @@ const handleExportQRCodes = async () => {
                     placeholder={`--`}
                     value={grade === null ? '' : grade}
                     onChange={(e) => updateStudentGrade(selectedStudent.id, "performanceTasks", i, e.target.value)}
-                    className="w-16 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    className="w-16 p-2 border border-gray-600 rounded-lg text-center text-base bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    style={{ touchAction: 'manipulation' }}
                   />
                 ))}
               </div>
@@ -2294,9 +2299,9 @@ const handleExportQRCodes = async () => {
                 <FaCommentDots className="text-3xl text-cyan-400" /> المشاركة  <span className="text-cyan-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'participation', 'sum')} / 10</span>
               </h4>
               <div className="flex flex-wrap gap-2">
-                {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
+                {/* تم تغيير text-sm إلى text-base وإضافة touchAction: 'manipulation' */}
                 {selectedStudent.grades.participation.slice(0, 10).map((grade, i) => (
-                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  <input key={i} type="text" inputMode="numeric" placeholder={`--`} value={grade === null ? '' : grade} onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} className="w-10 p-2 border border-gray-600 rounded-lg text-center text-base bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" style={{ touchAction: 'manipulation' }} />
                 ))}
               </div>
             </div>
@@ -2320,7 +2325,7 @@ const handleExportQRCodes = async () => {
                     <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(selectedStudent.grades, 'quranRecitation', 'average')} / 10</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
+                    {/* تم تغيير text-sm إلى text-base وإضافة touchAction: 'manipulation' */}
                     {selectedStudent.grades.quranRecitation.slice(0, 5).map((grade, i) => (
                       <input
                         key={i}
@@ -2329,7 +2334,8 @@ const handleExportQRCodes = async () => {
                         placeholder={`--`}
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranRecitation", i, e.target.value)}
-                        className="w-12 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-12 p-2 border border-gray-600 rounded-lg text-center text-base bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{ touchAction: 'manipulation' }}
                       />
                     ))}
                   </div>
@@ -2345,7 +2351,7 @@ const handleExportQRCodes = async () => {
                     <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(selectedStudent.grades, 'quranMemorization', 'average')} / 10</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {/* تم تعديل الـ Placeholder لإظهار --- فقط */}
+                    {/* تم تغيير text-sm إلى text-base وإضافة touchAction: 'manipulation' */}
                     {selectedStudent.grades.quranMemorization.slice(0, 5).map((grade, i) => (
                       <input
                         key={i}
@@ -2354,7 +2360,8 @@ const handleExportQRCodes = async () => {
                         placeholder={`--`}
                         value={grade === null ? '' : grade}
                         onChange={(e) => updateStudentGrade(selectedStudent.id, "quranMemorization", i, e.target.value)}
-                        className="w-12 p-2 border border-gray-600 rounded-lg text-center text-sm bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-12 p-2 border border-gray-600 rounded-lg text-center text-base bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{ touchAction: 'manipulation' }}
                       />
                     ))}
                   </div>
