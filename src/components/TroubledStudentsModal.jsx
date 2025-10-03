@@ -20,13 +20,26 @@ const TroubledStudentsModal = ({ students, onClose, homeworkCurriculum, recitati
     const [selectedTemplate, setSelectedTemplate] = useState('');
 
     // قوالب الملاحظات الجاهزة 
-    const noteTemplates = [
-        { id: 'excellent', text: 'أداء ممتاز ومتفوق' },
-        { id: 'sleeping', text: 'يغلب عليه النوم في الفصل' },
-        { id: 'distracted', text: 'غير منتبه أثناء الشرح' },
-        { id: 'late', text: 'يتأخر في الحضور' },
-        { id: 'improved', text: 'ظهر تحسن ملحوظ في الأداء' }
-    ];
+const noteTemplates = [
+    // العبارات الأصلية (مع تعديل IDs لتجنب التكرار)
+    { id: 'excellent', text: 'أداء ممتاز ومتفوق' },
+    { id: 'sleeping_general', text: 'يغلب عليه النوم في الفصل' },
+    { id: 'distracted', text: 'غير منتبه أثناء الشرح' },
+    { id: 'late_general', text: 'يتأخر في الحضور' },
+    { id: 'improved', text: 'ظهر تحسن ملحوظ في الأداء' },
+
+    // العبارات الجديدة المُضافة
+    { id: 'late_note1', text: 'لوحظ عليك التأخر في الحضور للحصة الدراسية - ارجو الاهتمام' },
+    { id: 'late_note2', text: 'التأخر عن الحصة الدراسية يؤثر سلباً على مستواك الدراسي - ارجو الاهتمام' },
+    { id: 'quran_hw_thank', text: 'شكرا لك على حرصك واهتمامك بحل واجبات مادة القرآن الكريم والدراسات الإسلامية في منصة مدرستي' },
+    { id: 'quran_hw_attention', text: 'ارجو الاهتمام بحل واجبات مادة القرآن الكريم والدراسات الإسلامية في منصة مدرستي' },
+    { id: 'quran_hw_missing', text: 'لوحظ عليك عدم حل واجب مادة القرآن الكريم والدراسات الإسلامية - ارجو الاهتمام بحل الواجبات في منصة مدرستي' },
+    { id: 'eating_in_class', text: 'لوحظ عليك تناول الطعام أثناء الدرس بدون استئذان - ارجو الالتزام والاهتمام' },
+    { id: 'sleeping_in_class', text: 'نوم أثناء الحصة الدراسية' },
+    { id: 'missing_book', text: 'عدم الاهتمام بإحضار الكتاب في الحصة الدراسية' },
+    { id: 'missing_quran', text: 'عدم الاهتمام بإحضار القرآن الكريم في الحصة الدراسية' },
+    { id: 'talking_disruptive', text: 'كثرة كلام وإشغال زملائك عن الدرس' }
+];
 
     const categoryTitles = {
         all: { title: "جميع الطلاب المتعثرين", icon: <FaGlobe className="text-gray-300" /> },
