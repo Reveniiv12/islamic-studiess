@@ -1,4 +1,5 @@
 // src/components/RecitationModal.jsx
+
 import React, { useState, useEffect } from 'react';
 import { FaBookOpen, FaStickyNote, FaSave, FaTimes, FaCheckCircle, FaTimesCircle, FaClock, FaQuestionCircle } from 'react-icons/fa';
 import { getRecitationStatus } from '../utils/recitationUtils';
@@ -113,13 +114,14 @@ const noteTemplates = [
                 let studentRecord = {};
                 let updatedGrades = { ...student.grades };
                 
-                if (mode === 'note') {
-                    const noteText = noteType === 'custom'
-                        ? customNote
-                        : noteTemplates.find(t => t.id === selectedTemplate)?.text || '';
+                // ** التعديل يبدأ هنا **
+                // حساب نص الملاحظة بغض النظر عن قيمة الـ 'mode'
+                const noteText = noteType === 'custom'
+                    ? customNote
+                    : noteTemplates.find(t => t.id === selectedTemplate)?.text || '';
 
-                    if (!noteText.trim()) return student;
-
+                // حفظ الملاحظة إذا كان هناك نص (بشكل مستقل عن الـ 'mode')
+                if (noteText.trim()) {
                     const formattedNote = `(${hijriDate}): ${noteText.trim()}`;
                     const updatedWeeklyNotes = [...(student.grades.weeklyNotes || Array(20).fill(null).map(() => []))];
                     if (!Array.isArray(updatedWeeklyNotes[weekIndex])) {
@@ -134,7 +136,9 @@ const noteTemplates = [
                         },
                     };
                 }
+                // ** التعديل ينتهي هنا **
                 
+                // منطق حفظ التسميع القديم (والذي لم يطلب تعديله)
                 if (Object.keys(studentRecord).length > 0) {
                     const recitationHistory = Array.isArray(student.recitationHistory) ? student.recitationHistory : [];
                     return {
