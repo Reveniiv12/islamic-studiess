@@ -56,8 +56,8 @@ const BriefSheet = ({
                 dataFields = (student) => [
                     (student.stars || 0).toString(),
                     calculateTotalScore(student.grades).toString(),
-                    calculateCoursework(student.grades),
-                    calculateMajorAssessments(student.grades),
+                    calculateCoursework(student.grades), // ✅ تصحيح: أعمال السنة (40)
+                    calculateMajorAssessments(student.grades), // ✅ تصحيح: التقييمات الرئيسية (60)
                     student.name
                 ];
             } else {
@@ -225,10 +225,10 @@ const BriefSheet = ({
                                 {student.name}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
-                                {calculateMajorAssessments(student.grades)}
+                                {calculateCoursework(student.grades)} {/* ✅ تم التبديل: أعمال السنة (40) */}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-yellow-400">
-                                {calculateCoursework(student.grades)}
+                                {calculateMajorAssessments(student.grades)} {/* ✅ تم التبديل: التقييمات الرئيسية (60) */}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-green-400">
                                 {calculateTotalScore(student.grades)}
