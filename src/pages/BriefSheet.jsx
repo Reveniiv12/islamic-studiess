@@ -208,10 +208,10 @@ const BriefSheet = ({
                         </th>
                         
                         <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">
-                            أعمال السنة (40)
+                            المهام الأدائية والمشاركة و الواجبات والتفاعل الصفي (40)
                         </th>
                         <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">
-                            التقييمات الرئيسية (60)
+                            تقويمات شفهية وتحريرية (60)
                         </th>
                         <th scope="col" className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">
                             المجموع الكلي (100)
@@ -279,3 +279,4 @@ const BriefSheet = ({
 };
 
 export default BriefSheet;
+
