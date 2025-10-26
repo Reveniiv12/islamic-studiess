@@ -471,8 +471,10 @@ const SectionGrades = () => {
           id: student.id.toString(),
           grades: studentGrades, // الدرجات النشطة المعروضة
           acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
-          consumedStars: student.consumed_stars || 0,
-          stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumedStars || 0), 
+          // *** الإصلاح: تغيير consumed_consumedStars إلى consumed_stars ***
+          consumedStars: student.consumed_stars || 0, 
+          // *** الإصلاح: التأكد من استخدام consumed_stars ***
+          stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0), 
           fullGrades: fullGradesUpdated, // الهيكل الكامل المحدث
           viewKey: student.view_key || `/grades/${gradeId}/sections/${sectionId}/students/${student.id}`,
           absences: (student.absences || []).map(a => a.absence_date),
@@ -622,9 +624,10 @@ const SectionGrades = () => {
                 phone: student.phone,
                 parent_phone: student.parentPhone,
                 photo: student.photo,
+                // *** الإصلاح: استخدام acquiredStars و consumedStars للحساب ***
                 stars: (student.acquiredStars || 0) - (student.consumedStars || 0),
                 acquired_stars: student.acquiredStars,
-                consumed_stars: student.consumedStars,
+                consumed_stars: student.consumedStars, 
                 recitation_history: student.recitation_history, 
                 grades: {
                     period1: updatedFullGrades.period1,
@@ -646,6 +649,10 @@ const SectionGrades = () => {
 
                  return { 
                      ...s, 
+                     // *** الإصلاح: تحديث acquiredStars و consumedStars و stars بناءً على القيم المحدثة ***
+                     acquiredStars: studentToUpdate.acquired_stars,
+                     consumedStars: studentToUpdate.consumed_stars,
+                     stars: studentToUpdate.stars, // قيمة النجوم الحالية المحسوبة بشكل صحيح
                      // تحديث fullGrades
                      fullGrades: { period1: fullGradesData.period1, period2: fullGradesData.period2, weeklyNotes: fullGradesData.weeklyNotes },
                      // تحديث الدرجات النشطة بما في ذلك الملاحظات الموحدة
@@ -1754,7 +1761,7 @@ const handleExportQRCodes = async () => {
 
   return (
     <div className="p-4 md:p-8 max-w-8xl mx-auto font-['Noto_Sans_Arabic',sans-serif] text-right bg-gray-900 text-gray-100 min-h-screen" dir="rtl">
-      <header className="flex flex-col md:flex-row justify-center items-center bg-gray-800 p-4 md:p-6 shadow-lg rounded-xl mb-4 md:mb-8 border border-gray-700 text-center">
+      <header className="flex flex-col md:flex-row justify-center items-center bg-gray-800 p-4 md:p-6 shadow-lg rounded-xl mb-4 md:mb-8 border border-gray-700">
         <div className="flex items-center gap-2 md:gap-4 mb-4 md:mb-0">
           <div className="flex flex-col">
             <h1 className="text-xl md:text-3xl font-extrabold text-blue-400">
