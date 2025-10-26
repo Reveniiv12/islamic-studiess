@@ -1,3 +1,5 @@
+// src/pages/StudentView.jsx
+
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
@@ -15,9 +17,12 @@ import {
   FaArrowLeft,
   FaRegStar,
   FaCoins,
-  FaGift,
+  FaGift, 
   FaSyncAlt,
   FaClock, 
+  FaExclamationCircle,
+  FaCheckCircle,
+  FaTimes
 } from "react-icons/fa";
 
 import {
@@ -29,7 +34,8 @@ import {
   taskStatusUtils,
 } from "../utils/gradeUtils";
 import { getRecitationStatus } from "../utils/recitationUtils";
-import PrizesModal from "../components/PrizesModal";
+import PrizesModal from "../components/PrizesModal"; 
+import CustomDialog from "../components/CustomDialog"; 
 
 const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
   const sizes = {
@@ -102,8 +108,37 @@ function StudentView() {
   const [isPrizesModalOpen, setIsPrizesModalOpen] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   
+  // ==========================================================
+  // NEW: Reward Request States
+  const [rewardRequests, setRewardRequests] = useState([]);
+  const [showDialog, setShowDialog] = useState(false);
+  const [dialogTitle, setDialogTitle] = useState("");
+  const [dialogMessage, setDialogMessage] = useState("");
+  const [dialogType, setDialogType] = useState("info");
+  const [dialogAction, setDialogAction] = useState(null);
+  // ==========================================================
+  
   const gradeName = getGradeNameById(studentBaseData?.grade_level);
   const sectionName = getSectionNameById(studentBaseData?.section);
+  
+  // ==========================================================
+  // Dialog Handler
+  // ==========================================================
+  const handleDialog = (title, message, type, action = null) => {
+    setDialogTitle(title);
+    setDialogMessage(message);
+    setDialogType(type);
+    setDialogAction(() => action);
+    setShowDialog(true);
+  };
+  
+  const handleConfirmAction = () => {
+    if (dialogAction) {
+      dialogAction();
+    }
+    setShowDialog(false);
+  };
+
 
   // ----------------------------------------------------------------------
   // 1. Initial Data Fetch (Base/Shared Data)
@@ -130,7 +165,17 @@ function StudentView() {
           throw studentError;
         }
 
-        const teacherId = student.teacher_id;
+        // *** الإصلاح: توحيد قراءة teacher_id والتحقق من قيمته ***
+        const rawTeacherId = student.teacher_id;
+        let teacherId = null;
+        if (rawTeacherId) {
+            teacherId = String(rawTeacherId).trim();
+            if (teacherId === 'null' || teacherId === 'undefined' || teacherId.length === 0) {
+                 teacherId = null;
+                 console.warn("Teacher ID in student record is invalid/missing.");
+            }
+        }
+        
         const gradeId = student.grade_level;
         const sectionId = student.section;
         
@@ -151,53 +196,72 @@ function StudentView() {
           initialPeriod = settingsData.current_period === 'period2' ? 2 : 1; 
         }
 
-        // Fetch curriculum (Shared Data Structure Logic)
-        const { data: curriculumData } = await supabase
-            .from('curriculum')
-            .select('*')
-            .eq('grade_id', gradeId)
-            .eq('section_id', sectionId)
-            .eq('teacher_id', teacherId)
-            .single();
+        // Fetch curriculum (Only if teacherId is present)
+        if (teacherId) {
+            const { data: curriculumData } = await supabase
+                .from('curriculum')
+                .select('*')
+                .eq('grade_id', gradeId)
+                .eq('section_id', sectionId)
+                .eq('teacher_id', teacherId)
+                .single();
+        // ... (بقية منطق جلب المنهج)
+            let recitationCurriculum = { period1: [], period2: [] };
+            let homeworkCurriculumData = { period1: [], period2: [] };
 
-        let recitationCurriculum = { period1: [], period2: [] };
-        let homeworkCurriculumData = { period1: [], period2: [] };
+            if (curriculumData) {
+                const recitation = curriculumData.recitation;
+                const homework = curriculumData.homework;
 
-        if (curriculumData) {
-            const recitation = curriculumData.recitation;
-            const homework = curriculumData.homework;
+                if (Array.isArray(recitation)) {
+                    recitationCurriculum = { period1: recitation, period2: [] };
+                } else {
+                    recitationCurriculum = { 
+                        period1: recitation?.period1 || [],
+                        period2: recitation?.period2 || [],
+                    };
+                }
 
-            if (Array.isArray(recitation)) {
-                recitationCurriculum = { period1: recitation, period2: [] };
-            } else {
-                recitationCurriculum = { 
-                    period1: recitation?.period1 || [],
-                    period2: recitation?.period2 || [],
-                };
+                if (Array.isArray(homework)) {
+                    homeworkCurriculumData = { period1: homework, period2: [] };
+                } else {
+                    homeworkCurriculumData = {
+                        period1: homework?.period1 || [],
+                        period2: homework?.period2 || [],
+                    };
+                }
             }
-
-            if (Array.isArray(homework)) {
-                homeworkCurriculumData = { period1: homework, period2: [] };
-            } else {
-                homeworkCurriculumData = {
-                    period1: homework?.period1 || [],
-                    period2: homework?.period2 || [],
-                };
-            }
+            setFullCurriculumData(recitationCurriculum);
+            setFullHomeworkCurriculumData(homeworkCurriculumData);
         }
-        setFullCurriculumData(recitationCurriculum);
-        setFullHomeworkCurriculumData(homeworkCurriculumData);
         
         // Fetch prizes (shared)
+        let prizesData = [];
         if (teacherId) {
-          const { data: prizesData } = await supabase
+          const { data: pData, error: pError } = await supabase
             .from('prizes')
             .select('*')
             .eq('teacher_id', teacherId)
             .order('cost', { ascending: true });
             
-          setPrizes(prizesData || []);
+          if (pError) console.error("Error fetching prizes:", pError);
+          prizesData = pData || [];
+          setPrizes(prizesData);
+        
+            // NEW: Fetch Reward Requests for this student (Always fetch if teacherId is present for filtering)
+            let requestsData = [];
+            const { data: rData, error: rError } = await supabase
+                .from('reward_requests')
+                .select('*, prizes(id, name, cost)')
+                .eq('student_id', studentId)
+                .order('created_at', { ascending: false });
+            
+            if (rError) console.error("Error fetching reward requests:", rError);
+            // Filter requests to show only those linked to the student's teacher if teacherId is valid
+            requestsData = rData ? rData.filter(r => r.teacher_id === teacherId) : [];
+            setRewardRequests(requestsData);
         }
+        
 
         // --- Prepare Student Grades (Crucial for handling old/new schema) ---
         let grades = student.grades || {};
@@ -252,8 +316,9 @@ function StudentView() {
         // Store the raw student data including all period grades
         const baseData = {
           ...student,
+          teacher_id: teacherId, // استخدام teacherId الموحد
           acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
-          consumedStars: student.consumed_stars || 0, // <--- تم التصحيح هنا
+          consumedStars: student.consumed_stars || 0, 
           stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
           nationalId: student.national_id,
           parentPhone: student.parent_phone,
@@ -277,52 +342,113 @@ function StudentView() {
 
     fetchBaseData();
   }, [studentId]);
+  
+  // دالة تحديث بيانات الطالب يدويًا (بعد المطالبة بالجائزة مثلاً)
+  const refreshStudentData = async () => {
+      setIsFetching(true);
+      try {
+          // جلب بيانات الطالب المحدثة
+          const { data: student, error: studentError } = await supabase
+              .from('students')
+              .select('*, teacher_id')
+              .eq('id', studentId)
+              .single();
+
+          if (studentError) throw studentError;
+          
+          const rawTeacherId = student.teacher_id;
+          let teacherId = null;
+          if (rawTeacherId) {
+              teacherId = String(rawTeacherId).trim();
+          }
+          
+          // جلب طلبات المكافآت المحدثة
+          const { data: rData, error: rError } = await supabase
+              .from('reward_requests')
+              .select('*, prizes(id, name, cost)')
+              .eq('student_id', studentId)
+              .order('created_at', { ascending: false });
+          
+          if (rError) console.error("Error fetching reward requests:", rError);
+          
+          // تصفية الطلبات حسب المعلم (للتأكد من عرض الطلبات الصحيحة فقط)
+          const filteredRequests = rData ? rData.filter(r => r.teacher_id === teacherId) : [];
+
+          // إعادة بناء الـ baseData
+          const fullGrades = student.grades || {};
+          let weeklyNotes = fullGrades.weeklyNotes || (fullGrades.weekly_notes) || Array(20).fill(null);
+          
+          const newBaseData = {
+              ...student,
+              teacher_id: teacherId, // استخدام teacherId الموحد
+              acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
+              consumedStars: student.consumed_stars || 0, 
+              stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
+              nationalId: student.national_id,
+              parentPhone: student.parent_phone,
+              fullGrades: { 
+                  period1: fullGrades.period1,
+                  period2: fullGrades.period2,
+                  weeklyNotes: weeklyNotes 
+              }, 
+          };
+          
+          setStudentBaseData(newBaseData);
+          setRewardRequests(filteredRequests);
+          // إعادة جلب بيانات الفترة المعروضة لضمان التحديث الكامل
+          await fetchPeriodData(currentPeriod, newBaseData, filteredRequests);
+
+      } catch (err) {
+          console.error("Error refreshing student data:", err);
+          handleDialog("خطأ", "فشل في تحديث بيانات الطالب.", "error");
+      } finally {
+          setIsFetching(false);
+      }
+  };
+
+  // NEW: دالة لإخفاء الإشعار (تحديث حالة الطلب إلى fulfilled)
+  const clearRewardRequest = async (requestId) => {
+      try {
+          // تحديث حالة الطلب في قاعدة البيانات إلى 'fulfilled'
+          const { error } = await supabase
+              .from('reward_requests')
+              .update({ status: 'fulfilled', updated_at: new Date().toISOString() })
+              .eq('id', requestId);
+
+          if (error) throw error;
+          
+          // تحديث الحالة المحلية لإزالة الإشعار من الواجهة
+          setRewardRequests(prev => prev.map(r => 
+              r.id === requestId ? { ...r, status: 'fulfilled' } : r
+          ));
+          
+          // إعادة جلب البيانات لضمان التزامن الكامل (لأن النجوم قد تكون تغيرت)
+          refreshStudentData(); 
+          
+      } catch (err) {
+          console.error("Error clearing reward request:", err);
+          handleDialog("خطأ", "فشل في إخفاء الإشعار. يرجى المحاولة مرة أخرى.", "error");
+      }
+  };
+
 
   // ----------------------------------------------------------------------
   // 2. Period Data Processing (Runs after period selection)
   // ----------------------------------------------------------------------
-  const fetchPeriodData = async (period) => {
-    if (!studentBaseData || !period) return;
+  const fetchPeriodData = async (period, baseDataOverride = null) => {
+    const student = baseDataOverride || studentBaseData;
+    if (!student || !period) return;
     
     const periodName = `period${period}`;
 
     try {
       setIsFetching(true);
       
-      const student = studentBaseData;
       const teacherId = student.teacher_id;
       const gradeId = student.grade_level;
       const sectionId = student.section;
       
-      let visitId = null;
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // New Logic: Log the visit only if the user is not the teacher
-      if (!user || user.id !== teacherId) {
-          // Check for previous incomplete visits and close them
-          await supabase
-              .from('page_visits')
-              .update({ visit_end_time: new Date().toISOString() })
-              .eq('student_id', studentId)
-              .is('visit_end_time', null);
-              
-          // Insert a new visit log
-          const { data, error } = await supabase
-              .from('page_visits')
-              .insert({
-                  student_id: studentId,
-                  teacher_id: teacherId,
-                  visit_start_time: new Date().toISOString()
-              })
-              .select()
-              .single();
-
-          if (error) {
-              console.error("Error logging visit:", error);
-          } else {
-              visitId = data.id;
-          }
-      }
+      // *** تم إزالة منطق تسجيل الزيارات والتحقق من المستخدم المسجل لـ RLS ***
       
       // Fetch announcements (Shared Logic)
       const { data: announcementsData } = await supabase
@@ -331,6 +457,7 @@ function StudentView() {
         .eq('grade_id', gradeId)
         .eq('section_id', sectionId)
         .eq('teacher_id', teacherId)
+        .eq('is_visible', true) // <--- NEW: تصفية الإعلانات المرئية فقط
         .order('created_at', { ascending: false });
 
       setAnnouncements(announcementsData || []);
@@ -361,9 +488,9 @@ function StudentView() {
         },
         nationalId: student.national_id,
         parentPhone: student.parent_phone,
-        acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
-        consumedStars: student.consumed_stars || 0, // <--- تم التصحيح هنا
-        stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
+        acquiredStars: student.acquiredStars,
+        consumedStars: student.consumedStars, 
+        stars: student.stars,
         grade_level: student.grade_level,
         section: student.section,
       };
@@ -372,17 +499,7 @@ function StudentView() {
       setIsFetching(false);
 
       // Cleanup function to log visit end time
-      return () => {
-        if (visitId) {
-          supabase
-            .from('page_visits')
-            .update({ visit_end_time: new Date().toISOString() })
-            .eq('id', visitId)
-            .then(({ error }) => {
-              if (error) console.error("Error updating visit end time:", error);
-            });
-        }
-      };
+      return () => {}; 
 
     } catch (err) {
       console.error("Error fetching period data:", err);
@@ -407,7 +524,71 @@ function StudentView() {
   }, [studentBaseData, currentPeriod, fullCurriculumData, fullHomeworkCurriculumData]); 
   
   // ----------------------------------------------------------------------
-  // 4. Loading/Error States and Period Selection UI
+  // 4. Request Reward Functionality
+  // ----------------------------------------------------------------------
+  
+  const requestReward = async (prize) => {
+      if (!studentDisplayedData) return;
+      
+      const teacherId = studentDisplayedData.teacher_id; // <--- استخدام ID المعلم الموحد
+      
+      if (!teacherId) {
+          handleDialog("خطأ", "لم يتم العثور على معرف المعلم المرتبط بالطالب، لا يمكن إرسال الطلب.", "error");
+          return;
+      }
+      
+      const pendingRequest = rewardRequests.find(r => r.status === 'pending');
+      if (pendingRequest) {
+          handleDialog("خطأ", "لديك طلب مكافأة معلق بالفعل: " + pendingRequest.prizes.name, "error");
+          return;
+      }
+      
+      if (studentDisplayedData.stars < prize.cost) {
+          handleDialog("خطأ", `رصيدك الحالي (${studentDisplayedData.stars} نجمة) غير كافٍ لطلب مكافأة "${prize.name}" التي تكلفتها ${prize.cost} نجوم.`, "error");
+          return;
+      }
+
+      handleDialog(
+          "تأكيد طلب المكافأة",
+          `هل أنت متأكد من طلب مكافأة "${prize.name}" التي تكلفتها ${prize.cost} نجوم؟ سيتم خصم التكلفة عند موافقة المعلم.`,
+          "confirm",
+          async () => {
+              try {
+                  const { data, error } = await supabase
+                      .from('reward_requests')
+                      .insert({
+                          student_id: studentId,
+                          teacher_id: teacherId, 
+                          prize_id: prize.id,
+                          prize_cost: prize.cost,
+                          status: 'pending'
+                      })
+                      .select('*, prizes(id, name, cost)')
+                      .single();
+
+                  if (error) throw error;
+                  
+                  // تحديث الطلبات المعروضة للطالب
+                  setRewardRequests([data, ...rewardRequests.filter(r => r.id !== data.id)]);
+                  
+                  handleDialog("نجاح", `تم إرسال طلب مكافأة "${prize.name}" بنجاح. يرجى الانتظار حتى موافقة المعلم.`, "success");
+              } catch (err) {
+                  console.error("Error requesting reward:", err);
+                   // هذا القسم يعالج خطأ المفتاح الخارجي 23503
+                  if (err.code === "23503" && err.message.includes("reward_requests_teacher_id_fkey")) {
+                     handleDialog("خطأ", `فشل إرسال الطلب: المفتاح الخارجي للمعلم غير موجود في قاعدة البيانات (profiles). يرجى الاتصال بالإدارة لحل مشكلة بيانات المعلم.`, "error");
+                  } else if (err.code === "23505" || err.message.includes("violates unique constraint")) {
+                     handleDialog("خطأ", "يبدو أن لديك طلبًا نشطًا آخر في النظام لم تتم معالجته بعد. يرجى الانتظار.", "error");
+                  } else {
+                     handleDialog("خطأ", `حدث خطأ أثناء إرسال طلب المكافأة. يرجى مراجعة سجلات الخادم.`, "error");
+                  }
+              }
+          }
+      );
+  };
+  
+  // ----------------------------------------------------------------------
+  // 5. Loading/Error States and Period Selection UI
   // ----------------------------------------------------------------------
 
   if (error) {
@@ -420,7 +601,11 @@ function StudentView() {
   
   // Show base loading spinner while fetching initial data
   if (loadingInitial) {
-      return <div className="p-8 text-center text-blue-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">جاري تحميل بيانات الطالب الأساسية...</div>;
+      return (
+        <div className="p-8 text-center text-blue-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">
+            جاري تحميل بيانات الطالب الأساسية...
+        </div>
+      );
   }
 
   // Show the period selection screen if base data is loaded but period is not selected
@@ -487,7 +672,7 @@ function StudentView() {
   const processedNotes = allNotes.reverse().slice(0, 5);
   
   // ----------------------------------------------------------------------
-  // 5. Main Content UI (Original layout with period integration)
+  // 6. Main Content UI (Original layout with period integration)
   // ----------------------------------------------------------------------
   
   // دوال حساب المجاميع الفرعية (مكررة هنا للوصول السريع إلى studentData)
@@ -536,6 +721,14 @@ function StudentView() {
 
       return finalTotal.toFixed(2);
   };
+  
+  // حالة طلب المكافأة المعلقة
+  const pendingRequest = rewardRequests.find(r => r.status === 'pending');
+  const lastRequest = rewardRequests[0];
+  
+  // تحديد ما إذا كان الزر يجب أن يظهر (إذا كانت الحالة approved أو rejected)
+  const showClearButton = lastRequest && (lastRequest.status === 'approved' || lastRequest.status === 'rejected');
+  
 
   return (
     <div className="p-4 md:p-8 bg-gray-900 min-h-screen font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100" dir="rtl">
@@ -601,6 +794,38 @@ function StudentView() {
               )}
             </div>
           </div>
+          
+          {/* NEW: Reward Request Status Alert */}
+          {lastRequest && lastRequest.status !== 'fulfilled' && (
+              <div className={`p-4 rounded-xl mb-6 flex justify-between items-start ${
+                  lastRequest.status === 'pending' ? 'bg-yellow-800 text-yellow-100 border border-yellow-700' :
+                  lastRequest.status === 'rejected' ? 'bg-red-800 text-red-100 border border-red-700' : 'bg-green-800 text-green-100 border border-green-700'
+              }`}>
+                  <div className="flex-grow">
+                      <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                          <FaGift /> حالة طلب المكافأة
+                      </h4>
+                      <p className="text-sm">
+                          {lastRequest.status === 'pending' && <><FaExclamationCircle className="inline ml-1"/> لديك طلب مكافأة معلق: {lastRequest.prizes?.name} (بتكلفة {lastRequest.prize_cost} نجوم). لا يمكنك طلب مكافأة أخرى حتى تتم معالجة هذا الطلب.</>}
+                          {lastRequest.status === 'rejected' && <><FaExclamationCircle className="inline ml-1"/> تم رفض طلب مكافأة {lastRequest.prizes?.name} بتاريخ {new Date(lastRequest.updated_at).toLocaleDateString()}. يمكنك تقديم طلب جديد الآن.</>}
+                          {lastRequest.status === 'approved' && <><FaCheckCircle className="inline ml-1"/> تهانينا! تم قبول طلب مكافأة {lastRequest.prizes?.name} بتاريخ {new Date(lastRequest.updated_at).toLocaleDateString()}. يمكنك تقديم طلب جديد.</>}
+                      </p>
+                  </div>
+                  
+                  {/* NEW: زر إخفاء الإشعار (يظهر فقط عند القبول أو الرفض) */}
+                  {showClearButton && (
+                      <button
+                          onClick={() => clearRewardRequest(lastRequest.id)}
+                          className={`flex-shrink-0 flex items-center gap-1 px-3 py-1 text-sm rounded-lg font-semibold transition-colors mt-1 ${
+                              lastRequest.status === 'rejected' ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                          }`}
+                      >
+                          <FaTimes className="text-xs" /> إخفاء الإشعار
+                      </button>
+                  )}
+              </div>
+          )}
+
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8">
             {/* Important Announcements Section */}
@@ -743,7 +968,6 @@ function StudentView() {
               <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
                 <FaBookOpen className="text-3xl text-red-400" /> الاختبارات
                 <span className="text-red-400 font-bold mr-2 text-2xl">
-                  {/* تم التعديل: استخدام المجموع الكلي 'sum' */}
                   {calculateCategoryScore(studentData.grades, 'tests', 'sum')} / 40
                 </span>
               </h4>
@@ -768,7 +992,6 @@ function StudentView() {
                 {/* تم التعديل: تغيير المسمى إلى التفاعل الصفي */}
                 <FaMicrophone className="text-3xl text-yellow-400" /> التفاعل الصفي
                 <span className="text-yellow-400 font-bold text-2xl">
-                  {/* تم التعديل: أفضل درجة 'best' ومن 10 */}
                   {calculateCategoryScore(studentData.grades, 'classInteraction', 'best')} / 10
                 </span>
               </h4>
@@ -901,7 +1124,7 @@ function StudentView() {
                   onClick={() => setIsPrizesModalOpen(true)}
                   className="bg-purple-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-purple-700 transition-colors"
                 >
-                  <FaGift /> عرض المكافآت
+                  <FaGift /> طلب المكافأة
                 </button>
               </div>
             </div>
@@ -935,7 +1158,31 @@ function StudentView() {
           </div>
         </div>
       </div>
-      {isPrizesModalOpen && <PrizesModal prizes={prizes} onClose={() => setIsPrizesModalOpen(false)} />}
+      
+      {/* NEW: PrizesModal for the student */}
+      {isPrizesModalOpen && 
+        <PrizesModal 
+            prizes={prizes} 
+            onClose={() => {
+                setIsPrizesModalOpen(false);
+                refreshStudentData(); // Refresh data in case of request submission/rejection
+            }}
+            currentStars={studentData.stars}
+            pendingRequest={pendingRequest}
+            onRequest={requestReward}
+            handleDialog={handleDialog}
+        />
+      }
+      
+      {showDialog && (
+        <CustomDialog
+          title={dialogTitle}
+          message={dialogMessage}
+          type={dialogType}
+          onConfirm={handleConfirmAction}
+          onClose={() => setShowDialog(false)}
+        />
+      )}
     </div>
   );
 }

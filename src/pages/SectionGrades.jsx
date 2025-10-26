@@ -20,6 +20,8 @@ import VerificationModal from "../components/VerificationModal.jsx";
 import CustomModal from "../components/CustomModal.jsx";
 import AnnouncementsModal from "../components/AnnouncementsModal";
 import VisitLogModal from "../components/VisitLogModal.jsx";
+import RewardRequestsModal from '../components/RewardRequestsModal'; 
+import RewardRequestsButton from '../components/RewardRequestsButton'; // <--- تم استيراد الزر الجديد
 import { QRCodeSVG } from 'qrcode.react';
 import { getHijriToday } from '../utils/recitationUtils';
 
@@ -65,7 +67,8 @@ import {
   FaExclamationTriangle,
   FaTimes,
   FaCalendarAlt, 
-  FaCalendarCheck 
+  FaCalendarCheck,
+  FaGift 
 } from "react-icons/fa";
 
 import {
@@ -97,6 +100,20 @@ const convertToEnglishNumbers = (input) => {
     output = output.replace(new RegExp(arabicNumbers[i], "g"), englishNumbers[i]);
   }
   return output;
+};
+
+// **********************************************************
+// الدالة المعرفة في المستوى الأعلى (ensureGradesArraySize)
+// **********************************************************
+const ensureGradesArraySize = (array, size) => {
+    const newArray = Array(size).fill(null);
+    const sourceArray = array && Array.isArray(array) ? array : [];
+    
+    // نقل القيم الموجودة من المصفوفة المصدر إلى المصفوفة الجديدة
+    for (let i = 0; i < Math.min(sourceArray.length, size); i++) {
+        newArray[i] = sourceArray[i];
+    }
+    return newArray;
 };
 
 
@@ -165,6 +182,9 @@ const SectionGrades = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showStarsModal, setShowStarsModal] = useState(false);
+  // NEW: Reward Requests State
+  const [showRewardRequestsModal, setShowRewardRequestsModal] = useState(false); 
+  // OLD: تم حذف [pendingRequestCount, setPendingRequestCount]
   const [showRecitationModal, setShowRecitationModal] = useState(false);
   const [showCurriculumModal, setShowCurriculumModal] = useState(false);
   const [showGradesModal, setShowGradesModal] = useState(false);
@@ -365,22 +385,14 @@ const SectionGrades = () => {
       } else {
         setAnnouncements(announcementsData || []);
       }
+      
+      // *** تم حذف منطق جلب pendingRequestCount من هنا (تم نقله إلى المكون الجديد) ***
 
       const parsedStudents = (studentsData || []).map(student => {
         
         // **********************************************************
-        // الإصلاح الجذري: دالة قوية لضمان حجم المصفوفة ونقل البيانات
+        // *** تم إصلاح المرجعية: استخدام ensureGradesArraySize ***
         // **********************************************************
-        const ensureGradesArraySize = (array, size) => {
-            const newArray = Array(size).fill(null);
-            const sourceArray = array && Array.isArray(array) ? array : [];
-            
-            // نقل القيم الموجودة من المصفوفة المصدر إلى المصفوفة الجديدة
-            for (let i = 0; i < Math.min(sourceArray.length, size); i++) {
-                newArray[i] = sourceArray[i];
-            }
-            return newArray;
-        };
 
         // ==========================================================
         // NEW: منطق تهيئة وتغليف الدرجات للفترتين (الملاحظات موحدة)
@@ -393,7 +405,6 @@ const SectionGrades = () => {
 
         // التحقق والتغليف لـ grades
         if (!grades.period1 && !grades.period2 && Object.keys(grades).length > 0) {
-            // هذا هو التنسيق القديم، نحذف weeklyNotes قبل التغليف لتوحيدها
             const { weeklyNotes: _, weekly_notes: __, ...oldGradesWithoutNotes } = grades;
 
             // تطبيق التهيئة على الهيكل القديم أيضاً لضمان التوافق مع الأحجام الجديدة
@@ -471,9 +482,7 @@ const SectionGrades = () => {
           id: student.id.toString(),
           grades: studentGrades, // الدرجات النشطة المعروضة
           acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
-          // *** الإصلاح: تغيير consumed_consumedStars إلى consumed_stars ***
           consumedStars: student.consumed_stars || 0, 
-          // *** الإصلاح: التأكد من استخدام consumed_stars ***
           stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0), 
           fullGrades: fullGradesUpdated, // الهيكل الكامل المحدث
           viewKey: student.view_key || `/grades/${gradeId}/sections/${sectionId}/students/${student.id}`,
@@ -482,7 +491,8 @@ const SectionGrades = () => {
           nationalId: student.national_id,
           parentPhone: student.parent_phone,
           phone: student.phone,
-          photo: student.photo
+          photo: student.photo,
+          teacher_id: student.teacher_id,
         };
 
         if (!studentWithStars.viewKey) {
@@ -597,7 +607,7 @@ const SectionGrades = () => {
       return;
     }
     try {
-        const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+        const sortedStudents = [...updatedStudents].sort((a, b) => b.name.localeCompare(a.name, 'ar')); // sort for consistency
         
         // 1. إعادة بناء الدرجات الكاملة قبل الحفظ
         const studentsToUpdate = sortedStudents.map(student => {
@@ -1445,7 +1455,7 @@ const updateBookAbsenceData = async (updatedStudents) => {
   };
 
 const handleExportQRCodes = async () => {
-  // ... (الكود الأصلي هنا)
+    // ... (الكود الأصلي هنا)
   try {
     handleDialog("جاري التصدير", "جاري إنشاء ملف الوورد، الرجاء الانتظار...", "info");
     const [{ Document, Packer, Paragraph, HeadingLevel, Table, TableRow, TableCell, WidthType, ImageRun, AlignmentType }, { toDataURL }, { saveAs }] = await Promise.all([
@@ -1819,6 +1829,14 @@ const handleExportQRCodes = async () => {
           <button onClick={() => setShowStarsModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-teal-500 text-white rounded-lg hover:bg-teal-400 transition-colors shadow-md text-xs md:text-sm">
             <FaStar /> إدارة النجوم
           </button>
+          
+{/* NEW: زر طلبات المكافآت مع Badge */}
+          <RewardRequestsButton
+            teacherId={teacherId}
+            students={students} // تم تمرير قائمة الطلاب غير المفلترة 
+            onClick={() => setShowRewardRequestsModal(true)}
+          />
+          
           <button onClick={() => setShowGradesModal(true)} className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors shadow-md text-xs md:text-sm">
             <FaTable /> إدارة الدرجات
           </button>
@@ -2053,7 +2071,7 @@ const handleExportQRCodes = async () => {
       )}
 
       {!showGradeSheet && !showBriefSheet && !showQrList && (
-        <div className="bg-gray-800 p-4 md:p-6 rounded-xl shadow-lg border border-gray-700">
+        <div className="bg-gray-800 p-4 md:p-6 rounded-xl shadow-lg mb-4 md:mb-8 border border-gray-700">
           <h3 className="text-xl md:text-2xl font-bold text-blue-400 text-right mb-4">
             الطلاب في {gradeName} - {sectionName} (الفترة {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})
           </h3>
@@ -2217,7 +2235,6 @@ const handleExportQRCodes = async () => {
               <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
                 <FaBookOpen className="text-3xl text-red-400" /> الاختبارات
                 <span className="text-red-400 font-bold mr-2 text-2xl">
-                  {/* تم التعديل: استخدام المجموع الكلي 'sum' */}
                   {calculateCategoryScore(selectedStudent.grades, 'tests', 'sum')} / 40
                 </span>
               </h4>
@@ -2471,6 +2488,18 @@ const handleExportQRCodes = async () => {
           prizes={prizes}
           onUpdatePrizes={handleUpdatePrizes}
           teacherId={teacherId}
+        />
+      )}
+      
+      {/* NEW: Reward Requests Modal */}
+      {showRewardRequestsModal && (
+        <RewardRequestsModal
+          show={showRewardRequestsModal}
+          onClose={() => setShowRewardRequestsModal(false)}
+          students={students}
+          handleDialog={handleDialog}
+          updateStudentsData={updateStudentsData}
+          fetchDataFromSupabase={fetchDataFromSupabase}
         />
       )}
 

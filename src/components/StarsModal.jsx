@@ -99,12 +99,15 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
 
     const studentsWithSufficientStars = selectedStudents.filter(studentId => {
       const student = students.find(s => s.id === studentId);
-      return student && student.stars >= stars;
+      // التحقق من الرصيد الحالي وليس المكتسب
+      return student && student.stars >= stars; 
     });
 
+    // إزالة النجوم يتم من المكتسب (acquiredStars) وليس من المستهلك (consumedStars)
+    // إذا كان الرصيد الحالي كافيًا، نقوم بطرح النجوم من الرصيد المكتسب
     if (studentsWithSufficientStars.length !== selectedStudents.length) {
       setMessage({
-        text: "لا يمكن إزالة النجوم. بعض الطلاب ليس لديهم رصيد كافٍ من النجوم.",
+        text: "لا يمكن إزالة النجوم. بعض الطلاب ليس لديهم رصيد كافٍ من النجوم الحالية.",
         type: "error"
       });
       setIsSaving(false);
@@ -113,6 +116,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
 
     const updatedStudents = students.map(student => {
       if (selectedStudents.includes(student.id)) {
+        // طرح النجوم من المكتسب لتقليل الرصيد الكلي
         const newAcquiredStars = Math.max(0, (student.acquiredStars || 0) - stars);
         return {
           ...student,
@@ -192,54 +196,8 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
       setIsSaving(false);
     }
   };
-
-  const redeemPrize = async (studentId, prizeId) => {
-    if (selectedStudents.length !== 1 || selectedStudents[0] !== studentId) {
-      setMessage({ text: "يجب تحديد طالب واحد فقط لاستخدام الجائزة.", type: "error" });
-      return;
-    }
-
-    const student = students.find(s => s.id === studentId);
-    const prize = prizes.find(p => p.id === prizeId);
-
-    if (student && prize) {
-      if (student.stars >= prize.cost) {
-        setIsSaving(true);
-        const updatedStudents = students.map(s => {
-          if (s.id === studentId) {
-            const newConsumedStars = (s.consumedStars || 0) + prize.cost;
-            return {
-              ...s,
-              consumedStars: newConsumedStars,
-              stars: (s.acquiredStars || 0) - newConsumedStars
-            };
-          }
-          return s;
-        });
-
-        try {
-          await onSave(updatedStudents);
-          setMessage({
-            text: `تم استهلاك جائزة "${prize.name}" بنجاح للطالب ${student.name}.`,
-            type: "success"
-          });
-          setSelectedStudents([]);
-        } catch (error) {
-          setMessage({
-            text: "حدث خطأ أثناء حفظ النجوم. يرجى المحاولة مرة أخرى.",
-            type: "error"
-          });
-        } finally {
-          setIsSaving(false);
-        }
-      } else {
-        setMessage({
-          text: `لا يوجد لدى الطالب ${student.name} نجوم كافية لاستخدام هذه الجائزة.`,
-          type: "error"
-        });
-      }
-    }
-  };
+  
+  // *** تم إزالة دالة redeemPrize للسماح بالاستهلاك عبر طلب الطالب فقط ***
 
   const isSaveDisabled = selectedStudents.length === 0 || stars < 1 || isSaving;
   const isRemoveDisabled = selectedStudents.length === 0 || stars < 1 || isSaving;
@@ -394,7 +352,7 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
           {/* Prizes Section */}
           <div className="p-6 bg-gray-900 rounded-xl border border-gray-700">
             <h4 className="text-xl md:text-2xl font-bold text-purple-400 flex items-center gap-2 mb-6">
-              <FaGift className="text-xl" /> الجوائز والمكافآت
+              <FaGift className="text-xl" /> الجوائز والمكافآت (تتم المطالبة بها من صفحة الطالب)
             </h4>
 
             {/* Add New Prize Form */}
@@ -451,24 +409,14 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
                     </div>
                     <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
                       <button
+                        // زر الاستهلاك معطل ومخصص للإشعار
                         onClick={() => {
-                          if (selectedStudents.length === 1) {
-                            const studentName = students.find(s => s.id === selectedStudents[0])?.name;
-                            if(window.confirm(`هل أنت متأكد من استهلاك جائزة "${prize.name}" للطالب ${studentName}؟`)) {
-                              redeemPrize(selectedStudents[0], prize.id);
-                            }
-                          } else {
-                            setMessage({ text: "يرجى تحديد طالب واحد فقط لاستخدام الجائزة.", type: "error" });
-                          }
+                           setMessage({ text: "يجب على الطالب طلب المكافأة من صفحته الخاصة.", type: "info" });
                         }}
-                        disabled={isSaving || selectedStudents.length !== 1}
-                        className={`flex items-center justify-center gap-2 px-6 py-2 rounded-xl font-semibold text-lg transition-colors ${
-                          isSaving || selectedStudents.length !== 1
-                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                            : 'bg-green-600 hover:bg-green-700 text-white'
-                        }`}
+                        disabled={true} // تعطيل دائم
+                        className={`flex items-center justify-center gap-2 px-6 py-2 rounded-xl font-semibold text-lg bg-gray-600 text-gray-400 cursor-not-allowed`}
                       >
-                        <FaGift /> استهلاك
+                        <FaGift /> استهلاك (عبر الطالب)
                       </button>
                       <button
                         onClick={() => {

@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import CustomModal from "./CustomModal";
 import { supabase } from "../supabaseClient";
-import { FaTrash, FaPlusCircle } from "react-icons/fa";
+import { FaTrash, FaPlusCircle, FaEye, FaEyeSlash } from "react-icons/fa";
 
 // Update the props to receive the numeric IDs
 const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teacherId, onSave, handleDialog }) => {
@@ -25,15 +25,18 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
           grade_id: numericGradeId, // Use the numeric gradeId
           section_id: sectionId, // Use the text sectionId
           teacher_id: teacherId,
+          is_visible: true, 
           created_at: new Date().toISOString()
         })
         .select();
 
       if (error) throw error;
       
-      onSave([...data, ...announcements]);
+      onSave([...data, ...announcements]); 
       setNewAnnouncement("");
-      onClose(); // <-- تم إضافة هذا السطر لإغلاق القائمة أولاً
+      
+      // الإجراء: إغلاق النافذة أولاً ثم عرض رسالة النجاح
+      onClose(); 
       handleDialog("نجاح", "تمت إضافة الإعلان بنجاح.", "success");
     } catch (error) {
       console.error("Error adding announcement:", error);
@@ -41,7 +44,45 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
     }
   };
 
+  const handleToggleVisibility = async (announcement) => {
+    const newVisibility = !announcement.is_visible;
+    const actionText = newVisibility ? "إظهار" : "إخفاء";
+    
+    // إغلاق النافذة المنبثقة قبل طلب التأكيد
+    onClose(); 
+    
+    handleDialog(
+        "تأكيد الإجراء",
+        `هل أنت متأكد من ${actionText} هذا الإعلان عن صفحة الطالب؟`,
+        "confirm",
+        async () => {
+            try {
+                const { error } = await supabase
+                    .from('announcements')
+                    .update({ is_visible: newVisibility })
+                    .eq('id', announcement.id);
+
+                if (error) throw error;
+
+                // تحديث الحالة المحلية
+                onSave(announcements.map(ann => 
+                    ann.id === announcement.id ? { ...ann, is_visible: newVisibility } : ann
+                ));
+                
+                handleDialog("نجاح", `تم ${actionText} الإعلان بنجاح.`, "success");
+            } catch (error) {
+                console.error("Error toggling visibility:", error);
+                handleDialog("خطأ", `حدث خطأ أثناء ${actionText} الإعلان.`, "error");
+            }
+        }
+    );
+  };
+
   const handleDeleteAnnouncement = async (id) => {
+    
+    // إغلاق النافذة المنبثقة قبل طلب التأكيد
+    onClose(); 
+    
     handleDialog(
       "تأكيد الحذف",
       "هل أنت متأكد من حذف هذا الإعلان؟",
@@ -55,6 +96,7 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
 
           if (error) throw error;
           onSave(announcements.filter(ann => ann.id !== id));
+          
           handleDialog("نجاح", "تم حذف الإعلان بنجاح.", "success");
         } catch (error) {
           console.error("Error deleting announcement:", error);
@@ -90,13 +132,39 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
                 key={ann.id}
                 className="bg-gray-700 p-4 rounded-lg flex items-center justify-between"
               >
-                <p className="text-sm text-gray-300">{ann.content}</p>
-                <button
-                  onClick={() => handleDeleteAnnouncement(ann.id)}
-                  className="text-red-400 hover:text-red-300 ml-4 transition-colors"
-                >
-                  <FaTrash />
-                </button>
+                <div className="flex-grow">
+                    <p className="text-sm text-gray-300">{ann.content}</p>
+                    {/* NEW: حالة العرض للطالب */}
+                    <span className={`text-xs font-semibold mt-1 inline-block px-2 py-0.5 rounded-full ${
+                        ann.is_visible 
+                            ? 'bg-green-600/50 text-green-100' 
+                            : 'bg-red-600/50 text-red-100'
+                    }`}>
+                        {ann.is_visible ? 'مرئي للطلاب' : 'مخفي عن الطلاب'}
+                    </span>
+                </div>
+                
+                {/* NEW: زر تبديل الرؤية والحذف */}
+                <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                    <button
+                        onClick={() => handleToggleVisibility(ann)}
+                        className={`p-2 rounded-full transition-colors ${
+                            ann.is_visible 
+                                ? 'text-green-400 hover:bg-green-900' 
+                                : 'text-red-400 hover:bg-red-900'
+                        }`}
+                        title={ann.is_visible ? "إخفاء عن الطلاب" : "إظهار للطلاب"}
+                    >
+                        {ann.is_visible ? <FaEye /> : <FaEyeSlash />}
+                    </button>
+                    <button
+                        onClick={() => handleDeleteAnnouncement(ann.id)}
+                        className="text-red-400 hover:text-red-300 p-2 transition-colors"
+                        title="حذف الإعلان"
+                    >
+                        <FaTrash />
+                    </button>
+                </div>
               </div>
             ))
           ) : (
