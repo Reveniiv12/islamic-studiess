@@ -253,7 +253,7 @@ function StudentView() {
         const baseData = {
           ...student,
           acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
-          consumedStars: student.consumed_consumedStars || 0,
+          consumedStars: student.consumed_stars || 0, // <--- تم التصحيح هنا
           stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
           nationalId: student.national_id,
           parentPhone: student.parent_phone,
@@ -362,7 +362,7 @@ function StudentView() {
         nationalId: student.national_id,
         parentPhone: student.parent_phone,
         acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
-        consumedStars: student.consumed_consumedStars || 0,
+        consumedStars: student.consumed_stars || 0, // <--- تم التصحيح هنا
         stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
         grade_level: student.grade_level,
         section: student.section,
