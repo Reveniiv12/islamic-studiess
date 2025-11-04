@@ -375,8 +375,45 @@ function StudentView() {
           const filteredRequests = rData ? rData.filter(r => r.teacher_id === teacherId) : [];
 
           // إعادة بناء الـ baseData
-          const fullGrades = student.grades || {};
-          let weeklyNotes = fullGrades.weeklyNotes || (fullGrades.weekly_notes) || Array(20).fill(null);
+          let grades = student.grades || {};
+          let weeklyNotes = grades.weeklyNotes || (grades.weekly_notes) || Array(20).fill(null);
+
+          // إعادة بناء fullGrades هنا لتجنب الأخطاء (نستخدم نفس المنطق الموجود في fetchBaseData)
+          let fullGrades;
+          if (!grades.period1 && !grades.period2 && Object.keys(grades).length > 0) {
+              const { weeklyNotes: _, weekly_notes: __, ...oldGradesWithoutNotes } = grades;
+              const oldPeriod1 = {
+                  tests: ensureArraySize(oldGradesWithoutNotes.tests, 2),
+                  homework: ensureArraySize(oldGradesWithoutNotes.homework, 10),
+                  performanceTasks: ensureArraySize(oldGradesWithoutNotes.performanceTasks || oldGradesWithoutNotes.performance_tasks, 4), 
+                  participation: ensureArraySize(oldGradesWithoutNotes.participation, 10),
+                  quranRecitation: ensureArraySize(oldGradesWithoutNotes.quranRecitation || oldGradesWithoutNotes.quran_recitation, 5),
+                  quranMemorization: ensureArraySize(oldGradesWithoutNotes.quranMemorization || oldGradesWithoutNotes.quran_memorization, 5),
+                  classInteraction: ensureArraySize(oldGradesWithoutNotes.classInteraction || oldGradesWithoutNotes.oralTest || oldGradesWithoutNotes.oral_test, 4), 
+              };
+              fullGrades = { period1: oldPeriod1, period2: createEmptyGradesStructure() };
+          } else {
+              fullGrades = {
+                  period1: {
+                      tests: ensureArraySize(grades.period1?.tests, 2),
+                      homework: ensureArraySize(grades.period1?.homework, 10),
+                      performanceTasks: ensureArraySize(grades.period1?.performanceTasks || grades.period1?.performance_tasks, 4),
+                      participation: ensureArraySize(grades.period1?.participation, 10),
+                      quranRecitation: ensureArraySize(grades.period1?.quranRecitation || grades.period1?.quran_recitation, 5),
+                      quranMemorization: ensureArraySize(grades.period1?.quranMemorization || grades.period1?.quran_memorization, 5),
+                      classInteraction: ensureArraySize(grades.period1?.classInteraction || grades.period1?.oralTest || grades.period1?.oral_test, 4),
+                  },
+                  period2: {
+                      tests: ensureArraySize(grades.period2?.tests, 2),
+                      homework: ensureArraySize(grades.period2?.homework, 10),
+                      performanceTasks: ensureArraySize(grades.period2?.performanceTasks || grades.period2?.performance_tasks, 4),
+                      participation: ensureArraySize(grades.period2?.participation, 10),
+                      quranRecitation: ensureArraySize(grades.period2?.quranRecitation || grades.period2?.quran_recitation, 5),
+                      quranMemorization: ensureArraySize(grades.period2?.quranMemorization || grades.period2?.quran_memorization, 5),
+                      classInteraction: ensureArraySize(grades.period2?.classInteraction || grades.period2?.oralTest || grades.period2?.oral_test, 4),
+                  },
+              };
+          }
           
           const newBaseData = {
               ...student,
@@ -522,6 +559,64 @@ function StudentView() {
       return () => clearTimeout(timeoutId);
     }
   }, [studentBaseData, currentPeriod, fullCurriculumData, fullHomeworkCurriculumData]); 
+  
+  // ********************************************************************
+  // 🚨🚨🚨 NEW: Visit Logging Logic (Added based on your request) 🚨🚨🚨
+  // ********************************************************************
+  useEffect(() => {
+      // استخلاص teacherId من البيانات الأساسية
+      const teacherId = studentBaseData?.teacher_id; 
+
+      // التحقق من وجود معرفات الطالب والمعلم قبل بدء التسجيل
+      if (studentId && teacherId) {
+          let visitId = null;
+
+          // الدالة المسؤولة عن تسجيل وقت الدخول (INSERT)
+          const logVisitStart = async () => {
+              const { data: insertData, error: insertError } = await supabase
+                  .from('page_visits')
+                  .insert([
+                      {
+                          student_id: studentId,
+                          teacher_id: teacherId,
+                          visit_start_time: new Date().toISOString(),
+                      },
+                  ])
+                  .select('id')
+                  .single();
+
+              if (insertError) {
+                  console.error("Error logging visit start:", insertError);
+              } else {
+                  // حفظ الـ ID لتحديث سجل الخروج لاحقًا
+                  visitId = insertData.id;
+              }
+          };
+
+          logVisitStart();
+
+          // دالة التنظيف (Cleanup) التي تعمل عند مغادرة الطالب للصفحة (UPDATE)
+          return () => {
+              if (visitId) {
+                  const logVisitEnd = async () => {
+                      const { error: updateError } = await supabase
+                          .from('page_visits')
+                          .update({ visit_end_time: new Date().toISOString() })
+                          .eq('id', visitId); // تحديث السجل باستخدام الـ ID المحفوظ
+
+                      if (updateError) {
+                          console.error("Error logging visit end:", updateError);
+                      }
+                  };
+                  logVisitEnd();
+              }
+          };
+      }
+      
+      // يتم إعادة تشغيل الخطاف إذا تغير مُعرّف الطالب أو teacherId في studentBaseData
+  }, [studentId, studentBaseData?.teacher_id]); 
+  // ********************************************************************
+
   
   // ----------------------------------------------------------------------
   // 4. Request Reward Functionality
