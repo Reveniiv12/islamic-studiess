@@ -108,12 +108,6 @@ function StudentView() {
   const [isPrizesModalOpen, setIsPrizesModalOpen] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   
-  // **********************************************************
-  // NEW: State for current authenticated user ID
-  // Used to determine if the viewer is the student or a teacher/unauthenticated.
-  const [currentAuthUserId, setCurrentAuthUserId] = useState(null); 
-  // **********************************************************
-
   // ==========================================================
   // NEW: Reward Request States
   const [rewardRequests, setRewardRequests] = useState([]);
@@ -147,7 +141,7 @@ function StudentView() {
 
 
   // ----------------------------------------------------------------------
-  // 1. Initial Data Fetch (Base/Shared Data) - UPDATED
+  // 1. Initial Data Fetch (Base/Shared Data)
   // ----------------------------------------------------------------------
 
   useEffect(() => {
@@ -160,14 +154,6 @@ function StudentView() {
 
       try {
         setLoadingInitial(true);
-        
-        // **********************************************************
-        // NEW: Get the current authenticated user session
-        const { data: { user } } = await supabase.auth.getUser();
-        const authenticatedUserId = user?.id || null;
-        setCurrentAuthUserId(authenticatedUserId);
-        // **********************************************************
-
 
         const { data: student, error: studentError } = await supabase
           .from('students')
@@ -389,45 +375,8 @@ function StudentView() {
           const filteredRequests = rData ? rData.filter(r => r.teacher_id === teacherId) : [];
 
           // إعادة بناء الـ baseData
-          let grades = student.grades || {};
-          let weeklyNotes = grades.weeklyNotes || (grades.weekly_notes) || Array(20).fill(null);
-
-          // إعادة بناء fullGrades هنا لتجنب الأخطاء (نستخدم نفس المنطق الموجود في fetchBaseData)
-          let fullGrades;
-          if (!grades.period1 && !grades.period2 && Object.keys(grades).length > 0) {
-              const { weeklyNotes: _, weekly_notes: __, ...oldGradesWithoutNotes } = grades;
-              const oldPeriod1 = {
-                  tests: ensureArraySize(oldGradesWithoutNotes.tests, 2),
-                  homework: ensureArraySize(oldGradesWithoutNotes.homework, 10),
-                  performanceTasks: ensureArraySize(oldGradesWithoutNotes.performanceTasks || oldGradesWithoutNotes.performance_tasks, 4), 
-                  participation: ensureArraySize(oldGradesWithoutNotes.participation, 10),
-                  quranRecitation: ensureArraySize(oldGradesWithoutNotes.quranRecitation || oldGradesWithoutNotes.quran_recitation, 5),
-                  quranMemorization: ensureArraySize(oldGradesWithoutNotes.quranMemorization || oldGradesWithoutNotes.quran_memorization, 5),
-                  classInteraction: ensureArraySize(oldGradesWithoutNotes.classInteraction || oldGradesWithoutNotes.oralTest || oldGradesWithoutNotes.oral_test, 4), 
-              };
-              fullGrades = { period1: oldPeriod1, period2: createEmptyGradesStructure() };
-          } else {
-              fullGrades = {
-                  period1: {
-                      tests: ensureArraySize(grades.period1?.tests, 2),
-                      homework: ensureArraySize(grades.period1?.homework, 10),
-                      performanceTasks: ensureArraySize(grades.period1?.performanceTasks || grades.period1?.performance_tasks, 4),
-                      participation: ensureArraySize(grades.period1?.participation, 10),
-                      quranRecitation: ensureArraySize(grades.period1?.quranRecitation || grades.period1?.quran_recitation, 5),
-                      quranMemorization: ensureArraySize(grades.period1?.quranMemorization || grades.period1?.quran_memorization, 5),
-                      classInteraction: ensureArraySize(grades.period1?.classInteraction || grades.period1?.oralTest || grades.period1?.oral_test, 4),
-                  },
-                  period2: {
-                      tests: ensureArraySize(grades.period2?.tests, 2),
-                      homework: ensureArraySize(grades.period2?.homework, 10),
-                      performanceTasks: ensureArraySize(grades.period2?.performanceTasks || grades.period2?.performance_tasks, 4),
-                      participation: ensureArraySize(grades.period2?.participation, 10),
-                      quranRecitation: ensureArraySize(grades.period2?.quranRecitation || grades.period2?.quran_recitation, 5),
-                      quranMemorization: ensureArraySize(grades.period2?.quranMemorization || grades.period2?.quran_memorization, 5),
-                      classInteraction: ensureArraySize(grades.period2?.classInteraction || grades.period2?.oralTest || grades.period2?.oral_test, 4),
-                  },
-              };
-          }
+          const fullGrades = student.grades || {};
+          let weeklyNotes = fullGrades.weeklyNotes || (fullGrades.weekly_notes) || Array(20).fill(null);
           
           const newBaseData = {
               ...student,
@@ -495,11 +444,44 @@ function StudentView() {
     try {
       setIsFetching(true);
       
+      const studentId = student.id; // تأكد من وجود ID الطالب
       const teacherId = student.teacher_id;
       const gradeId = student.grade_level;
       const sectionId = student.section;
       
-      // *** تم إزالة منطق تسجيل الزيارات والتحقق من المستخدم المسجل لـ RLS ***
+      
+      // *** المنطق المُعاد إضافته لتسجيل زيارة الصفحة (page_visits) ***
+      let visitId = null;
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Log the visit only if the user is not the teacher OR if there is no logged-in user (public access)
+      if (!user || user.id !== teacherId) {
+          // Check for previous incomplete visits for this student and close them
+          await supabase
+              .from('page_visits')
+              .update({ visit_end_time: new Date().toISOString() })
+              .eq('student_id', studentId)
+              .is('visit_end_time', null);
+              
+          // Insert a new visit log
+          const { data, error } = await supabase
+              .from('page_visits')
+              .insert({
+                  student_id: studentId,
+                  teacher_id: teacherId, // تسجيل مُعرف المعلم لسهولة التتبع
+                  visit_start_time: new Date().toISOString()
+              })
+              .select()
+              .single();
+
+          if (error) {
+              console.error("Error logging visit:", error);
+          } else {
+              visitId = data.id;
+          }
+      }
+      // *** نهاية منطق تسجيل الزيارات ***
+      
       
       // Fetch announcements (Shared Logic)
       const { data: announcementsData } = await supabase
@@ -550,12 +532,26 @@ function StudentView() {
       setIsFetching(false);
 
       // Cleanup function to log visit end time
-      return () => {}; 
+      return () => { 
+        if (visitId) {
+            // تحديث سجل الزيارة عند مغادرة الصفحة أو تغيير الفترة
+            supabase
+                .from('page_visits')
+                .update({ visit_end_time: new Date().toISOString() })
+                .eq('id', visitId)
+                .then(({ error }) => {
+                    if (error) console.error("Error updating visit end time on cleanup:", error);
+                });
+        }
+      }; 
 
     } catch (err) {
       console.error("Error fetching period data:", err);
       setError("فشل في جلب بيانات الفترة.");
       setIsFetching(false);
+      
+      // يجب أن تُعاد دالة تنظيف حتى في حالة وجود خطأ
+      return () => {}; 
     }
   };
   
@@ -573,67 +569,6 @@ function StudentView() {
       return () => clearTimeout(timeoutId);
     }
   }, [studentBaseData, currentPeriod, fullCurriculumData, fullHomeworkCurriculumData]); 
-  
-  // ********************************************************************
-  // 🚨🚨🚨 UPDATED: Visit Logging Logic (Conditional based on Auth ID) 🚨🚨🚨
-  // ********************************************************************
-  useEffect(() => {
-      const teacherId = studentBaseData?.teacher_id; 
-
-      // الشرط الحاسم: تسجيل الزيارة يتم فقط إذا كان المستخدم المصادق عليه هو الطالب (studentId)
-      // هذا يضمن عدم تسجيل زيارة إذا كان المستخدم معلمًا (لديه Auth ID مختلف)
-      // ونفترض أن الطالب هو المستخدم الوحيد الذي يجب تسجيل زيارته
-      const isStudentViewing = currentAuthUserId && (String(currentAuthUserId) === String(studentId));
-      
-      if (studentId && teacherId && isStudentViewing) {
-          let visitId = null;
-
-          // الدالة المسؤولة عن تسجيل وقت الدخول (INSERT)
-          const logVisitStart = async () => {
-              const { data: insertData, error: insertError } = await supabase
-                  .from('page_visits')
-                  .insert([
-                      {
-                          student_id: studentId,
-                          teacher_id: teacherId,
-                          visit_start_time: new Date().toISOString(),
-                      },
-                  ])
-                  .select('id')
-                  .single();
-
-              if (insertError) {
-                  console.error("Error logging visit start:", insertError);
-              } else {
-                  // حفظ الـ ID لتحديث سجل الخروج لاحقًا
-                  visitId = insertData.id;
-              }
-          };
-
-          logVisitStart();
-
-          // دالة التنظيف (Cleanup) التي تعمل عند مغادرة الطالب للصفحة (UPDATE)
-          return () => {
-              if (visitId) {
-                  const logVisitEnd = async () => {
-                      const { error: updateError } = await supabase
-                          .from('page_visits')
-                          .update({ visit_end_time: new Date().toISOString() })
-                          .eq('id', visitId); // تحديث السجل باستخدام الـ ID المحفوظ
-
-                      if (updateError) {
-                          console.error("Error logging visit end:", updateError);
-                      }
-                  };
-                  logVisitEnd();
-              }
-          };
-      }
-      
-      // يتم إعادة تشغيل الخطاف إذا تغير مُعرّف الطالب أو teacherId أو currentAuthUserId
-  }, [studentId, studentBaseData?.teacher_id, currentAuthUserId]); 
-  // ********************************************************************
-
   
   // ----------------------------------------------------------------------
   // 4. Request Reward Functionality
