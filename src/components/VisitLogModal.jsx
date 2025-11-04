@@ -13,10 +13,18 @@ const VisitLogModal = ({ show, onClose, students, teacherId }) => {
 
     useEffect(() => {
         if (show && teacherId && students && students.length > 0) {
+            const studentIds = students.map(s => s.id);
+            
+            // 🚨🚨🚨 الإضافات الجديدة لأغراض التحقق 🚨🚨🚨
+            console.log("--- Visit Log Fetch Debug ---");
+            console.log("Teacher ID being queried:", teacherId);
+            console.log("Student IDs array being queried:", studentIds);
+            console.log("Number of students in the array:", studentIds.length);
+            // 🚨🚨🚨 نهاية الإضافات 🚨🚨🚨
+
             const fetchVisits = async () => {
                 setLoading(true);
                 try {
-                    const studentIds = students.map(s => s.id);
                     const { data: rawVisits, error: visitsError } = await supabase
                         .from('page_visits')
                         .select('student_id, visit_start_time, visit_end_time')
@@ -25,6 +33,11 @@ const VisitLogModal = ({ show, onClose, students, teacherId }) => {
                         .order('visit_start_time', { ascending: false });
 
                     if (visitsError) throw visitsError;
+                    
+                    // 🚨🚨🚨 إضافة للتحقق من البيانات الراجعة 🚨🚨🚨
+                    console.log("Raw Visits Data returned from Supabase:", rawVisits);
+                    console.log("Number of raw visits returned:", rawVisits ? rawVisits.length : 0);
+                    // 🚨🚨🚨 نهاية الإضافة 🚨🚨🚨
 
                     const studentMap = new Map(students.map(s => [s.id, s]));
 
@@ -51,6 +64,16 @@ const VisitLogModal = ({ show, onClose, students, teacherId }) => {
                 }
             };
             fetchVisits();
+        } else if (show) {
+             // 🚨🚨🚨 إضافة للتحقق إذا لم يتحقق الشرط الأساسي 🚨🚨🚨
+            console.warn("VisitLogModal: Fetch condition not met.", { 
+                show, 
+                teacherId, 
+                studentsExists: !!students, 
+                studentsLength: students ? students.length : 0 
+            });
+            setLoading(false); // تأكد من إزالة شاشة التحميل إذا لم يتم الجلب
+             // 🚨🚨🚨 نهاية الإضافة 🚨🚨🚨
         }
     }, [show, teacherId, students]);
 
