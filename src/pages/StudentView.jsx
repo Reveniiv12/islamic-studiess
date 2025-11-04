@@ -108,6 +108,12 @@ function StudentView() {
   const [isPrizesModalOpen, setIsPrizesModalOpen] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   
+  // **********************************************************
+  // NEW: State for current authenticated user ID
+  // Used to determine if the viewer is the student or a teacher/unauthenticated.
+  const [currentAuthUserId, setCurrentAuthUserId] = useState(null); 
+  // **********************************************************
+
   // ==========================================================
   // NEW: Reward Request States
   const [rewardRequests, setRewardRequests] = useState([]);
@@ -141,7 +147,7 @@ function StudentView() {
 
 
   // ----------------------------------------------------------------------
-  // 1. Initial Data Fetch (Base/Shared Data)
+  // 1. Initial Data Fetch (Base/Shared Data) - UPDATED
   // ----------------------------------------------------------------------
 
   useEffect(() => {
@@ -154,6 +160,14 @@ function StudentView() {
 
       try {
         setLoadingInitial(true);
+        
+        // **********************************************************
+        // NEW: Get the current authenticated user session
+        const { data: { user } } = await supabase.auth.getUser();
+        const authenticatedUserId = user?.id || null;
+        setCurrentAuthUserId(authenticatedUserId);
+        // **********************************************************
+
 
         const { data: student, error: studentError } = await supabase
           .from('students')
@@ -561,14 +575,17 @@ function StudentView() {
   }, [studentBaseData, currentPeriod, fullCurriculumData, fullHomeworkCurriculumData]); 
   
   // ********************************************************************
-  // 🚨🚨🚨 NEW: Visit Logging Logic (Added based on your request) 🚨🚨🚨
+  // 🚨🚨🚨 UPDATED: Visit Logging Logic (Conditional based on Auth ID) 🚨🚨🚨
   // ********************************************************************
   useEffect(() => {
-      // استخلاص teacherId من البيانات الأساسية
       const teacherId = studentBaseData?.teacher_id; 
 
-      // التحقق من وجود معرفات الطالب والمعلم قبل بدء التسجيل
-      if (studentId && teacherId) {
+      // الشرط الحاسم: تسجيل الزيارة يتم فقط إذا كان المستخدم المصادق عليه هو الطالب (studentId)
+      // هذا يضمن عدم تسجيل زيارة إذا كان المستخدم معلمًا (لديه Auth ID مختلف)
+      // ونفترض أن الطالب هو المستخدم الوحيد الذي يجب تسجيل زيارته
+      const isStudentViewing = currentAuthUserId && (String(currentAuthUserId) === String(studentId));
+      
+      if (studentId && teacherId && isStudentViewing) {
           let visitId = null;
 
           // الدالة المسؤولة عن تسجيل وقت الدخول (INSERT)
@@ -613,8 +630,8 @@ function StudentView() {
           };
       }
       
-      // يتم إعادة تشغيل الخطاف إذا تغير مُعرّف الطالب أو teacherId في studentBaseData
-  }, [studentId, studentBaseData?.teacher_id]); 
+      // يتم إعادة تشغيل الخطاف إذا تغير مُعرّف الطالب أو teacherId أو currentAuthUserId
+  }, [studentId, studentBaseData?.teacher_id, currentAuthUserId]); 
   // ********************************************************************
 
   
