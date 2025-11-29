@@ -324,6 +324,12 @@ const StarsModal = ({ students = [], onClose, onSave, prizes = [], onUpdatePrize
                         className="form-checkbox h-5 w-5 text-blue-600 bg-gray-900 border-gray-500 rounded focus:ring-blue-500"
                         disabled={isSaving}
                       />
+                      {/* التعديل: إضافة صورة الطالب هنا */}
+                      <img 
+                          src={student.photo || '/images/1.webp'} 
+                          alt={student.name} 
+                          className="w-10 h-10 rounded-full object-cover border-2 border-gray-600"
+                      />
                       <span className="text-lg font-medium text-white">{student.name}</span>
                     </div>
                     <div className="flex flex-col items-end">
