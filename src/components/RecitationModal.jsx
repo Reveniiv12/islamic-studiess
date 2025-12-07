@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { FaBookOpen, FaStickyNote, FaSave, FaTimes, FaCheckCircle, FaTimesCircle, FaClock, FaQuestionCircle, FaUsers, FaPaperPlane, FaCalendarAlt, FaUserCircle, FaMicrophone } from 'react-icons/fa';
-import { getRecitationStatus } from '../utils/recitationUtils'; // نحتفظ بها، لكن لن نستخدمها في الفرز المباشر
+import { getRecitationStatus } from '../utils/recitationUtils'; 
 
 // =================================================================
 // StudentList Component (للعرض الثنائي) - تم التعديل لإضافة صورة الطالب
@@ -143,7 +143,7 @@ const noteTemplates = [
     }, [recitationType, availableTaskNumbers]);
 
 
-    // 3. useEffect لتصنيف الطلاب بناءً على المهمة المحددة (weekIndex) - **منطق الفرز المباشر المُصحَّح**
+    // 3. useEffect لتصنيف الطلاب بناءً على المهمة المحددة (weekIndex) - **منطق الفرز المُعدَّل**
     useEffect(() => {
         const solved = [];
         const notSolved = [];
@@ -165,8 +165,8 @@ const noteTemplates = [
                 
                 let statusText;
                 
-                // التحقق من وجود المهمة في المنهج (على الرغم من أن availableTaskNumbers تضمن ذلك)
-                const isTaskAvailable = curriculum.some(item => item.type === recitationType && curriculum.indexOf(item) === weekIndex);
+                // 🚨 التعديل هنا: التحقق من توفر المهمة يعتمد على أن weekIndex في نطاق قائمة المهام المتاحة المفلترة
+                const isTaskAvailable = weekIndex >= 0 && weekIndex < availableTaskNumbers.length;
 
                 if (!isTaskAvailable) {
                     statusText = 'لا يوجد منهج';
@@ -188,6 +188,7 @@ const noteTemplates = [
                 if (statusText === 'تم التسميع') {
                     solved.push(studentWithStatus);
                 } else {
+                    // يتم وضع 'لا يوجد منهج' هنا أيضاً
                     notSolved.push(studentWithStatus); 
                 }
             });
@@ -196,7 +197,7 @@ const noteTemplates = [
         setSolvedStudents(solved);
         setNotSolvedStudents(notSolved);
         setSelectedStudents([]); 
-    }, [recitationType, weekIndex, students, curriculum]); 
+    }, [recitationType, weekIndex, students, availableTaskNumbers]); // تم إضافة availableTaskNumbers إلى التوابع
 
 
     // **مصحح 3:** دالة اختيار رقم المهمة (تنفذ التحديث مباشرة)
