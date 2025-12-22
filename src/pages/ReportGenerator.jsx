@@ -2,7 +2,6 @@
 import React, { useState, useRef } from "react";
 import { FaPrint, FaArrowRight, FaFileAlt, FaImage, FaTrash, FaDownload, FaCloudUploadAlt, FaExternalLinkAlt } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import html2canvas from "html2canvas";
 import { supabase } from '../supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -534,3 +533,4 @@ const ReportGenerator = () => {
 };
 
 export default ReportGenerator;
+
