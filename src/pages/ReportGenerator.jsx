@@ -434,7 +434,7 @@ const ReportGenerator = () => {
             </div>
           </div>
 
-          <div className="px-10 mt-10 flex justify-between items-end">
+          <div className="absolute bottom-10 left-10 right-10 flex justify-between items-end">
             {formData.showSupervisor ? (
               <div style={{ background: "linear-gradient(to left, #1d72b8, #3eb3a3)", height: "70px", borderRadius: "35px", display: "flex", alignItems: "center", padding: "0 30px", color: "white", minWidth: "250px" }} className="shadow-lg">
                 <div className="text-center w-full">
