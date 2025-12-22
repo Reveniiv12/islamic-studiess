@@ -15,6 +15,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { supabase } from "./supabaseClient"; 
 import Portfolio from "./pages/Portfolio";
 import PortfolioPublic from "./pages/PortfolioPublic";
+import ReportGenerator from "./pages/ReportGenerator";
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -98,6 +99,8 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
+<Route path="/reports" element={<ReportGenerator />} />
 
             {/* مسار ملف الإنجاز العام (بدون حماية) */}
             <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
