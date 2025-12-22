@@ -3,7 +3,18 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { gradesData } from "../data/mockData";
 import Navbar from "../components/Navbar";
-import { FaUserGraduate, FaBars, FaTimes, FaCog, FaRedo, FaDownload, FaTrash, FaFolderOpen, FaChartBar } from "react-icons/fa";
+import { 
+  FaUserGraduate, 
+  FaBars, 
+  FaTimes, 
+  FaCog, 
+  FaRedo, 
+  FaDownload, 
+  FaTrash, 
+  FaFolderOpen, 
+  FaChartBar,
+  FaFileAlt // تم إضافة أيقونة التقارير هنا
+} from "react-icons/fa";
 import { supabase } from "../supabaseClient";
 
 const TeacherDashboard = () => {
@@ -503,7 +514,6 @@ const TeacherDashboard = () => {
     setBackupTitle("");
   };
 
-  // --- التعديل هنا ---
   const handleConfirmBackupTitle = async () => {
     setIsBackupTitleModalOpen(false);
     setModalMessage("جاري حفظ النسخة الاحتياطية، يرجى الانتظار...");
@@ -511,10 +521,7 @@ const TeacherDashboard = () => {
     if (success) {
       setModalMessage("تم حفظ النسخة الاحتياطية بنجاح.");
     }
-    // لا يوجد استدعاء لـ showDeleteConfirmation هنا
   };
-  // ------------------
-
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 font-['Noto_Sans_Arabic',sans-serif]">
@@ -567,9 +574,7 @@ const TeacherDashboard = () => {
             </div>
             <div className="flex justify-between items-center mt-6">
               <button onClick={() => { setIsBackupTitleModalOpen(false); }} className="px-6 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700 transition">إلغاء</button>
-              {/* --- التعديل هنا --- */}
               <button onClick={handleConfirmBackupTitle} className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition">تأكيد</button>
-              {/* ------------------ */}
             </div>
           </div>
         </div>
@@ -620,6 +625,17 @@ const TeacherDashboard = () => {
           </div>
 
           <div className="space-y-4">
+            {/* الزر الجديد المضاف هنا */}
+            <button 
+              onClick={() => {
+                setIsMenuOpen(false);
+                navigate("/reports");
+              }} 
+              className="w-full py-3 bg-teal-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-teal-700 transition shadow-lg font-bold"
+            >
+              <FaFileAlt /> إنشاء تقارير
+            </button>
+
             <button onClick={() => navigate("/portfolio")} className="w-full py-3 bg-blue-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-blue-700 transition">
               <FaFolderOpen /> ملف الإنجاز
             </button>
@@ -755,7 +771,7 @@ const TeacherDashboard = () => {
                 </p>
               </div>
               <div className="flex justify-center items-center bg-gray-700 text-blue-400 py-4">
-                <span className="text-md font-semibold">عرض الفصول →</span>
+                <span className="text-md font-semibold">عرض الفصول ←</span>
               </div>
             </div>
           ))}
@@ -764,6 +780,5 @@ const TeacherDashboard = () => {
     </div>
   );
 };
-
 
 export default TeacherDashboard;
