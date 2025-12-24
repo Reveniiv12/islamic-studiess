@@ -252,11 +252,11 @@ const ReportGenerator = () => {
             <div className="md:col-span-2 p-4 bg-gray-900/50 rounded-xl border border-gray-700 space-y-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" name="showSupervisor" checked={formData.showSupervisor} onChange={handleChange} className="accent-emerald-500 w-5 h-5" />
-                <span className="text-sm font-bold text-gray-300">إضافة حقل "المشرف التربوي" في التقرير</span>
+                <span className="text-sm font-bold text-gray-300">إضافة حقل "إعداد وإشراف" في التقرير</span>
               </label>
               {formData.showSupervisor && (
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 mb-1">اسم المشرف</label>
+                  <label className="block text-xs font-bold text-gray-400 mb-1">اسم المعد</label>
                   <input name="supervisorName" value={formData.supervisorName} onChange={handleChange} placeholder="اكتب اسم المشرف هنا..." className="w-full bg-gray-700 border-gray-600 rounded-lg p-2 text-white outline-none focus:ring-2 ring-emerald-500 text-sm" />
                 </div>
               )}
@@ -337,7 +337,7 @@ const ReportGenerator = () => {
             <div className="md:col-span-2 p-4 bg-gray-900/50 rounded-xl border border-gray-700 space-y-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" name="showExtraText" checked={formData.showExtraText} onChange={handleChange} className="accent-emerald-500 w-5 h-5" />
-                <span className="text-sm font-bold text-gray-300">تفعيل حقل "نص إضافي" بجانب الأهداف</span>
+                <span className="text-sm font-bold text-gray-300">تفعيل حقل "الملاحظات" بجانب الأهداف</span>
               </label>
               {formData.showExtraText && (
                 <textarea name="extraText" value={formData.extraText} rows="2" onChange={handleChange} placeholder="اكتب النص الإضافي هنا..." className="w-full bg-gray-700 border-gray-600 rounded-lg p-2 text-white outline-none focus:ring-2 ring-emerald-500 text-sm"></textarea>
@@ -418,7 +418,7 @@ const ReportGenerator = () => {
                   </div>
                   {formData.showExtraText && (
                     <div className="text-right">
-                      <p className="font-bold text-black text-xs mb-1">نص إضافي:</p>
+                      <p className="font-bold text-black text-xs mb-1">الملاحظات:</p>
                       <div className="bg-white/40 p-3 rounded-xl min-h-[100px] h-full border border-black/10">
                         <p className="text-black font-bold text-xs whitespace-pre-line" style={{ lineHeight: "1.5" }}>{formData.extraText}</p>
                       </div>
@@ -447,7 +447,7 @@ const ReportGenerator = () => {
               {formData.showSupervisor ? (
                 <div style={{ background: "linear-gradient(to left, #1d72b8, #3eb3a3)", height: "70px", borderRadius: "35px", display: "flex", alignItems: "center", padding: "0 30px", color: "white", minWidth: "250px" }} className="shadow-lg">
                   <div className="text-center w-full">
-                    <p className="text-[10px] font-bold opacity-90 mb-0">المشرف التربوي</p>
+                    <p className="text-[10px] font-bold opacity-90 mb-0">إعداد وإشراف</p>
                     <p className="text-lg font-black" style={{ lineHeight: "1" }}>{formData.supervisorName}</p>
                   </div>
                 </div>
@@ -509,3 +509,4 @@ const ReportGenerator = () => {
 };
 
 export default ReportGenerator;
+
