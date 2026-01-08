@@ -5,13 +5,15 @@ import { getHijriToday } from '../utils/recitationUtils';
 import { supabase } from '../supabaseClient';
 import CustomDialog from "./CustomDialog.jsx";
 
-// إضافة currentPeriod إلى props
-const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
+// إضافة activeSemester إلى props
+const CurriculumModal = ({ gradeId, sectionId, currentPeriod, activeSemester, onClose }) => {
   const [curriculum, setCurriculum] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newPart, setNewPart] = useState({ start: '', end: '', dueDate: getHijriToday(), type: 'memorization' });
   const [editingPart, setEditingPart] = useState(null);
   const [teacherId, setTeacherId] = useState(null);
+  
+  // Dialog States
   const [showDialog, setShowDialog] = useState(false);
   const [dialogTitle, setDialogTitle] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
@@ -34,38 +36,64 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
     setDialogAction(null);
   };
 
-  // دوال مساعدة لدعم التوافق والتعامل مع هيكل الفترات
-  const extractCurriculum = (data, period) => {
+  // ==========================================================
+  // دوال الهيكلة الجديدة (semester -> period)
+  // ==========================================================
+  
+  // دالة لاستخراج المنهج الصحيح بناءً على الفصل والفترة
+  const extractCurriculum = (data, semesterKey, periodKey) => {
     if (!data) return [];
-    if (Array.isArray(data.recitation)) { // تنسيق قديم: يعتبر period1
-        return period === 'period1' ? data.recitation : [];
+    
+    // محاولة الوصول للهيكل الجديد
+    const semesterData = data.recitation?.[semesterKey];
+    if (semesterData && semesterData[periodKey]) {
+        return semesterData[periodKey];
     }
-    return data.recitation?.[period] || [];
+
+    // دعم التوافقية: إذا كانت البيانات قديمة (مسطحة) ونحن في الفصل الأول، نعرضها
+    // أما إذا كنا في الفصل الثاني والبيانات مسطحة، نعود بمصفوفة فارغة (لأن القديم يخص الفصل الأول)
+    if (semesterKey === 'semester1' && data.recitation && !data.recitation.semester1) {
+         // فحص إذا كان القديم مخزن كـ period1 مباشرة
+         if (Array.isArray(data.recitation)) return periodKey === 'period1' ? data.recitation : [];
+         return data.recitation[periodKey] || [];
+    }
+
+    return [];
   };
 
-  const getFullCurriculumStructure = (existingData, currentPeriod, newRecitationPart) => {
-    let recitation = {};
-    let homework = {};
+  // دالة لبناء الهيكل الكامل عند الحفظ (دون فقدان بيانات الفصول الأخرى)
+  const getFullCurriculumStructure = (existingData, semesterKey, periodKey, newPeriodData) => {
+    let currentRecitationTree = existingData?.recitation || {};
+    let currentHomeworkTree = existingData?.homework || {};
 
-    // معالجة منهج التلاوة
-    if (existingData && Array.isArray(existingData.recitation)) {
-        recitation = { period1: existingData.recitation, period2: [] };
-    } else {
-        recitation = existingData?.recitation || { period1: [], period2: [] };
+    // 1. التأكد من أن الهيكل الجذري كائن وليس مصفوفة (تصحيح البيانات القديمة)
+    if (Array.isArray(currentRecitationTree)) {
+        // إذا كان مصفوفة، نعتبرها بيانات الفصل الأول-الفترة الأولى القديمة
+        currentRecitationTree = {
+            semester1: { period1: currentRecitationTree, period2: [] },
+            semester2: { period1: [], period2: [] }
+        };
+    } else if (currentRecitationTree.period1 && !currentRecitationTree.semester1) {
+        // إذا كان هيكل فترات مسطح (بدون فصول)
+        currentRecitationTree = {
+            semester1: { ...currentRecitationTree },
+            semester2: { period1: [], period2: [] }
+        };
     }
 
-    // معالجة منهج الواجبات (للحفاظ عليه)
-    if (existingData && Array.isArray(existingData.homework)) {
-         homework = { period1: existingData.homework, period2: [] };
-    } else {
-        homework = existingData?.homework || { period1: [], period2: [] };
+    // 2. التأكد من وجود مفتاح الفصل الدراسي الحالي
+    if (!currentRecitationTree[semesterKey]) {
+        currentRecitationTree[semesterKey] = { period1: [], period2: [] };
     }
 
-    // تحديث الجزء النشط فقط ضمن هيكل التلاوة
-    const updatedRecitation = { ...recitation, [currentPeriod]: newRecitationPart };
-    return { updatedRecitation, homework };
+    // 3. تحديث الفترة المحددة داخل الفصل المحدد
+    currentRecitationTree[semesterKey] = {
+        ...currentRecitationTree[semesterKey],
+        [periodKey]: newPeriodData
+    };
+
+    return { updatedRecitation: currentRecitationTree, homework: currentHomeworkTree };
   };
-  // نهاية الدوال المساعدة
 
   useEffect(() => {
     const fetchCurriculum = async () => {
@@ -84,8 +112,10 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
             if (error && error.code !== 'PGRST116') {
                 console.error("Error fetching curriculum:", error);
             }
+            
+            // استخدام الدالة الجديدة للاستخراج
             if (data) {
-                setCurriculum(extractCurriculum(data, currentPeriod) || []);
+                setCurriculum(extractCurriculum(data, activeSemester, currentPeriod));
             } else {
                 setCurriculum([]);
             }
@@ -94,7 +124,43 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
     };
 
     fetchCurriculum();
-  }, [gradeId, sectionId, currentPeriod]); 
+  }, [gradeId, sectionId, currentPeriod, activeSemester]); // تمت إضافة activeSemester للمصفوفة
+
+  const saveCurriculumToSupabase = async (updatedPeriodCurriculum) => {
+    try {
+        const { data: existingCurriculum } = await supabase
+            .from('curriculum')
+            .select('*')
+            .eq('grade_id', gradeId)
+            .eq('section_id', sectionId)
+            .eq('teacher_id', teacherId)
+            .single();
+
+        // بناء الهيكل الكامل
+        const { updatedRecitation, homework } = getFullCurriculumStructure(
+            existingCurriculum, 
+            activeSemester, 
+            currentPeriod, 
+            updatedPeriodCurriculum
+        );
+
+        const { error } = await supabase
+            .from('curriculum')
+            .upsert({
+                grade_id: gradeId,
+                section_id: sectionId,
+                teacher_id: teacherId,
+                recitation: updatedRecitation, 
+                homework: homework, // الحفاظ على الواجبات كما هي
+            }, { onConflict: 'grade_id,section_id' });
+
+        if (error) throw error;
+        return true;
+    } catch (error) {
+        console.error("Error saving curriculum:", error);
+        throw error;
+    }
+  };
 
   const handleAddPart = async () => {
     if (!newPart.start || !newPart.end || !newPart.dueDate) {
@@ -108,35 +174,13 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
 
     setLoading(true);
     try {
-        const { data: existingCurriculum, error: fetchError } = await supabase
-            .from('curriculum')
-            .select('*')
-            .eq('grade_id', gradeId)
-            .eq('section_id', sectionId)
-            .eq('teacher_id', teacherId)
-            .single();
-
         const newCurriculumPart = [...curriculum, { ...newPart, id: Date.now() }];
-        const { updatedRecitation, homework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, newCurriculumPart);
-
-        const { error } = await supabase
-            .from('curriculum')
-            .upsert({
-                grade_id: gradeId,
-                section_id: sectionId,
-                teacher_id: teacherId,
-                recitation: updatedRecitation, 
-                homework: homework,           
-            }, { onConflict: 'grade_id,section_id' });
-
-        if (error) throw error;
+        await saveCurriculumToSupabase(newCurriculumPart);
 
         setCurriculum(newCurriculumPart);
         setNewPart({ start: '', end: '', dueDate: getHijriToday(), type: 'memorization' });
         handleDialog("نجاح", "تم إضافة الجزء بنجاح", "success");
-
     } catch (error) {
-        console.error("Error adding curriculum part:", error);
         handleDialog("خطأ", "حدث خطأ أثناء إضافة جزء المنهج.", "error");
     } finally {
         setLoading(false);
@@ -148,117 +192,44 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
         handleDialog("خطأ", "الرجاء إدخال جميع الحقول.", "error");
         return;
     }
-    if (!teacherId) {
-        handleDialog("خطأ", "لا يمكن تحديث المنهج. لم يتم تحديد المعلم.", "error");
-        return;
-    }
 
     setLoading(true);
     try {
         const updatedCurriculum = curriculum.map(part =>
             part.id === editingPart.id ? newPart : part
         );
-
-        const { data: existingCurriculum } = await supabase
-            .from('curriculum')
-            .select('*')
-            .eq('grade_id', gradeId)
-            .eq('section_id', sectionId)
-            .eq('teacher_id', teacherId)
-            .single();
-
-        const { updatedRecitation, homework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, updatedCurriculum);
-
-        const { error } = await supabase
-            .from('curriculum')
-            .upsert({
-                grade_id: gradeId,
-                section_id: sectionId,
-                teacher_id: teacherId,
-                recitation: updatedRecitation,
-                homework: homework,
-            }, { onConflict: 'grade_id,section_id' });
-
-        if (error) throw error;
+        
+        await saveCurriculumToSupabase(updatedCurriculum);
 
         setCurriculum(updatedCurriculum);
         setNewPart({ start: '', end: '', dueDate: getHijriToday(), type: 'memorization' });
         setEditingPart(null);
         handleDialog("نجاح", "تم تحديث الجزء بنجاح", "success");
-
     } catch (error) {
-        console.error("Error updating curriculum part:", error);
         handleDialog("خطأ", "حدث خطأ أثناء تحديث جزء المنهج.", "error");
     } finally {
         setLoading(false);
     }
   };
 
-  // دالة الحذف الجزئي (معدلة)
-  const deleteCurriculumPart = async (partId, gId, sId, tId, currentCurriculum, setCurriculumState, dialogHandler) => {
+  const deleteCurriculumPart = async (partId) => {
     try {
-        const updatedCurriculum = currentCurriculum.filter(part => part.id !== partId);
-
-        const { data: existingCurriculum } = await supabase
-            .from('curriculum')
-            .select('*')
-            .eq('grade_id', gId)
-            .eq('section_id', sId)
-            .eq('teacher_id', tId)
-            .single();
-
-        const { updatedRecitation, homework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, updatedCurriculum);
-
-        const { error } = await supabase
-            .from('curriculum')
-            .upsert({
-                grade_id: gId,
-                section_id: sId,
-                teacher_id: tId,
-                recitation: updatedRecitation,
-                homework: homework,
-            }, { onConflict: 'grade_id,section_id' });
-
-        if (error) throw error;
-
-        setCurriculumState(updatedCurriculum);
-        dialogHandler("نجاح", "تم حذف الجزء بنجاح", "success");
+        const updatedCurriculum = curriculum.filter(part => part.id !== partId);
+        await saveCurriculumToSupabase(updatedCurriculum);
+        setCurriculum(updatedCurriculum);
+        handleDialog("نجاح", "تم حذف الجزء بنجاح", "success");
     } catch (error) {
-        console.error("Error deleting curriculum part:", error);
-        dialogHandler("خطأ", "حدث خطأ أثناء حذف الجزء.", "error");
+        handleDialog("خطأ", "حدث خطأ أثناء حذف الجزء.", "error");
     }
   };
 
-  // دالة الحذف الكلي للفترة النشطة فقط (معدلة)
-  const deleteAllCurriculum = async (gId, sId, tId, dialogHandler, setCurriculumState) => {
+  const deleteAllCurriculum = async () => {
     try {
-        const { data: existingCurriculum } = await supabase
-            .from('curriculum')
-            .select('*')
-            .eq('grade_id', gId)
-            .eq('section_id', sId)
-            .eq('teacher_id', tId)
-            .single();
-
-        const { updatedRecitation, homework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, []);
-
-        const { error } = await supabase
-            .from('curriculum')
-            .upsert({
-                grade_id: gId,
-                section_id: sId,
-                teacher_id: tId,
-                recitation: updatedRecitation,
-                homework: homework,
-            }, { onConflict: 'grade_id,section_id' });
-
-        if (error) throw error;
-
-        setCurriculumState([]);
-        dialogHandler("نجاح", "تم حذف كل أجزاء منهج هذه الفترة بنجاح", "success");
+        await saveCurriculumToSupabase([]);
+        setCurriculum([]);
+        handleDialog("نجاح", "تم حذف كل أجزاء منهج هذه الفترة بنجاح", "success");
     } catch (error) {
-        console.error("Error deleting all curriculum:", error);
-        dialogHandler("خطأ", "حدث خطأ أثناء حذف كل المنهج.", "error");
+        handleDialog("خطأ", "حدث خطأ أثناء حذف كل المنهج.", "error");
     }
   };
     
@@ -266,10 +237,15 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 font-['Noto_Sans_Arabic',sans-serif]">
       <div className="bg-gray-800 rounded-xl p-6 md:p-8 shadow-2xl w-full max-w-2xl text-right overflow-y-auto max-h-[90vh]">
         <div className="flex justify-between items-center border-b border-gray-700 pb-4 mb-4">
-          <h2 className="text-2xl font-bold text-blue-400">
-            إدارة منهج التلاوة والحفظ
-            <span className="text-xl text-gray-400 mr-2"> (الفترة {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})</span>
-          </h2>
+          <div className="flex flex-col">
+              <h2 className="text-2xl font-bold text-blue-400">
+                إدارة منهج التلاوة والحفظ
+              </h2>
+              <p className="text-sm text-gray-400 mt-1">
+                 {activeSemester === 'semester1' ? 'الفصل الدراسي الأول' : 'الفصل الدراسي الثاني'} - 
+                 {currentPeriod === 'period1' ? ' الفترة الأولى' : ' الفترة الثانية'}
+              </p>
+          </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <FaTimes size={24} />
           </button>
@@ -350,7 +326,7 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
                     "تأكيد حذف كل المناهج",
                     "هل أنت متأكد من حذف جميع أجزاء منهج التلاوة والحفظ في هذه الفترة؟ هذا الإجراء لا يمكن التراجع عنه.",
                     "confirm",
-                    () => deleteAllCurriculum(gradeId, sectionId, teacherId, handleDialog, setCurriculum)
+                    () => deleteAllCurriculum()
                   );
                 }}
                 className="bg-red-600 text-white py-1 px-3 rounded-lg text-sm flex items-center gap-2 hover:bg-red-500 transition-colors"
@@ -361,7 +337,7 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
               </button>
             </h3>
             {curriculum.length === 0 ? (
-                <p className="text-gray-400 text-center">لا يوجد منهج محدد بعد.</p>
+                <p className="text-gray-400 text-center">لا يوجد منهج محدد للفصل الدراسي الحالي.</p>
             ) : (
                 <div className="space-y-4">
                     {curriculum.map((part) => (
@@ -389,7 +365,7 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose }) => {
                                         "تأكيد الحذف",
                                         "هل أنت متأكد من حذف هذا الجزء من المنهج؟",
                                         "confirm",
-                                        () => deleteCurriculumPart(part.id, gradeId, sectionId, teacherId, curriculum, setCurriculum, handleDialog)
+                                        () => deleteCurriculumPart(part.id)
                                       );
                                     }}
                                     className="p-2 text-red-400 hover:text-red-300 transition-colors"

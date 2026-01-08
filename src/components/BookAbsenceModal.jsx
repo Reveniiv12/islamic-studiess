@@ -11,8 +11,9 @@ import {
   FaTrash
 } from 'react-icons/fa';
 
-const BookAbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
-  const startDate = new Date('2024-09-01');
+const BookAbsenceModal = ({ students, onClose, onSave, handleDialog, activeSemester }) => {
+  // تحديد البادئة بناءً على الفصل الحالي
+  const semesterPrefix = `${activeSemester}_`;
 
   const getHijriTodayShort = () => {
     const date = new Date();
@@ -29,16 +30,35 @@ const BookAbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
   };
 
   const initialBookAbsences = {};
+  
   students.forEach(student => {
     initialBookAbsences[student.id] =
       student.bookAbsences?.map(dateString => {
-        if (dateString.startsWith('W')) {
-          const [weekPart, dayPart] = dateString.split('-');
+        let processedString = dateString;
+        let belongsToCurrentSemester = false;
+
+        if (dateString.includes('_W')) {
+            // بيانات جديدة
+            if (dateString.startsWith(semesterPrefix)) {
+                processedString = dateString.replace(semesterPrefix, '');
+                belongsToCurrentSemester = true;
+            }
+        } else {
+            // بيانات قديمة (تعتبر للفصل الأول)
+            if (activeSemester === 'semester1') {
+                belongsToCurrentSemester = true;
+            }
+        }
+
+        if (!belongsToCurrentSemester) return null;
+
+        if (processedString.startsWith('W')) {
+          const [weekPart, dayPart] = processedString.split('-');
           const week = parseInt(weekPart.substring(1));
           const day = parseInt(dayPart.substring(1));
           return { week, day, date: getHijriTodayShort() };
         } else {
-          const date = new Date(dateString);
+          const date = new Date(processedString);
           if (isNaN(date.getTime())) return null;
 
           const hijriDateParts = date.toLocaleDateString('ar-SA-u-ca-islamic', {
@@ -85,8 +105,22 @@ const BookAbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
 const handleSaveBookAbsences = async () => {
     setIsSaving(true);
     const updatedStudents = students.map(student => {
-      const newBookAbsences = bookAbsencesByStudent[student.id]?.map(a => `W${a.week}-D${a.day}`) || [];
-      return { ...student, bookAbsences: newBookAbsences };
+      // 1. الحفاظ على بيانات الفصول الأخرى
+      const otherSemesterData = (student.bookAbsences || []).filter(dateString => {
+         if (dateString.includes('_W')) {
+             return !dateString.startsWith(semesterPrefix);
+         } else {
+             return activeSemester !== 'semester1';
+         }
+      });
+      
+      // 2. بيانات الفصل الحالي مع البادئة
+      const newBookAbsences = bookAbsencesByStudent[student.id]?.map(a => `${semesterPrefix}W${a.week}-D${a.day}`) || [];
+      
+      // 3. الدمج
+      const finalAbsences = [...otherSemesterData, ...newBookAbsences];
+
+      return { ...student, bookAbsences: finalAbsences };
     });
     
     await onSave(updatedStudents);
@@ -99,15 +133,25 @@ const handleDeleteAllBookAbsences = () => {
     onClose();
     setTimeout(() => {
         handleDialog(
-            "تأكيد الحذف",
-            "هل أنت متأكد من حذف جميع سجلات عدم إحضار الكتاب لكل الطلاب؟ لا يمكن التراجع عن هذا الإجراء.",
+            `تأكيد حذف بيانات ${activeSemester === 'semester1' ? 'الفصل الأول' : 'الفصل الثاني'}`,
+            "هل أنت متأكد من حذف جميع سجلات عدم إحضار الكتاب لهذا الفصل الدراسي فقط؟",
             "confirm",
             async () => {
                 setIsSaving(true);
-                const updatedStudents = students.map(student => ({
-                    ...student,
-                    bookAbsences: []
-                }));
+                const updatedStudents = students.map(student => {
+                    const keptAbsences = (student.bookAbsences || []).filter(dateString => {
+                        if (dateString.includes('_W')) {
+                            return !dateString.startsWith(semesterPrefix);
+                        } else {
+                            return activeSemester !== 'semester1';
+                        }
+                    });
+
+                    return {
+                        ...student,
+                        bookAbsences: keptAbsences
+                    };
+                });
                 await onSave(updatedStudents);
                 setIsSaving(false);
             }
@@ -175,7 +219,7 @@ const handleDeleteAllBookAbsences = () => {
       <div className="bg-gray-800 rounded-lg shadow-xl overflow-hidden max-w-6xl w-full max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-700">
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <FaBookOpen className="text-blue-400" /> كشف من لم يحضر الكتاب
+            <FaBookOpen className="text-blue-400" /> كشف من لم يحضر الكتاب ({activeSemester === 'semester1' ? 'الفصل الأول' : 'الفصل الثاني'})
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <FaTimes size={24} />
@@ -303,7 +347,7 @@ const handleDeleteAllBookAbsences = () => {
             className="bg-red-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-red-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FaTrash />
-            حذف الكل
+            حذف بيانات الفصل الحالي
           </button>
           <button
             onClick={onClose}

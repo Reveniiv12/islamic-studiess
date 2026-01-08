@@ -1,11 +1,11 @@
-// HomeworkCurriculumModal.jsx
+// src/components/HomeworkCurriculumModal.jsx
 import React, { useState, useEffect } from 'react';
 import { getHijriToday } from '../utils/recitationUtils';
 import { supabase } from '../supabaseClient';
 import { FaTimes, FaPlus, FaSave, FaPen, FaTrash } from 'react-icons/fa';
 
-// إضافة handleDialog إلى props
-const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, handleDialog }) => {
+// إضافة activeSemester إلى props
+const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, activeSemester, onClose, handleDialog }) => {
     const [homeworkCurriculum, setHomeworkCurriculum] = useState([]);
     const [loading, setLoading] = useState(true);
     const [newPart, setNewPart] = useState({
@@ -16,38 +16,61 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
     const [editingPart, setEditingPart] = useState(null);
     const [teacherId, setTeacherId] = useState(null);
 
-    // دوال مساعدة لدعم التوافق والتعامل مع هيكل الفترات
-    const extractHomeworkCurriculum = (data, period) => {
+    // ==========================================================
+    // دوال التعامل مع الهيكل الجديد (Semester -> Period)
+    // ==========================================================
+    
+    const extractHomeworkCurriculum = (data, semesterKey, periodKey) => {
         if (!data) return [];
-        if (Array.isArray(data.homework)) { // تنسيق قديم
-            return period === 'period1' ? data.homework : [];
+
+        // 1. محاولة الوصول للهيكل الجديد (الهرمي)
+        const semesterData = data.homework?.[semesterKey];
+        if (semesterData && semesterData[periodKey]) {
+            return semesterData[periodKey];
         }
-        return data.homework?.[period] || [];
+
+        // 2. دعم التوافقية: إذا كنا في الفصل الأول والبيانات قديمة (مسطحة)
+        if (semesterKey === 'semester1' && data.homework && !data.homework.semester1) {
+             if (Array.isArray(data.homework)) return periodKey === 'period1' ? data.homework : [];
+             return data.homework[periodKey] || [];
+        }
+
+        // إذا كنا في الفصل الثاني ولا توجد بيانات له، نرجع مصفوفة فارغة (لا نعرض بيانات الفصل الأول)
+        return [];
     };
 
-    const getFullCurriculumStructure = (existingData, currentPeriod, newHomeworkCurriculumPart) => {
-        let recitation = {};
-        let homework = {};
+    const getFullCurriculumStructure = (existingData, semesterKey, periodKey, newPeriodData) => {
+        let currentRecitationTree = existingData?.recitation || {};
+        let currentHomeworkTree = existingData?.homework || {};
 
-        // معالجة منهج التلاوة (للحفاظ عليه)
-        if (existingData && Array.isArray(existingData.recitation)) {
-            recitation = { period1: existingData.recitation, period2: [] };
-        } else {
-            recitation = existingData?.recitation || { period1: [], period2: [] };
+        // 1. تصحيح هيكل الواجبات إذا كان قديماً (مسطحاً)
+        if (Array.isArray(currentHomeworkTree)) {
+            currentHomeworkTree = {
+                semester1: { period1: currentHomeworkTree, period2: [] },
+                semester2: { period1: [], period2: [] }
+            };
+        } else if (currentHomeworkTree.period1 && !currentHomeworkTree.semester1) {
+            // إذا كان هيكل فترات بدون فصول
+            currentHomeworkTree = {
+                semester1: { ...currentHomeworkTree },
+                semester2: { period1: [], period2: [] }
+            };
         }
 
-        // معالجة منهج الواجبات
-        if (existingData && Array.isArray(existingData.homework)) {
-            homework = { period1: existingData.homework, period2: [] };
-        } else {
-            homework = existingData?.homework || { period1: [], period2: [] };
+        // 2. التأكد من وجود كائن الفصل الدراسي
+        if (!currentHomeworkTree[semesterKey]) {
+            currentHomeworkTree[semesterKey] = { period1: [], period2: [] };
         }
 
-        // تحديث الجزء النشط فقط ضمن هيكل الواجبات
-        const updatedHomework = { ...homework, [currentPeriod]: newHomeworkCurriculumPart };
-        return { recitation, updatedHomework };
+        // 3. تحديث الفترة المحددة داخل الفصل المحدد
+        currentHomeworkTree[semesterKey] = {
+            ...currentHomeworkTree[semesterKey],
+            [periodKey]: newPeriodData
+        };
+
+        return { recitation: currentRecitationTree, updatedHomework: currentHomeworkTree };
     };
-    // نهاية الدوال المساعدة
+    // ==========================================================
 
     useEffect(() => {
         const fetchHomeworkCurriculum = async () => {
@@ -73,7 +96,8 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
                         throw error;
                     }
 
-                    setHomeworkCurriculum(extractHomeworkCurriculum(data, currentPeriod) || []);
+                    // استخدام دالة الاستخراج الجديدة مع الفصل الدراسي
+                    setHomeworkCurriculum(extractHomeworkCurriculum(data, activeSemester, currentPeriod) || []);
                 } catch (error) {
                     console.error("Error fetching homework curriculum:", error);
                 } finally {
@@ -83,9 +107,8 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
         };
 
         fetchHomeworkCurriculum();
-    }, [gradeId, sectionId, currentPeriod]);
+    }, [gradeId, sectionId, currentPeriod, activeSemester]); // تمت إضافة activeSemester
 
-    // **الدالة المعدلة لإخفاء الخيارات المضافة**
     const getOptionsForType = (type) => {
         let count = 0;
         let prefix = '';
@@ -93,37 +116,32 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
             count = 10;
             prefix = 'واجب ';
         } else if (type === 'performanceTask') {
-            count = 4; // تم التعديل إلى 4 ليتوافق مع SectionGrades
+            count = 4; 
             prefix = 'مهمة أدائية ';
         } else if (type === 'test') {
-            count = 2; // تم التعديل إلى 2 ليتوافق مع SectionGrades
+            count = 2; 
             prefix = 'اختبار ';
         }
         
-        // استخراج أسماء المهام الموجودة من نفس النوع، مع استثناء المهمة التي يتم تعديلها حالياً
         const existingNames = homeworkCurriculum
             .filter(p => p.type === type)
-            .filter(p => !editingPart || p.id !== editingPart.id) // تجاهل المهمة التي يتم تعديلها
+            .filter(p => !editingPart || p.id !== editingPart.id) 
             .map(p => p.name);
         
         const options = [];
         for (let i = 1; i <= count; i++) {
             const optionName = `${prefix}${i}`;
-            
-            // إضافة الاسم للقائمة فقط إذا لم يكن موجوداً بالفعل
             if (!existingNames.includes(optionName)) {
                 options.push(optionName);
             }
         }
         
-        // إذا كنا في وضع التعديل، تأكد من إضافة اسم الجزء الأصلي ليتوفر في القائمة
         if (editingPart && editingPart.type === type && !options.includes(editingPart.name)) {
             options.push(editingPart.name);
         }
 
         return options;
     };
-    // **نهاية الدالة المعدلة**
 
     const handleAddPart = async () => {
         if (!newPart.name || !newPart.dueDate) {
@@ -146,7 +164,14 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
                 .single();
 
             const newHomeworkCurriculumPart = [...homeworkCurriculum, { ...newPart, id: Date.now() }];
-            const { recitation, updatedHomework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, newHomeworkCurriculumPart);
+            
+            // استخدام دالة الهيكلة الجديدة
+            const { recitation, updatedHomework } = getFullCurriculumStructure(
+                existingCurriculum, 
+                activeSemester, 
+                currentPeriod, 
+                newHomeworkCurriculumPart
+            );
             
             const { error } = await supabase
                 .from('curriculum')
@@ -177,10 +202,6 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
             if (handleDialog) handleDialog("تنبيه", "يرجى تعبئة جميع الحقول المطلوبة.", "warning");
             return;
         }
-        if (!teacherId) {
-            if (handleDialog) handleDialog("خطأ", "هوية المعلم غير متوفرة. لا يمكن التحديث.", "error");
-            return;
-        }
 
         setLoading(true);
         try {
@@ -196,7 +217,12 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
                 .eq('teacher_id', teacherId)
                 .single();
 
-            const { recitation, updatedHomework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, updatedHomeworkCurriculum);
+            const { recitation, updatedHomework } = getFullCurriculumStructure(
+                existingCurriculum, 
+                activeSemester, 
+                currentPeriod, 
+                updatedHomeworkCurriculum
+            );
 
             const { error } = await supabase
                 .from('curriculum')
@@ -217,18 +243,12 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
 
         } catch (error) {
             if (handleDialog) handleDialog("خطأ", `فشل تحديث المهمة: ${error.message}`, "error");
-            console.error("Error updating homework curriculum part:", error);
         } finally {
             setLoading(false);
         }
     };
 
     const handleDeletePart = async (id) => {
-        if (!teacherId) {
-            if (handleDialog) handleDialog("خطأ", "هوية المعلم غير متوفرة. لا يمكن الحذف.", "error");
-            return;
-        }
-
         setLoading(true);
         try {
             const updatedHomeworkCurriculum = homeworkCurriculum.filter(part => part.id !== id);
@@ -241,7 +261,12 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
                 .eq('teacher_id', teacherId)
                 .single();
 
-            const { recitation, updatedHomework } = getFullCurriculumStructure(existingCurriculum, currentPeriod, updatedHomeworkCurriculum);
+            const { recitation, updatedHomework } = getFullCurriculumStructure(
+                existingCurriculum, 
+                activeSemester, 
+                currentPeriod, 
+                updatedHomeworkCurriculum
+            );
 
             const { error } = await supabase
                 .from('curriculum')
@@ -256,7 +281,6 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
             if (error) throw error;
             
             setHomeworkCurriculum(updatedHomeworkCurriculum);
-            // إعادة تعيين وضع التعديل إذا تم حذف العنصر الذي يتم تعديله
             if (editingPart && editingPart.id === id) {
                 setEditingPart(null);
                 setNewPart({ name: '', type: 'homework', dueDate: getHijriToday() });
@@ -265,7 +289,6 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
             
         } catch (error) {
             if (handleDialog) handleDialog("خطأ", `فشل حذف المهمة: ${error.message}`, "error");
-            console.error("Error deleting homework curriculum part:", error);
         } finally {
             setLoading(false);
         }
@@ -280,27 +303,30 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, onClose, h
         }
     };
     
-    // دالة لتهيئة وضع التعديل
     const handleEditClick = (part) => {
         setEditingPart(part);
         setNewPart({ name: part.name, type: part.type, dueDate: part.dueDate });
     };
 
-    // دالة لإلغاء وضع التعديل
     const handleCancelEdit = () => {
         setEditingPart(null);
         setNewPart({ name: '', type: 'homework', dueDate: getHijriToday() });
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 font-['Noto_Sans_Arabic',sans-serif]">
             <div dir="rtl" className="bg-gray-800 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-700">
                 <div className="p-6 overflow-y-auto">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-bold text-gray-100">
-                            الواجبات والمهام الأدائية والاختبارات 
-                            <span className="text-base text-gray-400 mr-2"> (الفترة {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})</span>
-                        </h3>
+                        <div className="flex flex-col">
+                            <h3 className="text-xl font-bold text-gray-100">
+                                الواجبات والمهام والاختبارات
+                            </h3>
+                            <p className="text-sm text-gray-400 mt-1">
+                                {activeSemester === 'semester1' ? 'الفصل الدراسي الأول' : 'الفصل الدراسي الثاني'} - 
+                                {currentPeriod === 'period1' ? ' الفترة الأولى' : ' الفترة الثانية'}
+                            </p>
+                        </div>
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-200 text-3xl leading-none font-semibold">&times;</button>
                     </div>
 

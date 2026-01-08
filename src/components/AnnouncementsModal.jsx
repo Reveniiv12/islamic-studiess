@@ -1,12 +1,34 @@
 // src/components/AnnouncementsModal.jsx
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import CustomModal from "./CustomModal";
 import { supabase } from "../supabaseClient";
 import { FaTrash, FaPlusCircle, FaEye, FaEyeSlash } from "react-icons/fa";
 
-// Update the props to receive the numeric IDs
-const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teacherId, onSave, handleDialog }) => {
+const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teacherId, onSave, handleDialog, activeSemester }) => {
   const [newAnnouncement, setNewAnnouncement] = useState("");
+
+  // تحديد البادئة بناءً على الفصل الدراسي الحالي
+  const semesterPrefix = `${activeSemester}_`;
+
+  // تصفية الإعلانات لعرض ما يخص الفصل الحالي فقط
+  const filteredAnnouncements = useMemo(() => {
+    return announcements.filter(ann => {
+      // إذا كان الإعلان يحتوي على بادئة فصل دراسي (بيانات جديدة)
+      if (ann.content.startsWith('semester1_') || ann.content.startsWith('semester2_')) {
+        return ann.content.startsWith(semesterPrefix);
+      }
+      // إذا لم يحتوي على بادئة (بيانات قديمة)، نعتبرها تابعة للفصل الأول
+      return activeSemester === 'semester1';
+    });
+  }, [announcements, activeSemester, semesterPrefix]);
+
+  // دالة لتنظيف النص وعرضه بدون البادئة
+  const getDisplayText = (content) => {
+    if (content.startsWith('semester1_') || content.startsWith('semester2_')) {
+      return content.replace(/^semester\d+_/, '');
+    }
+    return content;
+  };
 
   const handleAddAnnouncement = async () => {
     if (newAnnouncement.trim() === "") {
@@ -15,15 +37,17 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
     }
 
     try {
-      // Ensure gradeId is converted to an integer if it's a string from useParams
       const numericGradeId = parseInt(gradeId, 10);
       
+      // إضافة البادئة للنص قبل الحفظ في قاعدة البيانات
+      const contentWithPrefix = `${semesterPrefix}${newAnnouncement}`;
+
       const { data, error } = await supabase
         .from('announcements')
         .insert({
-          content: newAnnouncement,
-          grade_id: numericGradeId, // Use the numeric gradeId
-          section_id: sectionId, // Use the text sectionId
+          content: contentWithPrefix,
+          grade_id: numericGradeId,
+          section_id: sectionId,
           teacher_id: teacherId,
           is_visible: true, 
           created_at: new Date().toISOString()
@@ -32,10 +56,10 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
 
       if (error) throw error;
       
+      // تحديث القائمة العامة (التي تحتوي كل الفصول)
       onSave([...data, ...announcements]); 
       setNewAnnouncement("");
       
-      // الإجراء: إغلاق النافذة أولاً ثم عرض رسالة النجاح
       onClose(); 
       handleDialog("نجاح", "تمت إضافة الإعلان بنجاح.", "success");
     } catch (error) {
@@ -48,7 +72,6 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
     const newVisibility = !announcement.is_visible;
     const actionText = newVisibility ? "إظهار" : "إخفاء";
     
-    // إغلاق النافذة المنبثقة قبل طلب التأكيد
     onClose(); 
     
     handleDialog(
@@ -64,7 +87,6 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
 
                 if (error) throw error;
 
-                // تحديث الحالة المحلية
                 onSave(announcements.map(ann => 
                     ann.id === announcement.id ? { ...ann, is_visible: newVisibility } : ann
                 ));
@@ -79,8 +101,6 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
   };
 
   const handleDeleteAnnouncement = async (id) => {
-    
-    // إغلاق النافذة المنبثقة قبل طلب التأكيد
     onClose(); 
     
     handleDialog(
@@ -107,7 +127,7 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
   };
 
   return (
-    <CustomModal title="إدارة الإعلانات الهامة" onClose={onClose}>
+    <CustomModal title={`إدارة الإعلانات الهامة (${activeSemester === 'semester1' ? 'الفصل الأول' : 'الفصل الثاني'})`} onClose={onClose}>
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <input
@@ -126,15 +146,16 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
           </button>
         </div>
         <div className="space-y-3 max-h-80 overflow-y-auto">
-          {announcements.length > 0 ? (
-            announcements.map((ann) => (
+          {filteredAnnouncements.length > 0 ? (
+            filteredAnnouncements.map((ann) => (
               <div
                 key={ann.id}
                 className="bg-gray-700 p-4 rounded-lg flex items-center justify-between"
               >
                 <div className="flex-grow">
-                    <p className="text-sm text-gray-300">{ann.content}</p>
-                    {/* NEW: حالة العرض للطالب */}
+                    {/* هنا نستخدم الدالة لتنظيف النص من البادئة عند العرض */}
+                    <p className="text-sm text-gray-300">{getDisplayText(ann.content)}</p>
+                    
                     <span className={`text-xs font-semibold mt-1 inline-block px-2 py-0.5 rounded-full ${
                         ann.is_visible 
                             ? 'bg-green-600/50 text-green-100' 
@@ -144,7 +165,6 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
                     </span>
                 </div>
                 
-                {/* NEW: زر تبديل الرؤية والحذف */}
                 <div className="flex items-center gap-2 ml-4 flex-shrink-0">
                     <button
                         onClick={() => handleToggleVisibility(ann)}
@@ -168,7 +188,7 @@ const AnnouncementsModal = ({ announcements, onClose, gradeId, sectionId, teache
               </div>
             ))
           ) : (
-            <p className="text-center text-gray-400">لا توجد إعلانات حاليًا.</p>
+            <p className="text-center text-gray-400">لا توجد إعلانات لهذا الفصل حاليًا.</p>
           )}
         </div>
       </div>

@@ -1,10 +1,9 @@
+// src/components/HomeworkModal.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-// تم استيراد FaCalendarAlt لتكتمل قائمة الأيقونات
 import { FaSave, FaTimes, FaCheckCircle, FaTimesCircle, FaClock, FaQuestionCircle, FaStickyNote, FaUsers, FaPaperPlane, FaUserCircle, FaBookOpen, FaPencilAlt, FaTasks, FaCalendarAlt } from 'react-icons/fa';
-import { taskStatusUtils } from '../utils/gradeUtils';
 
 // =================================================================
-// B. StudentList Component (تم التعديل لإضافة صورة الطالب)
+// B. StudentList Component
 // =================================================================
 
 const StudentList = ({ title, color, students, selectedStudents, toggleSelect, onSelectAll }) => {
@@ -53,7 +52,6 @@ const StudentList = ({ title, color, students, selectedStudents, toggleSelect, o
                                     onChange={(e) => { e.stopPropagation(); toggleSelect(student.id); }} 
                                     className={`form-checkbox accent-blue-500 text-white w-5 h-5`}
                                 />
-                                {/* التعديل: استخدام صورة الطالب */}
                                 <img 
                                     src={student.photo || '/images/1.webp'} 
                                     alt={student.name} 
@@ -87,7 +85,6 @@ const noteTemplates = [
 ];
 
 const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDialog }) => {
-    // A. حالات داخلية (state)
     const [taskType, setTaskType] = useState('homework'); 
     const [taskNumber, setTaskNumber] = useState(0); 
     const [noteType, setNoteType] = useState('custom');
@@ -95,16 +92,13 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
     const [selectedTemplate, setSelectedTemplate] = useState('');
     const [selectedStudents, setSelectedStudents] = useState([]);
     const [isSending, setIsSending] = useState(false); 
-    
-    // **NEW STATE: أسبوع حفظ الملاحظة (1-20)**
     const [noteWeekIndex, setNoteWeekIndex] = useState(1); 
     
-    // B. تصنيف الطلاب
     const [solvedStudents, setSolvedStudents] = useState([]);
     const [notSolvedStudents, setNotSolvedStudents] = useState([]);
 
-    // 1. حساب أرقام المهام المتاحة بناءً على homeworkCurriculum
     const availableTaskNumbers = useMemo(() => {
+        if (!homeworkCurriculum) return []; // حماية
         const filteredTasks = homeworkCurriculum
             .filter(task => task.type === taskType)
             .map(task => {
@@ -117,21 +111,17 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
         return filteredTasks;
     }, [taskType, homeworkCurriculum]);
 
-    // 2. useEffect لتعيين رقم المهمة الافتراضي عند تغيير taskType أو تحميل المنهج
     useEffect(() => {
         if (availableTaskNumbers.length > 0 && (taskNumber === 0 || !availableTaskNumbers.includes(taskNumber))) {
             const defaultTaskNumber = availableTaskNumbers[0];
             setTaskNumber(defaultTaskNumber);
-            // تعيين أسبوع الملاحظة الافتراضي ليكون نفس رقم المهمة المحددة
             setNoteWeekIndex(defaultTaskNumber);
         } else if (availableTaskNumbers.length === 0) {
             setTaskNumber(0); 
-            // تعيين أسبوع الملاحظة إلى القيمة الافتراضية 1 عند عدم وجود مهام
             setNoteWeekIndex(1);
         }
     }, [taskType, availableTaskNumbers]);
 
-    // 3. useEffect لتصنيف الطلاب بناءً على المهمة المحددة (taskNumber) - **المنطق المُصحَّح والنهائي**
     useEffect(() => {
         const solved = [];
         const notSolved = [];
@@ -142,7 +132,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
             students.forEach(student => {
                 const studentWithStatus = { ...student };
                 
-                // تحديد مصفوفة الدرجات الصحيحة بناءً على taskType
                 let taskGradesArray;
                 if (taskType === 'performanceTask') {
                     taskGradesArray = student.grades.performanceTasks;
@@ -152,12 +141,11 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                     taskGradesArray = student.grades.homework;
                 }
 
-                // تحديد قيمة الدرجة (القيمة المحفوظة في سجل الطالب)
                 const gradeValue = Array.isArray(taskGradesArray) && weekIndex >= 0 && weekIndex < taskGradesArray.length
                     ? taskGradesArray[weekIndex]
                     : null; 
                 
-                // 1. التحقق من وجود المهمة في المنهج (هل يجب على الطالب حلها؟)
+                // هنا يتم التحقق من المنهج القادم من props. إذا كان المنهج صحيحاً (الفصل الثاني)، فالفلترة ستكون صحيحة
                 const isTaskAvailableInCurriculum = homeworkCurriculum.some(
                     item => {
                         const match = item.name.match(/\d+$/);
@@ -170,34 +158,23 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                 if (!isTaskAvailableInCurriculum) {
                     statusText = 'لا يوجد منهج';
                 } else {
-                    // 2. التحقق من أن القيمة هي قيمة حقيقية (مُنجزة)
-                    // القيمة تُعتبر منجزة إذا كانت:
-                    // أ) ليست null / undefined / سلسلة فارغة
-                    // ب) ليست القيمة الرقمية صفر (0) ما لم يكن الواجب يستحق صفر كحد أقصى!
-                    
                     const isInputPresent = (gradeValue !== null && gradeValue !== undefined && gradeValue !== '');
                     const isNumericAndPositive = isInputPresent && Number(gradeValue) > 0;
                     
-                    // إذا كان الواجب يستحق 0 أو أكثر (مثل الاختبارات والمهام)، أي قيمة مدخلة تعني محاولة/حل
-                    // إذا كان الواجب يستحق 1 (مثل الواجبات والمشاركات)، أي 1 تعني حل كامل
-                    
-                    const isSolved = isNumericAndPositive; // نعتبر أي قيمة رقمية موجبة تعني "تم الحل"
+                    const isSolved = isNumericAndPositive; 
                     
                     if (isSolved) {
                         statusText = 'تم الحل';
                     } else {
-                        // إذا كانت المهمة موجودة لكن القيمة مفقودة (null, '', 0)، تصنف "لم يحل"
                         statusText = 'لم يحل';
                     }
                 }
 
-                // التصنيف النهائي:
                 studentWithStatus.tempStatusInfo = { text: statusText };
                 
                 if (statusText === 'تم الحل') {
                     solved.push(studentWithStatus);
                 } else {
-                    // "لم يحل" و "لا يوجد منهج" يذهبان إلى قائمة المتعثرين
                     notSolved.push(studentWithStatus); 
                 }
             });
@@ -205,21 +182,17 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
 
         setSolvedStudents(solved);
         setNotSolvedStudents(notSolved);
-        
         setSelectedStudents([]); 
     }, [taskType, taskNumber, students, homeworkCurriculum]); 
-    // **نهاية المنطق المُصحَّح والنهائي**
 
 
-    // دالة للتحقق من إمكانية الإضافة
     const isAddNoteDisabled = () => {
-        if (selectedStudents.length === 0) return true; // يجب تحديد طلاب
-        if (noteWeekIndex < 1 || noteWeekIndex > 20) return true; // يجب اختيار أسبوع صالح
+        if (selectedStudents.length === 0) return true;
+        if (noteWeekIndex < 1 || noteWeekIndex > 20) return true;
         return (noteType === 'custom' && !customNote.trim()) ||
                (noteType === 'template' && !selectedTemplate);
     };
 
-    // 4.3 اختيار/إلغاء اختيار 
     const handleToggleSelect = (studentId) => {
         setSelectedStudents(prev =>
             prev.includes(studentId)
@@ -248,7 +221,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
         }
     };
 
-    // 4.4 حفظ / إرسال ملاحظة
     const handleSendNote = () => {
         if (isAddNoteDisabled()) {
             if (handleDialog) {
@@ -265,7 +237,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
             ? customNote.trim()
             : noteTemplates.find(t => t.id === selectedTemplate)?.text || '';
 
-        // **استخدام noteWeekIndex (رقم الأسبوع) للحفظ**
         const weekIndex = noteWeekIndex - 1; 
         
         const today = new Date();
@@ -275,7 +246,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
             year: 'numeric'
         }).format(today);
 
-        // 🚨 التعديل هنا: تم حذف جزء " - أسبوع ${noteWeekIndex}" من صياغة الملاحظة
         const newNote = `(${hijriDate}): ${finalNoteText}`;
 
         const updatedStudents = (students || []).map(student => {
@@ -317,7 +287,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
         }, 1500); 
     };
     
-    // بيانات أزرار اختيار نوع المهمة
     const taskTypeOptions = [
         { value: 'homework', label: 'واجب', icon: <FaPencilAlt /> },
         { value: 'performanceTask', label: 'مهمة أدائية', icon: <FaTasks /> },
@@ -325,7 +294,7 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
     ];
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 font-['Noto_Sans_Arabic',sans-serif]">
             <div dir="rtl" className="bg-gray-800 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col border border-gray-700 transform transition-all duration-300">
                 
                 {/* Header */}
@@ -339,7 +308,7 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                 {/* Content Area */}
                 <div className="p-6 overflow-y-auto flex-grow bg-gray-800">
                     
-                    {/* 1. Task Selection Panel (لوحة اختيار المهمة - تصميم عصري) */}
+                    {/* 1. Task Selection Panel */}
                     <div className="bg-gray-700 p-5 rounded-2xl shadow-xl border border-gray-600 mb-6">
                         <h4 className="text-lg font-bold mb-4 text-gray-100 flex items-center gap-2">
                             <FaClock className="text-yellow-400"/> تحديد المهمة للفرز
@@ -347,7 +316,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                         
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-600/50 rounded-xl">
                             
-                            {/* Segmented Buttons for Task Type */}
                             <div className="flex flex-col gap-2">
                                 <label className="text-sm font-medium text-gray-300">نوع المهمة:</label>
                                 <div className="flex bg-gray-900 p-1 rounded-full shadow-inner border border-gray-700">
@@ -368,7 +336,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                                 </div>
                             </div>
                             
-                            {/* Dropdown for Task Number */}
                             <div className="flex items-center gap-2">
                                 <label className="text-sm font-medium text-gray-300">رقم الواجب/المهمة:</label>
                                 <select
@@ -389,7 +356,7 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                         </div>
                     </div>
 
-                    {/* 2. Student Status Display Section (عرض حالات الطلاب) */}
+                    {/* 2. Student Status Display Section */}
                     <div className="bg-gray-700 p-5 rounded-2xl shadow-xl border border-gray-600 mb-6">
                         <h4 className="text-lg font-bold mb-4 text-gray-100 flex items-center gap-2">
                             <FaUsers className="text-blue-400"/> حالة الطلاب للمهمة المحددة
@@ -420,7 +387,7 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                         )}
                     </div>
                     
-                    {/* 3. Action Bar / Note Action Section (شريط الإجراءات - تصميم محسّن مع الأسبوع) */}
+                    {/* 3. Action Bar */}
                     <div className="bg-gray-700 p-5 rounded-2xl shadow-xl border border-gray-600">
                         <h4 className="text-lg font-bold mb-4 text-gray-100 flex items-center gap-2">
                             <FaStickyNote className="text-yellow-400"/>
@@ -429,7 +396,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                         
                         <div className="flex flex-col gap-4">
                             
-                            {/* NEW: اختيار الأسبوع لحفظ الملاحظة */}
                             <div className="flex items-center gap-4 bg-gray-800 p-3 rounded-xl border border-gray-600">
                                 <FaCalendarAlt className="text-xl text-cyan-400"/>
                                 <label className="text-sm font-medium text-gray-300">الأسبوع المراد حفظ الملاحظة فيه:</label>
@@ -445,7 +411,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                                 </select>
                             </div>
                             
-                            {/* نوع الملاحظة */}
                             <div className="mb-4 border-b border-gray-600 pb-4">
                                 <label className="block text-sm font-medium text-gray-300 mb-2">نوع الملاحظة</label>
                                 <div className="flex gap-6">
@@ -474,7 +439,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                                 </div>
                             </div>
                             
-                            {/* حقل الإدخال أو القالب */}
                             {noteType === 'custom' ? (
                                 <div className="mb-4">
                                     <textarea
@@ -529,7 +493,6 @@ const HomeworkModal = ({ students, onClose, onSave, homeworkCurriculum, handleDi
                     </div>
                 </div>
 
-                {/* Footer Actions (تحديد الكل وإغلاق) */}
                 <div className="p-4 bg-gray-900 border-t border-gray-700 flex justify-between gap-3 shadow-top">
                     <button
                         onClick={handleSelectAllStudents}

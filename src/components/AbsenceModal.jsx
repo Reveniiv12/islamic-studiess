@@ -10,8 +10,9 @@ import {
   FaTrash
 } from 'react-icons/fa';
 
-const AbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
-  const startDate = new Date('2024-09-01');
+const AbsenceModal = ({ students, onClose, onSave, handleDialog, activeSemester }) => {
+  // تحديد البادئة بناءً على الفصل الحالي (مثال: semester1_ أو semester2_)
+  const semesterPrefix = `${activeSemester}_`;
 
   const getHijriTodayShort = () => {
     const date = new Date();
@@ -28,16 +29,39 @@ const AbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
   };
 
   const initialAbsences = {};
+  
   students.forEach(student => {
     initialAbsences[student.id] =
       student.absences?.map(dateString => {
-        if (dateString.startsWith('W')) {
-          const [weekPart, dayPart] = dateString.split('-');
+        // التحقق مما إذا كان السجل يخص الفصل الحالي
+        // البيانات القديمة (بدون بادئة) تعتبر للفصل الأول
+        let processedString = dateString;
+        let belongsToCurrentSemester = false;
+
+        if (dateString.includes('_W')) {
+            // بيانات بنظام التخزين الجديد
+            if (dateString.startsWith(semesterPrefix)) {
+                processedString = dateString.replace(semesterPrefix, '');
+                belongsToCurrentSemester = true;
+            }
+        } else {
+            // بيانات قديمة (نفترض أنها للفصل الأول)
+            if (activeSemester === 'semester1') {
+                belongsToCurrentSemester = true;
+            }
+        }
+
+        if (!belongsToCurrentSemester) return null;
+
+        if (processedString.startsWith('W')) {
+          const [weekPart, dayPart] = processedString.split('-');
           const week = parseInt(weekPart.substring(1));
           const day = parseInt(dayPart.substring(1));
           return { week, day, date: getHijriTodayShort() };
         } else {
-          const date = new Date(dateString);
+          // التعامل مع التواريخ العادية (YYYY-MM-DD)
+          // هنا يمكن إضافة منطق تواريخ إذا لزم الأمر، حالياً نعرضها كما هي
+          const date = new Date(processedString);
           if (isNaN(date.getTime())) return null;
 
           const hijriDateParts = date.toLocaleDateString('ar-SA-u-ca-islamic', {
@@ -84,10 +108,26 @@ const AbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
   const handleSaveAbsences = async () => {
     setIsSaving(true);
     const updatedStudents = students.map(student => {
-      const newAbsences =
-        absencesByStudent[student.id]?.map(a => `W${a.week}-D${a.day}`) || [];
-      return { ...student, absences: newAbsences };
+      // 1. استخراج الغيابات القديمة التي تخص "الفصول الأخرى" للحفاظ عليها
+      const otherSemesterAbsences = (student.absences || []).filter(dateString => {
+         if (dateString.includes('_W')) {
+             // إذا كان يبدأ ببادئة الفصل الحالي، نستبعده (لأننا سنحفظ النسخة الجديدة)
+             return !dateString.startsWith(semesterPrefix);
+         } else {
+             // إذا كان بيانات قديمة، فهي للفصل الأول. إذا كنا في الفصل الأول نستبعدها، إذا كنا في الثاني نحتفظ بها
+             return activeSemester !== 'semester1';
+         }
+      });
+
+      // 2. تجهيز غيابات الفصل الحالي مع إضافة البادئة
+      const currentSemesterAbsences = absencesByStudent[student.id]?.map(a => `${semesterPrefix}W${a.week}-D${a.day}`) || [];
+      
+      // 3. دمج القائمتين
+      const finalAbsences = [...otherSemesterAbsences, ...currentSemesterAbsences];
+
+      return { ...student, absences: finalAbsences };
     });
+    
     await onSave(updatedStudents);
     setIsSaving(false);
     onClose();
@@ -97,15 +137,26 @@ const AbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
     onClose();
     setTimeout(() => {
         handleDialog(
-            "تأكيد الحذف",
-            "هل أنت متأكد من حذف جميع سجلات الغياب لكل الطلاب؟ لا يمكن التراجع عن هذا الإجراء.",
+            `تأكيد حذف غياب ${activeSemester === 'semester1' ? 'الفصل الأول' : 'الفصل الثاني'}`,
+            "هل أنت متأكد من حذف سجلات الغياب لهذا الفصل الدراسي فقط؟ ستبقى سجلات الفصل الآخر محفوظة.",
             "confirm",
             async () => {
                 setIsSaving(true);
-                const updatedStudents = students.map(student => ({
-                    ...student,
-                    absences: []
-                }));
+                const updatedStudents = students.map(student => {
+                    // نحتفظ فقط ببيانات الفصول الأخرى
+                    const keptAbsences = (student.absences || []).filter(dateString => {
+                        if (dateString.includes('_W')) {
+                            return !dateString.startsWith(semesterPrefix);
+                        } else {
+                            return activeSemester !== 'semester1';
+                        }
+                    });
+
+                    return {
+                        ...student,
+                        absences: keptAbsences
+                    };
+                });
                 await onSave(updatedStudents);
                 setIsSaving(false);
             }
@@ -173,7 +224,7 @@ const AbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
       <div className="bg-gray-800 rounded-lg shadow-xl overflow-hidden max-w-6xl w-full max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-700">
           <h3 className="text-xl font-bold text-white flex items-center gap-2">
-            <FaCalendarTimes className="text-red-400" /> كشف الغياب الأسبوعي
+            <FaCalendarTimes className="text-red-400" /> كشف الغياب ({activeSemester === 'semester1' ? 'الفصل الأول' : 'الفصل الثاني'})
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <FaTimes size={24} />
@@ -227,7 +278,7 @@ const AbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
               <thead className="text-xs text-gray-200 uppercase bg-gray-700 sticky top-0 z-20">
                 <tr>
                   <th scope="col" className="py-3 px-6 sticky right-0 bg-gray-700 z-30">
-                    اسم الطالب (<span className="text-blue-400">عدد مرات الغياب</span>)
+                    اسم الطالب (<span className="text-blue-400">مرات الغياب</span>)
                   </th>
                   {weeksToDisplay.map(week => (
                     <th key={week} scope="col" colSpan={days.length} className="py-3 px-6 text-center border-l border-gray-600">
@@ -301,7 +352,7 @@ const AbsenceModal = ({ students, onClose, onSave, handleDialog }) => {
             className="bg-red-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 hover:bg-red-500 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FaTrash />
-            حذف الكل
+            حذف غياب الفصل الحالي
           </button>
           <button
             onClick={onClose}

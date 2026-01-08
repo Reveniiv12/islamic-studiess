@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { FaBookOpen, FaStickyNote, FaSave, FaTimes, FaCheckCircle, FaTimesCircle, FaClock, FaQuestionCircle, FaUsers, FaPaperPlane, FaCalendarAlt, FaUserCircle, FaMicrophone } from 'react-icons/fa';
-import { getRecitationStatus } from '../utils/recitationUtils'; 
 
 // =================================================================
-// StudentList Component (للعرض الثنائي) - تم التعديل لإضافة صورة الطالب
+// StudentList Component 
 // =================================================================
 
 const StudentList = ({ title, color, students, selectedStudents, toggleSelect, onSelectAll }) => {
@@ -53,7 +52,6 @@ const StudentList = ({ title, color, students, selectedStudents, toggleSelect, o
                                     onChange={(e) => { e.stopPropagation(); toggleSelect(student.id); }} 
                                     className={`form-checkbox accent-blue-500 text-white w-5 h-5`}
                                 />
-                                {/* التعديل: استخدام صورة الطالب */}
                                 <img 
                                     src={student.photo || '/images/1.webp'} 
                                     alt={student.name} 
@@ -83,7 +81,7 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
     const [noteType, setNoteType] = useState('custom');
     const [customNote, setCustomNote] = useState('');
     const [selectedTemplate, setSelectedTemplate] = useState('');
-    const [weekIndex, setWeekIndex] = useState(-1); // فهرس المهمة (0, 1, 2...)
+    const [weekIndex, setWeekIndex] = useState(-1); 
     
     const [noteWeekIndex, setNoteWeekIndex] = useState(1); 
 
@@ -91,20 +89,21 @@ const RecitationModal = ({ students, onClose, onSave, curriculum }) => {
     const [notSolvedStudents, setNotSolvedStudents] = useState([]);
     const [selectedStudents, setSelectedStudents] = useState([]);
 
-const noteTemplates = [
-    { id: 'excellent', text: 'أداء ممتاز ومتفوق' },
-    { id: 'tlaawa_excellent', text: 'تلاوة ممتازة' },
-    { id: 'memorization_excellent', text: 'حفظ ممتاز' },
-    { id: 'tlaawa_needs_work', text: 'يحتاج تحسين في التلاوة' },
-    { id: 'memorization_needs_work', text: 'يحتاج تحسين في الحفظ' },
-    { id: 'late_note1', text: 'لوحظ عليك التأخر في الحضور للحصة الدراسية - ارجو الاهتمام' },
-    { id: 'quran_hw_attention', text: 'ارجو الاهتمام بحل واجبات مادة القرآن الكريم والدراسات الإسلامية في منصة مدرستي' },
-    { id: 'sleeping_in_class', text: 'نوم أثناء الحصة الدراسية' },
-    { id: 'missing_quran', text: 'عدم الاهتمام بإحضار القرآن الكريم في الحصة الدراسية' },
-];
+    const noteTemplates = [
+        { id: 'excellent', text: 'أداء ممتاز ومتفوق' },
+        { id: 'tlaawa_excellent', text: 'تلاوة ممتازة' },
+        { id: 'memorization_excellent', text: 'حفظ ممتاز' },
+        { id: 'tlaawa_needs_work', text: 'يحتاج تحسين في التلاوة' },
+        { id: 'memorization_needs_work', text: 'يحتاج تحسين في الحفظ' },
+        { id: 'late_note1', text: 'لوحظ عليك التأخر في الحضور للحصة الدراسية - ارجو الاهتمام' },
+        { id: 'quran_hw_attention', text: 'ارجو الاهتمام بحل واجبات مادة القرآن الكريم والدراسات الإسلامية في منصة مدرستي' },
+        { id: 'sleeping_in_class', text: 'نوم أثناء الحصة الدراسية' },
+        { id: 'missing_quran', text: 'عدم الاهتمام بإحضار القرآن الكريم في الحصة الدراسية' },
+    ];
 
-    // 1. حساب أرقام مهام التسميع المتاحة
     const availableTaskNumbers = useMemo(() => {
+        if (!curriculum) return []; // حماية من القيم الفارغة
+        
         const filteredTasks = curriculum
             .filter(item => item.type === recitationType)
             .map((item, index) => ({
@@ -116,22 +115,17 @@ const noteTemplates = [
         return filteredTasks;
     }, [recitationType, curriculum]);
 
-    // **مصحح 1:** دالة لتغيير نوع التسميع وتعيين الفهرس الافتراضي الجديد (التغيير الأولي)
     const handleTypeChange = (newType) => {
         setRecitationType(newType);
-        
-        // إعادة تعيين الفهرس الافتراضي لنوع التسميع الجديد
-        const newAvailableNumbers = curriculum.filter(item => item.type === newType);
+        // عند تغيير النوع، نحاول البحث عن أول مهمة متاحة في النوع الجديد
+        const newAvailableNumbers = curriculum ? curriculum.filter(item => item.type === newType) : [];
         const defaultIndex = newAvailableNumbers.length > 0 ? 0 : -1;
-        
         setWeekIndex(defaultIndex);
         setNoteWeekIndex(defaultIndex !== -1 ? defaultIndex + 1 : 1);
     };
     
-    // **مصحح 2:** useEffect لضمان تعيين weekIndex عند تحميل المنهج أو تغيير نوع التسميع
     useEffect(() => {
         if (availableTaskNumbers.length > 0) {
-             // إذا لم يكن هناك فهرس محدد أو كان الفهرس خارج النطاق الجديد، نختار الفهرس 0
              if (weekIndex === -1 || weekIndex >= availableTaskNumbers.length) {
                  setWeekIndex(0);
                  setNoteWeekIndex(1);
@@ -143,21 +137,18 @@ const noteTemplates = [
     }, [recitationType, availableTaskNumbers]);
 
 
-    // 3. useEffect لتصنيف الطلاب بناءً على المهمة المحددة (weekIndex) - **منطق الفرز المُعدَّل**
     useEffect(() => {
         const solved = [];
         const notSolved = [];
         
-        // الشرط الأساسي للفرز
         if (weekIndex >= 0 && availableTaskNumbers.length > 0) {
             
-            // تحديد الحقل الذي يجب قراءة الدرجات منه
             const gradeKey = recitationType === 'memorization' ? 'quranMemorization' : 'quranRecitation';
             
             students.forEach(student => {
                 const studentWithStatus = { ...student };
                 
-                // جلب قيمة الدرجة من مصفوفة الطالب مباشرة
+                // التأكد من أن الطالب لديه مصفوفة الدرجات
                 const gradesArray = student.grades?.[gradeKey];
                 const gradeValue = Array.isArray(gradesArray) && weekIndex >= 0 && weekIndex < gradesArray.length
                     ? gradesArray[weekIndex]
@@ -165,20 +156,17 @@ const noteTemplates = [
                 
                 let statusText;
                 
-                // 🚨 التعديل هنا: التحقق من توفر المهمة يعتمد على أن weekIndex في نطاق قائمة المهام المتاحة المفلترة
                 const isTaskAvailable = weekIndex >= 0 && weekIndex < availableTaskNumbers.length;
 
                 if (!isTaskAvailable) {
                     statusText = 'لا يوجد منهج';
                 } else {
-                    // المنطق: تم التسميع إذا كانت القيمة موجودة وصحيحة (> 0).
                     const isInputPresent = (gradeValue !== null && gradeValue !== undefined && gradeValue !== '');
                     const isSolved = isInputPresent && Number(gradeValue) > 0;
                     
                     if (isSolved) {
                         statusText = 'تم التسميع';
                     } else {
-                        // أي شيء آخر (null, '', 0) يعتبر لم يسمع
                         statusText = 'لم يسمع';
                     }
                 }
@@ -188,7 +176,6 @@ const noteTemplates = [
                 if (statusText === 'تم التسميع') {
                     solved.push(studentWithStatus);
                 } else {
-                    // يتم وضع 'لا يوجد منهج' هنا أيضاً
                     notSolved.push(studentWithStatus); 
                 }
             });
@@ -197,17 +184,14 @@ const noteTemplates = [
         setSolvedStudents(solved);
         setNotSolvedStudents(notSolved);
         setSelectedStudents([]); 
-    }, [recitationType, weekIndex, students, availableTaskNumbers]); // تم إضافة availableTaskNumbers إلى التوابع
+    }, [recitationType, weekIndex, students, availableTaskNumbers]); 
 
 
-    // **مصحح 3:** دالة اختيار رقم المهمة (تنفذ التحديث مباشرة)
     const handleWeekIndexChange = (index) => {
-        // تحديث weekIndex بشكل صريح لكي يتم تشغيل الـ useEffect التالي فوراً
         const newIndex = Number(index);
         setWeekIndex(newIndex);
         setNoteWeekIndex(newIndex + 1);
     };
-
 
     const handleToggleSelect = (studentId) => {
         setSelectedStudents(prev =>
@@ -250,14 +234,12 @@ const noteTemplates = [
             return;
         }
 
-        // تحديد نص الملاحظة
         const noteText = noteType === 'custom'
             ? customNote
             : noteTemplates.find(t => t.id === selectedTemplate)?.text || '';
 
         if (!noteText.trim()) return;
 
-        // حساب التاريخ الهجري
         const today = new Date();
         const hijriDate = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
             day: 'numeric',
@@ -265,14 +247,12 @@ const noteTemplates = [
             year: 'numeric'
         }).format(today);
         
-        // الأسبوع هو noteWeekIndex - 1 للحفظ
         const saveWeekIndex = noteWeekIndex - 1; 
-        // 🚨 التعديل هنا: تم حذف جزء " - أسبوع ${noteWeekIndex}" 
         const formattedNote = `(${hijriDate}): ${noteText.trim()}`;
         
         const updatedStudents = students.map(student => {
             if (selectedStudents.includes(student.id)) {
-                // حفظ الملاحظة في weeklyNotes (الملاحظات موحدة عبر الفترتين)
+                // حفظ الملاحظات (ملاحظة: weeklyNotes هي نفسها لكلا الفترتين داخل الفصل الدراسي)
                 const updatedWeeklyNotes = [...(student.grades.weeklyNotes || Array(20).fill(null).map(() => []))];
                 if (!Array.isArray(updatedWeeklyNotes[saveWeekIndex])) {
                     updatedWeeklyNotes[saveWeekIndex] = [];
@@ -304,7 +284,7 @@ const noteTemplates = [
         : 'لا توجد مهمة محددة';
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 font-['Noto_Sans_Arabic',sans-serif]">
             <div dir="rtl" className="bg-gray-800 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col border border-gray-700 transform transition-all duration-300">
                 
                 {/* Header */}
@@ -410,7 +390,6 @@ const noteTemplates = [
                         
                          <div className="flex flex-col gap-4">
                             
-                            {/* اختيار الأسبوع لحفظ الملاحظة (1-20) */}
                             <div className="flex items-center gap-4 bg-gray-800 p-3 rounded-xl border border-gray-600">
                                 <FaCalendarAlt className="text-xl text-cyan-400"/>
                                 <label className="text-sm font-medium text-gray-300">الأسبوع المراد حفظ الملاحظة فيه:</label>
@@ -419,14 +398,12 @@ const noteTemplates = [
                                     onChange={(e) => setNoteWeekIndex(Number(e.target.value))}
                                     className="p-2 border border-gray-600 rounded-lg bg-gray-900 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 shadow-inner"
                                 >
-                                    {/* 20 أسبوع للملاحظات */}
                                     {Array(20).fill().map((_, i) => (
                                         <option key={i + 1} value={i + 1}>الأسبوع {i + 1}</option>
                                     ))}
                                 </select>
                             </div>
                             
-                            {/* نوع الملاحظة */}
                             <div className="mb-4 border-b border-gray-600 pb-4">
                                 <label className="block text-sm font-medium text-gray-300 mb-2">نوع الملاحظة</label>
                                 <div className="flex gap-6">
@@ -455,7 +432,6 @@ const noteTemplates = [
                                 </div>
                             </div>
                             
-                            {/* حقل الإدخال أو القالب */}
                             {noteType === 'custom' ? (
                                 <div className="mb-4">
                                     <textarea
