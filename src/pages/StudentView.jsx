@@ -22,7 +22,10 @@ import {
   FaClock, 
   FaExclamationCircle,
   FaCheckCircle,
-  FaTimes
+  FaTimes,
+  FaLock,
+  FaLayerGroup,
+  FaHome
 } from "react-icons/fa";
 
 import {
@@ -71,15 +74,15 @@ const ensureArraySize = (array, size) => {
     return newArray;
 };
 
-// تم التعديل:
+// هيكلية الدرجات الفارغة
 const createEmptyGradesStructure = () => ({
     tests: Array(2).fill(null),
     homework: Array(10).fill(null),
-    performanceTasks: Array(4).fill(null), // تم تعديل الحجم إلى 4
+    performanceTasks: Array(4).fill(null),
     participation: Array(10).fill(null),
     quranRecitation: Array(5).fill(null),
     quranMemorization: Array(5).fill(null),
-    classInteraction: Array(4).fill(null), // تم تغيير oralTest إلى classInteraction
+    classInteraction: Array(4).fill(null),
 });
 
 
@@ -87,43 +90,51 @@ function StudentView() {
   const { studentId } = useParams();
   const navigate = useNavigate();
   
+  // --- States for Control Panel & View Config ---
+  const [viewConfig, setViewConfig] = useState(null); 
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockMessage, setLockMessage] = useState("");
+  // ---------------------------------------------
+
   // States for period functionality
   const [studentBaseData, setStudentBaseData] = useState(null); 
   const [studentDisplayedData, setStudentDisplayedData] = useState(null); 
   const [fullCurriculumData, setFullCurriculumData] = useState({ period1: [], period2: [] });
   const [fullHomeworkCurriculumData, setFullHomeworkCurriculumData] = useState({ period1: [], period2: [] });
-  const [currentPeriod, setCurrentPeriod] = useState(null); // null triggers selection screen
+  
+  const [currentPeriod, setCurrentPeriod] = useState(null); 
+  const [selectedSemester, setSelectedSemester] = useState(null); 
+  
   const [loadingInitial, setLoadingInitial] = useState(true); 
   const [isFetching, setIsFetching] = useState(false); 
+  const [verifying, setVerifying] = useState(false); // حالة تحميل جديدة للتحقق
 
-  const [curriculum, setCurriculum] = useState([]); // Active period curriculum
-  const [homeworkCurriculum, setHomeworkCurriculum] = useState([]); // Active period homework curriculum
+  const [curriculum, setCurriculum] = useState([]); 
+  const [homeworkCurriculum, setHomeworkCurriculum] = useState([]); 
   
   const [error, setError] = useState(null);
-  const [testCalculationMethod, setTestCalculationMethod] = useState('average'); // يتم تجاهله حالياً للاختبارات (Sum)
+  const [testCalculationMethod, setTestCalculationMethod] = useState('average'); 
   const [teacherName, setTeacherName] = useState("");
   const [schoolName, setSchoolName] = useState("");
-  const [currentSemester, setCurrentSemester] = useState("");
+  const [currentSemesterName, setCurrentSemesterName] = useState(""); 
+  const [defaultActiveSemesterKey, setDefaultActiveSemesterKey] = useState("semester1"); 
+
   const [prizes, setPrizes] = useState([]);
   const [isPrizesModalOpen, setIsPrizesModalOpen] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   
-  // ==========================================================
-  // NEW: Reward Request States
+  // Reward Request States
   const [rewardRequests, setRewardRequests] = useState([]);
   const [showDialog, setShowDialog] = useState(false);
   const [dialogTitle, setDialogTitle] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
   const [dialogType, setDialogType] = useState("info");
   const [dialogAction, setDialogAction] = useState(null);
-  // ==========================================================
   
   const gradeName = getGradeNameById(studentBaseData?.grade_level);
   const sectionName = getSectionNameById(studentBaseData?.section);
   
-  // ==========================================================
   // Dialog Handler
-  // ==========================================================
   const handleDialog = (title, message, type, action = null) => {
     setDialogTitle(title);
     setDialogMessage(message);
@@ -165,38 +176,65 @@ function StudentView() {
           throw studentError;
         }
 
-        // *** الإصلاح: توحيد قراءة teacher_id والتحقق من قيمته ***
         const rawTeacherId = student.teacher_id;
         let teacherId = null;
         if (rawTeacherId) {
             teacherId = String(rawTeacherId).trim();
             if (teacherId === 'null' || teacherId === 'undefined' || teacherId.length === 0) {
                  teacherId = null;
-                 console.warn("Teacher ID in student record is invalid/missing.");
             }
         }
         
         const gradeId = student.grade_level;
         const sectionId = student.section;
         
-        // Fetch settings (shared)
+        // Fetch settings
         const { data: settingsData } = await supabase
           .from('settings')
-          .select('test_method, teacher_name, school_name, current_semester, current_period')
+          .select('test_method, teacher_name, school_name, current_semester, current_period, student_view_config, active_semester_key')
           .eq('id', 'general')
           .single();
 
-        let initialPeriod = 1; // Default
-        if (settingsData) {
-          setTestCalculationMethod(settingsData.test_method || 'average');
-          setTeacherName(settingsData.teacher_name || "");
-          setSchoolName(settingsData.school_name || "");
-          setCurrentSemester(settingsData.current_semester || "");
-          // Get last selected period from teacher's settings
-          initialPeriod = settingsData.current_period === 'period2' ? 2 : 1; 
+        // --- منطق القفل والتحكم الجديد ---
+        if (settingsData?.student_view_config) {
+            const config = settingsData.student_view_config;
+            setViewConfig(config);
+            
+            if (config.is_locked) {
+                setIsLocked(true);
+                setLockMessage(config.lock_message);
+                setLoadingInitial(false);
+                return; 
+            }
         }
+        // --------------------------------
 
-        // Fetch curriculum (Only if teacherId is present)
+        setTestCalculationMethod(settingsData?.test_method || 'average');
+        setTeacherName(settingsData?.teacher_name || "");
+        setSchoolName(settingsData?.school_name || "");
+        setCurrentSemesterName(settingsData?.current_semester || "");
+        
+        const currentActiveSemesterKey = settingsData?.active_semester_key || "semester1";
+        setDefaultActiveSemesterKey(currentActiveSemesterKey);
+        
+        // --- المنطق الذكي للتوجيه التلقائي ---
+        if (settingsData?.student_view_config?.allowed_views?.length === 1) {
+             const singleView = settingsData.student_view_config.allowed_views[0];
+             
+             if (singleView === 'period1') {
+                 setSelectedSemester(currentActiveSemesterKey);
+                 setCurrentPeriod(1);
+             }
+             if (singleView === 'period2') {
+                 setSelectedSemester(currentActiveSemesterKey);
+                 setCurrentPeriod(2);
+             }
+             
+             if (singleView === 'semester1') setSelectedSemester('semester1');
+             if (singleView === 'semester2') setSelectedSemester('semester2');
+        } 
+
+        // Fetch curriculum
         if (teacherId) {
             const { data: curriculumData } = await supabase
                 .from('curriculum')
@@ -205,37 +243,14 @@ function StudentView() {
                 .eq('section_id', sectionId)
                 .eq('teacher_id', teacherId)
                 .single();
-        // ... (بقية منطق جلب المنهج)
-            let recitationCurriculum = { period1: [], period2: [] };
-            let homeworkCurriculumData = { period1: [], period2: [] };
-
+            
             if (curriculumData) {
-                const recitation = curriculumData.recitation;
-                const homework = curriculumData.homework;
-
-                if (Array.isArray(recitation)) {
-                    recitationCurriculum = { period1: recitation, period2: [] };
-                } else {
-                    recitationCurriculum = { 
-                        period1: recitation?.period1 || [],
-                        period2: recitation?.period2 || [],
-                    };
-                }
-
-                if (Array.isArray(homework)) {
-                    homeworkCurriculumData = { period1: homework, period2: [] };
-                } else {
-                    homeworkCurriculumData = {
-                        period1: homework?.period1 || [],
-                        period2: homework?.period2 || [],
-                    };
-                }
+                 setFullCurriculumData(curriculumData.recitation || {});
+                 setFullHomeworkCurriculumData(curriculumData.homework || {});
             }
-            setFullCurriculumData(recitationCurriculum);
-            setFullHomeworkCurriculumData(homeworkCurriculumData);
         }
         
-        // Fetch prizes (shared)
+        // Fetch prizes
         let prizesData = [];
         if (teacherId) {
           const { data: pData, error: pError } = await supabase
@@ -248,7 +263,7 @@ function StudentView() {
           prizesData = pData || [];
           setPrizes(prizesData);
         
-            // NEW: Fetch Reward Requests for this student (Always fetch if teacherId is present for filtering)
+            // Fetch Reward Requests
             let requestsData = [];
             const { data: rData, error: rError } = await supabase
                 .from('reward_requests')
@@ -257,80 +272,22 @@ function StudentView() {
                 .order('created_at', { ascending: false });
             
             if (rError) console.error("Error fetching reward requests:", rError);
-            // Filter requests to show only those linked to the student's teacher if teacherId is valid
             requestsData = rData ? rData.filter(r => r.teacher_id === teacherId) : [];
             setRewardRequests(requestsData);
         }
         
-
-        // --- Prepare Student Grades (Crucial for handling old/new schema) ---
-        let grades = student.grades || {};
-        let fullGrades;
-        
-        // Fix for notes: Extract weeklyNotes if exists at root, otherwise default
-        let weeklyNotes = grades.weeklyNotes || (grades.weekly_notes) || Array(20).fill(null);
-
-        // Logic for handling migration from old single-object structure
-        if (!grades.period1 && !grades.period2 && Object.keys(grades).length > 0) {
-            const { weeklyNotes: _, weekly_notes: __, ...oldGradesWithoutNotes } = grades; // Exclude notes
-
-            // Ensure grades are correctly sized for the new schema and use old names as fallbacks
-            const oldPeriod1 = {
-                tests: ensureArraySize(oldGradesWithoutNotes.tests, 2),
-                homework: ensureArraySize(oldGradesWithoutNotes.homework, 10),
-                performanceTasks: ensureArraySize(oldGradesWithoutNotes.performanceTasks || oldGradesWithoutNotes.performance_tasks, 4), 
-                participation: ensureArraySize(oldGradesWithoutNotes.participation, 10),
-                quranRecitation: ensureArraySize(oldGradesWithoutNotes.quranRecitation || oldGradesWithoutNotes.quran_recitation, 5),
-                quranMemorization: ensureArraySize(oldGradesWithoutNotes.quranMemorization || oldGradesWithoutNotes.quran_memorization, 5),
-                classInteraction: ensureArraySize(oldGradesWithoutNotes.classInteraction || oldGradesWithoutNotes.oralTest || oldGradesWithoutNotes.oral_test, 4), 
-            };
-
-            fullGrades = {
-                period1: oldPeriod1,
-                period2: createEmptyGradesStructure(),
-            };
-        } else {
-            // Logic for handling new period structure (already saved in DB)
-            fullGrades = {
-                period1: {
-                    tests: ensureArraySize(grades.period1?.tests, 2),
-                    homework: ensureArraySize(grades.period1?.homework, 10),
-                    performanceTasks: ensureArraySize(grades.period1?.performanceTasks || grades.period1?.performance_tasks, 4),
-                    participation: ensureArraySize(grades.period1?.participation, 10),
-                    quranRecitation: ensureArraySize(grades.period1?.quranRecitation || grades.period1?.quran_recitation, 5),
-                    quranMemorization: ensureArraySize(grades.period1?.quranMemorization || grades.period1?.quran_memorization, 5),
-                    classInteraction: ensureArraySize(grades.period1?.classInteraction || grades.period1?.oralTest || grades.period1?.oral_test, 4),
-                },
-                period2: {
-                    tests: ensureArraySize(grades.period2?.tests, 2),
-                    homework: ensureArraySize(grades.period2?.homework, 10),
-                    performanceTasks: ensureArraySize(grades.period2?.performanceTasks || grades.period2?.performance_tasks, 4),
-                    participation: ensureArraySize(grades.period2?.participation, 10),
-                    quranRecitation: ensureArraySize(grades.period2?.quranRecitation || grades.period2?.quran_recitation, 5),
-                    quranMemorization: ensureArraySize(grades.period2?.quranMemorization || grades.period2?.quran_memorization, 5),
-                    classInteraction: ensureArraySize(grades.period2?.classInteraction || grades.period2?.oralTest || grades.period2?.oral_test, 4),
-                },
-            };
-        }
-        
-        // Store the raw student data including all period grades
         const baseData = {
           ...student,
-          teacher_id: teacherId, // استخدام teacherId الموحد
+          teacher_id: teacherId,
           acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
           consumedStars: student.consumed_stars || 0, 
           stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
           nationalId: student.national_id,
           parentPhone: student.parent_phone,
-          fullGrades: { 
-             period1: fullGrades.period1,
-             period2: fullGrades.period2,
-             weeklyNotes: weeklyNotes 
-          }, 
+          rawGrades: student.grades || {}
         };
 
         setStudentBaseData(baseData);
-        setCurrentPeriod(initialPeriod); // Automatically select the teacher's last active period
         setLoadingInitial(false);
 
       } catch (err) {
@@ -343,11 +300,10 @@ function StudentView() {
     fetchBaseData();
   }, [studentId]);
   
-  // دالة تحديث بيانات الطالب يدويًا (بعد المطالبة بالجائزة مثلاً)
+  // دالة تحديث بيانات الطالب
   const refreshStudentData = async () => {
       setIsFetching(true);
       try {
-          // جلب بيانات الطالب المحدثة
           const { data: student, error: studentError } = await supabase
               .from('students')
               .select('*, teacher_id')
@@ -362,41 +318,31 @@ function StudentView() {
               teacherId = String(rawTeacherId).trim();
           }
           
-          // جلب طلبات المكافآت المحدثة
           const { data: rData, error: rError } = await supabase
               .from('reward_requests')
               .select('*, prizes(id, name, cost)')
               .eq('student_id', studentId)
               .order('created_at', { ascending: false });
           
-          if (rError) console.error("Error fetching reward requests:", rError);
-          
-          // تصفية الطلبات حسب المعلم (للتأكد من عرض الطلبات الصحيحة فقط)
           const filteredRequests = rData ? rData.filter(r => r.teacher_id === teacherId) : [];
 
-          // إعادة بناء الـ baseData
-          const fullGrades = student.grades || {};
-          let weeklyNotes = fullGrades.weeklyNotes || (fullGrades.weekly_notes) || Array(20).fill(null);
-          
           const newBaseData = {
               ...student,
-              teacher_id: teacherId, // استخدام teacherId الموحد
+              teacher_id: teacherId,
               acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
               consumedStars: student.consumed_stars || 0, 
               stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
               nationalId: student.national_id,
               parentPhone: student.parent_phone,
-              fullGrades: { 
-                  period1: fullGrades.period1,
-                  period2: fullGrades.period2,
-                  weeklyNotes: weeklyNotes 
-              }, 
+              rawGrades: student.grades || {}
           };
           
           setStudentBaseData(newBaseData);
           setRewardRequests(filteredRequests);
-          // إعادة جلب بيانات الفترة المعروضة لضمان التحديث الكامل
-          await fetchPeriodData(currentPeriod, newBaseData, filteredRequests);
+          
+          if (selectedSemester && currentPeriod) {
+              await fetchPeriodData(currentPeriod, selectedSemester, newBaseData, filteredRequests);
+          }
 
       } catch (err) {
           console.error("Error refreshing student data:", err);
@@ -406,10 +352,8 @@ function StudentView() {
       }
   };
 
-  // NEW: دالة لإخفاء الإشعار (تحديث حالة الطلب إلى fulfilled)
   const clearRewardRequest = async (requestId) => {
       try {
-          // تحديث حالة الطلب في قاعدة البيانات إلى 'fulfilled'
           const { error } = await supabase
               .from('reward_requests')
               .update({ status: 'fulfilled', updated_at: new Date().toISOString() })
@@ -417,12 +361,9 @@ function StudentView() {
 
           if (error) throw error;
           
-          // تحديث الحالة المحلية لإزالة الإشعار من الواجهة
           setRewardRequests(prev => prev.map(r => 
               r.id === requestId ? { ...r, status: 'fulfilled' } : r
           ));
-          
-          // إعادة جلب البيانات لضمان التزامن الكامل (لأن النجوم قد تكون تغيرت)
           refreshStudentData(); 
           
       } catch (err) {
@@ -430,45 +371,101 @@ function StudentView() {
           handleDialog("خطأ", "فشل في إخفاء الإشعار. يرجى المحاولة مرة أخرى.", "error");
       }
   };
+  
+  // ======================================================
+  // 🔥🔥🔥 دالة التحقق الذكي قبل الدخول (الحل الجديد) 🔥🔥🔥
+  // ======================================================
+  const verifyAndProceed = async (type, value) => {
+      setVerifying(true); // إظهار مؤشر تحميل بسيط
+      try {
+          // 1. جلب أحدث الإعدادات الآن
+          const { data: settingsData, error } = await supabase
+              .from('settings')
+              .select('student_view_config')
+              .eq('id', 'general')
+              .single();
+
+          if (error) throw error;
+          
+          const config = settingsData?.student_view_config;
+          
+          // 2. التحقق من القفل
+          if (config?.is_locked) {
+              setIsLocked(true);
+              setLockMessage(config.lock_message);
+              setVerifying(false);
+              return; // إيقاف العملية
+          }
+
+          // 3. التحقق من الصلاحيات (allowed_views)
+          const allowedViews = config?.allowed_views || [];
+          
+          // إذا كانت القائمة فارغة، نسمح بالدخول افتراضياً (إلا إذا كنت تريد منع الدخول في حال القائمة فارغة)
+          // هنا نفترض أن القائمة الفارغة تعني "كل شيء مسموح" أو "لم يتم التقييد"
+          // لكن إذا أردت التشدد: if (allowedViews.length > 0)
+          
+          if (allowedViews.length > 0) {
+              let targetView = value;
+              // تحويل القيمة الرقمية للفترة إلى نص للمقارنة
+              if (type === 'period') targetView = `period${value}`;
+              
+              if (!allowedViews.includes(targetView)) {
+                   handleDialog("عذراً", "لم يعد هذا القسم متاحاً للعرض بواسطة المعلم.", "error");
+                   // تحديث الإعدادات المحلية لتختفي الأزرار غير المتاحة
+                   setViewConfig(config); 
+                   setVerifying(false);
+                   return; // إيقاف العملية
+              }
+          }
+
+          // 4. السماح بالدخول
+          if (type === 'semester') setSelectedSemester(value);
+          if (type === 'period') setCurrentPeriod(value);
+          
+          // تحديث الإعدادات المحلية بالمرة
+          setViewConfig(config);
+
+      } catch (err) {
+          console.error("Verification failed:", err);
+          handleDialog("خطأ", "فشل في التحقق من الإعدادات. حاول مرة أخرى.", "error");
+      } finally {
+          setVerifying(false);
+      }
+  };
 
 
   // ----------------------------------------------------------------------
-  // 2. Period Data Processing (Runs after period selection)
+  // 2. Period Data Processing (Core Logic)
   // ----------------------------------------------------------------------
-  const fetchPeriodData = async (period, baseDataOverride = null) => {
+  const fetchPeriodData = async (period, semester, baseDataOverride = null) => {
     const student = baseDataOverride || studentBaseData;
-    if (!student || !period) return;
+    if (!student || !period || !semester) return;
     
     const periodName = `period${period}`;
 
     try {
       setIsFetching(true);
       
-      const studentId = student.id; // تأكد من وجود ID الطالب
+      const studentId = student.id; 
       const teacherId = student.teacher_id;
       const gradeId = student.grade_level;
       const sectionId = student.section;
       
-      
-      // *** المنطق المُعاد إضافته لتسجيل زيارة الصفحة (page_visits) ***
       let visitId = null;
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Log the visit only if the user is not the teacher OR if there is no logged-in user (public access)
       if (!user || user.id !== teacherId) {
-          // Check for previous incomplete visits for this student and close them
           await supabase
               .from('page_visits')
               .update({ visit_end_time: new Date().toISOString() })
               .eq('student_id', studentId)
               .is('visit_end_time', null);
               
-          // Insert a new visit log
           const { data, error } = await supabase
               .from('page_visits')
               .insert({
                   student_id: studentId,
-                  teacher_id: teacherId, // تسجيل مُعرف المعلم لسهولة التتبع
+                  teacher_id: teacherId, 
                   visit_start_time: new Date().toISOString()
               })
               .select()
@@ -480,50 +477,81 @@ function StudentView() {
               visitId = data.id;
           }
       }
-      // *** نهاية منطق تسجيل الزيارات ***
       
-      
-      // Fetch announcements (Shared Logic)
       const { data: announcementsData } = await supabase
         .from('announcements')
         .select('*')
         .eq('grade_id', gradeId)
         .eq('section_id', sectionId)
         .eq('teacher_id', teacherId)
-        .eq('is_visible', true) // <--- NEW: تصفية الإعلانات المرئية فقط
+        .eq('is_visible', true) 
         .order('created_at', { ascending: false });
 
       setAnnouncements(announcementsData || []);
       
-      // Extract period-specific grades from the fullGrades structure
-      const fullGrades = student.fullGrades || {};
-      const periodGrades = fullGrades[periodName] || {};
+      let activeRecitationCurriculum = [];
+      let activeHomeworkCurriculum = [];
+
+      const semRecitation = fullCurriculumData[semester];
+      const semHomework = fullHomeworkCurriculumData[semester];
+
+      if (semRecitation) {
+          activeRecitationCurriculum = semRecitation[periodName] || [];
+      } else if (semester === 'semester1' && fullCurriculumData.period1) {
+          activeRecitationCurriculum = fullCurriculumData[periodName] || [];
+      }
+
+      if (semHomework) {
+          activeHomeworkCurriculum = semHomework[periodName] || [];
+      } else if (semester === 'semester1' && fullHomeworkCurriculumData.period1) {
+          activeHomeworkCurriculum = fullHomeworkCurriculumData[periodName] || [];
+      }
+
+      setCurriculum(activeRecitationCurriculum);
+      setHomeworkCurriculum(activeHomeworkCurriculum);
+
+      const rawGrades = student.rawGrades || {};
+      let semesterGrades = rawGrades[semester]; 
+
+      if (!semesterGrades && semester === 'semester1') {
+          semesterGrades = rawGrades; 
+      }
       
-      // Set active curriculum based on period selection
-      setCurriculum(fullCurriculumData[periodName] || []);
-      setHomeworkCurriculum(fullHomeworkCurriculumData[periodName] || []);
+      if (!semesterGrades) {
+          semesterGrades = createEmptyGradesStructure();
+      }
+
+      const periodGrades = semesterGrades[periodName] || createEmptyGradesStructure();
       
-      // تعيين الأحجام الصحيحة لضمان التناسق مع الواجهة الجديدة
+      const weeklyNotes = semesterGrades.weeklyNotes || rawGrades.weeklyNotes || rawGrades.weekly_notes || Array(20).fill(null);
+      
+      let displayStars = student.stars;
+      let displayAcquired = student.acquired_stars;
+      let displayConsumed = student.consumed_stars;
+
+      if (semesterGrades.stars) {
+          displayAcquired = semesterGrades.stars.acquired || 0;
+          displayConsumed = semesterGrades.stars.consumed || 0;
+          displayStars = displayAcquired - displayConsumed;
+      }
+
       const processedStudentData = {
-        ...student, // Includes all shared data (stars, phones, etc.)
-        // Overwrite grades object with period-specific and shared notes
+        ...student,
         grades: {
           tests: ensureArraySize(periodGrades?.tests, 2),
-          // تم تغيير oralTest إلى classInteraction وحجمها 4
-          classInteraction: ensureArraySize(periodGrades?.classInteraction, 4), 
+          classInteraction: ensureArraySize(periodGrades?.classInteraction || periodGrades?.oralTest || periodGrades?.oral_test, 4), 
           homework: ensureArraySize(periodGrades?.homework, 10),
-          performanceTasks: ensureArraySize(periodGrades?.performanceTasks, 4), // الحجم الجديد 4
+          performanceTasks: ensureArraySize(periodGrades?.performanceTasks || periodGrades?.performance_tasks, 4), 
           participation: ensureArraySize(periodGrades?.participation, 10),
-          quranRecitation: ensureArraySize(periodGrades?.quranRecitation, 5),
-          quranMemorization: ensureArraySize(periodGrades?.quranMemorization, 5),
-          // Notes are shared at the root level (fullGrades.weeklyNotes)
-          weeklyNotes: ensureArraySize(fullGrades.weeklyNotes, 20), 
+          quranRecitation: ensureArraySize(periodGrades?.quranRecitation || periodGrades?.quran_recitation, 5),
+          quranMemorization: ensureArraySize(periodGrades?.quranMemorization || periodGrades?.quran_memorization, 5),
+          weeklyNotes: ensureArraySize(weeklyNotes, 20), 
         },
         nationalId: student.national_id,
         parentPhone: student.parent_phone,
-        acquiredStars: student.acquiredStars,
-        consumedStars: student.consumedStars, 
-        stars: student.stars,
+        acquiredStars: displayAcquired,
+        consumedStars: displayConsumed, 
+        stars: displayStars,
         grade_level: student.grade_level,
         section: student.section,
       };
@@ -531,10 +559,8 @@ function StudentView() {
       setStudentDisplayedData(processedStudentData);
       setIsFetching(false);
 
-      // Cleanup function to log visit end time
       return () => { 
         if (visitId) {
-            // تحديث سجل الزيارة عند مغادرة الصفحة أو تغيير الفترة
             supabase
                 .from('page_visits')
                 .update({ visit_end_time: new Date().toISOString() })
@@ -549,8 +575,6 @@ function StudentView() {
       console.error("Error fetching period data:", err);
       setError("فشل في جلب بيانات الفترة.");
       setIsFetching(false);
-      
-      // يجب أن تُعاد دالة تنظيف حتى في حالة وجود خطأ
       return () => {}; 
     }
   };
@@ -560,15 +584,13 @@ function StudentView() {
   // ----------------------------------------------------------------------
 
   useEffect(() => {
-    // Effect to fetch period-specific data when base data is loaded AND a period is selected
-    if (studentBaseData && currentPeriod) {
-      // Use a small delay to ensure the new state of curriculum data is available
+    if (studentBaseData && selectedSemester && currentPeriod) {
       const timeoutId = setTimeout(() => {
-          fetchPeriodData(currentPeriod);
+          fetchPeriodData(currentPeriod, selectedSemester);
       }, 50); 
       return () => clearTimeout(timeoutId);
     }
-  }, [studentBaseData, currentPeriod, fullCurriculumData, fullHomeworkCurriculumData]); 
+  }, [studentBaseData, currentPeriod, selectedSemester, fullCurriculumData, fullHomeworkCurriculumData]); 
   
   // ----------------------------------------------------------------------
   // 4. Request Reward Functionality
@@ -576,8 +598,7 @@ function StudentView() {
   
   const requestReward = async (prize) => {
       if (!studentDisplayedData) return;
-      
-      const teacherId = studentDisplayedData.teacher_id; // <--- استخدام ID المعلم الموحد
+      const teacherId = studentDisplayedData.teacher_id; 
       
       if (!teacherId) {
           handleDialog("خطأ", "لم يتم العثور على معرف المعلم المرتبط بالطالب، لا يمكن إرسال الطلب.", "error");
@@ -615,20 +636,10 @@ function StudentView() {
 
                   if (error) throw error;
                   
-                  // تحديث الطلبات المعروضة للطالب
                   setRewardRequests([data, ...rewardRequests.filter(r => r.id !== data.id)]);
-                  
                   handleDialog("نجاح", `تم إرسال طلب مكافأة "${prize.name}" بنجاح. يرجى الانتظار حتى موافقة المعلم.`, "success");
               } catch (err) {
-                  console.error("Error requesting reward:", err);
-                   // هذا القسم يعالج خطأ المفتاح الخارجي 23503
-                  if (err.code === "23503" && err.message.includes("reward_requests_teacher_id_fkey")) {
-                     handleDialog("خطأ", `فشل إرسال الطلب: المفتاح الخارجي للمعلم غير موجود في قاعدة البيانات (profiles). يرجى الاتصال بالإدارة لحل مشكلة بيانات المعلم.`, "error");
-                  } else if (err.code === "23505" || err.message.includes("violates unique constraint")) {
-                     handleDialog("خطأ", "يبدو أن لديك طلبًا نشطًا آخر في النظام لم تتم معالجته بعد. يرجى الانتظار.", "error");
-                  } else {
-                     handleDialog("خطأ", `حدث خطأ أثناء إرسال طلب المكافأة. يرجى مراجعة سجلات الخادم.`, "error");
-                  }
+                 handleDialog("خطأ", `حدث خطأ أثناء إرسال طلب المكافأة.`, "error");
               }
           }
       );
@@ -646,7 +657,6 @@ function StudentView() {
     );
   }
   
-  // Show base loading spinner while fetching initial data
   if (loadingInitial) {
       return (
         <div className="p-8 text-center text-blue-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">
@@ -655,36 +665,173 @@ function StudentView() {
       );
   }
 
-  // Show the period selection screen if base data is loaded but period is not selected
+  // >>>>> 1. شاشة القفل (التصميم الرسمي الجديد) <<<<<
+  if (isLocked) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden bg-gray-900 font-['Noto_Sans_Arabic',sans-serif]">
+            {/* الخلفية المتدرجة */}
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-gray-900 to-black z-0"></div>
+            
+            {/* دوائر تزيينية ضبابية */}
+            <div className="absolute top-0 left-0 w-64 h-64 bg-blue-600/10 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2 z-0"></div>
+            <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-600/10 rounded-full blur-[120px] translate-x-1/2 translate-y-1/2 z-0"></div>
+
+            <div className="relative z-10 bg-gray-800/40 backdrop-blur-xl p-8 md:p-12 rounded-2xl shadow-2xl border border-gray-700/50 max-w-lg w-full text-center animate-fadeIn">
+                <div className="mb-6 relative inline-block group">
+                     <div className="absolute inset-0 bg-yellow-500/10 blur-xl rounded-full group-hover:bg-yellow-500/20 transition-all duration-500"></div>
+                     <FaLock className="relative text-7xl text-yellow-500/90 mx-auto drop-shadow-2xl" />
+                </div>
+                <h1 className="text-3xl font-bold text-white mb-2 tracking-wide">الوصول مقيد</h1>
+                <h2 className="text-lg text-gray-400 mb-8 font-light border-b border-gray-700/50 pb-4 w-3/4 mx-auto">
+                    تم قفل الصفحة بواسطة المعلم
+                </h2>
+                
+                <div className="bg-gray-900/60 p-6 rounded-xl border border-gray-700/50 mb-8 shadow-inner">
+                    <p className="text-gray-300 text-lg leading-relaxed font-medium">
+                        {lockMessage || "يقوم المعلم بتحديث البيانات حالياً. يرجى العودة لاحقاً."}
+                    </p>
+                </div>
+
+                <button 
+                    onClick={() => window.location.reload()} 
+                    className="group relative px-8 py-3 w-full bg-gradient-to-r from-blue-700 to-blue-900 text-white rounded-xl font-bold shadow-lg hover:shadow-blue-500/30 transition-all duration-300 overflow-hidden border border-blue-600/30"
+                >
+                    <span className="relative z-10 flex items-center justify-center gap-3">
+                        <FaSyncAlt className="group-hover:rotate-180 transition-transform duration-500" /> 
+                        تحديث الصفحة
+                    </span>
+                    <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12 group-hover:animate-shine"></div>
+                </button>
+            </div>
+            
+            <div className="relative z-10 mt-8 text-gray-600 text-xs tracking-widest uppercase font-semibold">
+                نظام إدارة الطلاب الذكي
+            </div>
+        </div>
+      );
+  }
+
+  // >>>>> 2. شاشة الاختيار المتعدد <<<<<
   if (currentPeriod === null || currentPeriod === 0) {
     const studentName = studentBaseData?.name || "هذا الطالب";
-    
+    const allowedViews = viewConfig?.allowed_views || []; 
+
+    const shouldShow = (viewId) => {
+        if (!allowedViews || allowedViews.length === 0) {
+            if (viewId === 'period1' || viewId === 'period2') return true;
+        }
+        return allowedViews.includes(viewId);
+    };
+
+    // سيناريو 1: لم يتم اختيار الفصل بعد
+    if (!selectedSemester) {
+        return (
+            <div className="p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center" dir="rtl">
+                <div className="bg-gray-800 p-6 md:p-10 rounded-xl shadow-2xl border border-gray-700 w-full max-w-2xl mx-auto">
+                    <h1 className="text-2xl md:text-3xl font-extrabold text-blue-400 text-center mb-6 border-b pb-3 border-gray-700">
+                        <FaLayerGroup className="inline mb-1 ml-2"/> اختر الفصل الدراسي
+                    </h1>
+                    <p className="text-gray-400 text-center mb-8 text-md">
+                        مرحباً **{studentName}**. يرجى اختيار الفصل الدراسي لعرض بياناته.
+                    </p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {shouldShow('semester1') && (
+                            <button 
+                                onClick={() => verifyAndProceed('semester', 'semester1')}
+                                disabled={verifying}
+                                className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفصل الدراسي الأول</span>}
+                                {!verifying && <span className="text-sm opacity-80 mt-1">اضغط لعرض فترات الفصل الأول</span>}
+                            </button>
+                        )}
+
+                        {shouldShow('semester2') && (
+                            <button 
+                                onClick={() => verifyAndProceed('semester', 'semester2')}
+                                disabled={verifying}
+                                className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفصل الدراسي الثاني</span>}
+                                {!verifying && <span className="text-sm opacity-80 mt-1">اضغط لعرض فترات الفصل الثاني</span>}
+                            </button>
+                        )}
+                        
+                        {shouldShow('period1') && !shouldShow('semester1') && (
+                             <button 
+                                onClick={() => { 
+                                    setSelectedSemester(defaultActiveSemesterKey); 
+                                    verifyAndProceed('period', 1); 
+                                }}
+                                disabled={verifying}
+                                className="flex flex-col items-center justify-center p-6 bg-gray-700 text-white rounded-xl hover:bg-gray-600 border border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <span className="text-xl font-bold">الفترة الأولى</span>
+                                <span className="text-sm opacity-70">عرض مباشر</span>
+                            </button>
+                        )}
+                        
+                        {shouldShow('period2') && !shouldShow('semester2') && (
+                             <button 
+                                onClick={() => { 
+                                    setSelectedSemester(defaultActiveSemesterKey); 
+                                    verifyAndProceed('period', 2); 
+                                }}
+                                disabled={verifying}
+                                className="flex flex-col items-center justify-center p-6 bg-gray-700 text-white rounded-xl hover:bg-gray-600 border border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <span className="text-xl font-bold">الفترة الثانية</span>
+                                <span className="text-sm opacity-70">عرض مباشر</span>
+                            </button>
+                        )}
+                    </div>
+
+                    {allowedViews.length === 0 && (
+                         <p className="text-red-400 text-center mt-6">لا توجد سجلات متاحة للعرض حالياً. يرجى مراجعة المعلم.</p>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // سيناريو 2: تم اختيار الفصل، الآن اختر الفترة
     return (
         <div className="p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center" dir="rtl">
-            <div className="bg-gray-800 p-6 md:p-10 rounded-xl shadow-2xl border border-gray-700 w-full max-w-md mx-auto">
-                <h1 className="text-2xl md:text-3xl font-extrabold text-blue-400 text-center mb-6 border-b pb-3 border-gray-700">
-                    <FaClock className="inline mb-1 ml-2"/> اختر الفترة الدراسية
-                </h1>
-                <p className="text-gray-400 text-center mb-8 text-md">
-                    أنت تشاهد سجل الطالب **{studentName}**.
-                    يرجى تحديد الفترة التي تريد عرض درجاتها وواجباتها.
-                </p>
-                <div className="flex flex-col md:flex-row gap-4">
+            <div className="bg-gray-800 p-6 md:p-10 rounded-xl shadow-2xl border border-gray-700 w-full max-w-2xl mx-auto animate-fadeIn">
+                <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-700">
+                    <h1 className="text-2xl font-extrabold text-blue-400">
+                         {selectedSemester === 'semester1' ? 'الفصل الدراسي الأول' : 'الفصل الدراسي الثاني'}
+                    </h1>
                     <button 
-                        onClick={() => setCurrentPeriod(1)}
-                        className="flex-1 flex flex-col items-center justify-center p-6 bg-green-600 text-white rounded-xl hover:bg-green-500 transition-colors shadow-lg text-lg font-bold border-2 border-green-700 transform hover:scale-[1.02]"
+                        onClick={() => setSelectedSemester(null)}
+                        className="text-sm text-gray-400 hover:text-white flex items-center gap-1"
                     >
-                        <span className="text-xl">الفترة</span>
-                        <span className="text-5xl font-extrabold">1</span>
-                        <span className="text-lg">(الأولى)</span>
+                        <FaArrowLeft /> تغيير الفصل
                     </button>
+                </div>
+
+                <p className="text-gray-400 text-center mb-8 text-md">
+                    يرجى اختيار الفترة الزمنية لعرض الدرجات والمهام الخاصة بها.
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button 
-                        onClick={() => setCurrentPeriod(2)}
-                        className="flex-1 flex flex-col items-center justify-center p-6 bg-yellow-600 text-white rounded-xl hover:bg-yellow-500 transition-colors shadow-lg text-lg font-bold border-2 border-yellow-700 transform hover:scale-[1.02]"
+                        onClick={() => verifyAndProceed('period', 1)}
+                        disabled={verifying}
+                        className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-green-600 to-green-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <span className="text-xl">الفترة</span>
-                        <span className="text-5xl font-extrabold">2</span>
-                        <span className="text-lg">(الثانية)</span>
+                        {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفترة الأولى</span>}
+                        {!verifying && <span className="text-sm opacity-80 mt-1">عرض السجل</span>}
+                    </button>
+
+                    <button 
+                        onClick={() => verifyAndProceed('period', 2)}
+                        disabled={verifying}
+                        className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-yellow-600 to-yellow-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفترة الثانية</span>}
+                        {!verifying && <span className="text-sm opacity-80 mt-1">عرض السجل</span>}
                     </button>
                 </div>
             </div>
@@ -692,20 +839,17 @@ function StudentView() {
     );
   }
 
-  // Fallback if displayed data is not yet set (e.g., waiting for fetchPeriodData)
+  // Fallback
   if (!studentDisplayedData || isFetching) {
       return (
         <div className="p-8 text-center text-blue-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">
-            <FaSyncAlt className="animate-spin text-4xl mr-3"/> جاري تحميل بيانات الفترة {currentPeriod === 1 ? 'الأولى' : 'الثانية'}...
+            <FaSyncAlt className="animate-spin text-4xl mr-3"/> جاري تحميل بيانات {selectedSemester === 'semester1' ? 'الفصل الأول' : 'الفصل الثاني'} - الفترة {currentPeriod === 1 ? 'الأولى' : 'الثانية'}...
         </div>
       );
   }
 
-  // Use studentDisplayedData for rendering everything below
   const studentData = studentDisplayedData;
-  
   const allNotes = [];
-  // Notes are expected to be in the displayed data as they are shared/base data (weeklyNotes)
   const safeWeeklyNotes = Array.isArray(studentData.grades.weeklyNotes) ? studentData.grades.weeklyNotes : [];
   
   safeWeeklyNotes.forEach((notes, weekIndex) => { 
@@ -719,61 +863,41 @@ function StudentView() {
   const processedNotes = allNotes.reverse().slice(0, 5);
   
   // ----------------------------------------------------------------------
-  // 6. Main Content UI (Original layout with period integration)
+  // 6. Main Content UI
   // ----------------------------------------------------------------------
   
-  // دوال حساب المجاميع الفرعية (مكررة هنا للوصول السريع إلى studentData)
-  
-  // 1. حساب التقييمات الرئيسية (الاختبارات + القرآن) (Max 60)
   const calculateMajorAssessments = (grades) => {
-      // الاختبارات: المجموع (Max 40)
       const testsScore = parseFloat(calculateCategoryScore(grades, 'tests', 'sum'));
-      // التلاوة: المتوسط (Max 10)
       const recitationScore = parseFloat(calculateCategoryScore(grades, 'quranRecitation', 'average'));
-      // الحفظ: المتوسط (Max 10)
       const memorizationScore = parseFloat(calculateCategoryScore(grades, 'quranMemorization', 'average'));
-
       return (testsScore + recitationScore + memorizationScore).toFixed(2);
   };
 
-  // 2. حساب أعمال السنة (Homework, Participation, Performance, Interaction) (Max 40)
   const calculateCoursework = (grades) => {
-      // الواجبات: المجموع (Max 10)
       const homeworkScore = parseFloat(calculateCategoryScore(grades, 'homework', 'sum'));
-      // المشاركة: المجموع (Max 10)
       const participationScore = parseFloat(calculateCategoryScore(grades, 'participation', 'sum'));
-      // المهام الأدائية: أفضل درجة (Max 10)
       const performanceScore = parseFloat(calculateCategoryScore(grades, 'performanceTasks', 'best'));
-      // التفاعل الصفي: أفضل درجة (Max 10)
       const classInteractionScore = parseFloat(calculateCategoryScore(grades, 'classInteraction', 'best'));
-      
       return (homeworkScore + participationScore + performanceScore + classInteractionScore).toFixed(2);
   };
   
-  // **الدالة النهائية للمجموع الكلي (مطابقة للصفحة الأم)**
   const calculateFinalTotalScore = (grades) => {
-      // التقييمات الرئيسية (60)
-      const testsScore = parseFloat(calculateCategoryScore(grades, 'tests', 'sum')); // Max 40
-      const recitationScore = parseFloat(calculateCategoryScore(grades, 'quranRecitation', 'average')); // Max 10
-      const memorizationScore = parseFloat(calculateCategoryScore(grades, 'quranMemorization', 'average')); // Max 10
+      const testsScore = parseFloat(calculateCategoryScore(grades, 'tests', 'sum')); 
+      const recitationScore = parseFloat(calculateCategoryScore(grades, 'quranRecitation', 'average')); 
+      const memorizationScore = parseFloat(calculateCategoryScore(grades, 'quranMemorization', 'average')); 
 
-      // أعمال السنة (40)
-      const homeworkScore = parseFloat(calculateCategoryScore(grades, 'homework', 'sum')); // Max 10
-      const participationScore = parseFloat(calculateCategoryScore(grades, 'participation', 'sum')); // Max 10
-      const performanceScore = parseFloat(calculateCategoryScore(grades, 'performanceTasks', 'best')); // Max 10
-      const classInteractionScore = parseFloat(calculateCategoryScore(grades, 'classInteraction', 'best')); // Max 10
+      const homeworkScore = parseFloat(calculateCategoryScore(grades, 'homework', 'sum')); 
+      const participationScore = parseFloat(calculateCategoryScore(grades, 'participation', 'sum')); 
+      const performanceScore = parseFloat(calculateCategoryScore(grades, 'performanceTasks', 'best')); 
+      const classInteractionScore = parseFloat(calculateCategoryScore(grades, 'classInteraction', 'best')); 
 
-      // المجموع الكلي (100)
       const finalTotal = testsScore + recitationScore + memorizationScore + homeworkScore + participationScore + performanceScore + classInteractionScore;
 
       return finalTotal.toFixed(2);
   };
   
-  // حالة طلب المكافأة المعلقة
   const pendingRequest = rewardRequests.find(r => r.status === 'pending');
   const lastRequest = rewardRequests[0];
-  
-  // تحديد ما إذا كان الزر يجب أن يظهر (إذا كانت الحالة approved أو rejected)
   const showClearButton = lastRequest && (lastRequest.status === 'approved' || lastRequest.status === 'rejected');
   
 
@@ -795,33 +919,28 @@ function StudentView() {
               معلم المادة:  {teacherName}
             </p>
           )}
-          {currentSemester && (
-            <p className="text-sm md:text-md font-medium text-gray-400">
-              الفصل الدراسي: {currentSemester}
-            </p>
-          )}
           
-          {/* ******************************************************************** */}
-          {/* تحسين زر تبديل الفترة */}
-          {/* ******************************************************************** */}
+          <p className="text-sm md:text-md font-medium text-yellow-500 mt-1">
+              يتم عرض بيانات: {selectedSemester === 'semester1' ? 'الفصل الدراسي الأول' : 'الفصل الدراسي الثاني'}
+          </p>
+          
           <div className="flex flex-col items-center justify-center mt-3 p-2 bg-gray-700/50 rounded-lg border border-gray-600">
             <div className="flex items-center gap-3">
               <span className="text-md font-bold text-yellow-500 whitespace-nowrap">
                 الفترة المعروضة: <span className="text-lg text-white">{currentPeriod === 1 ? 'الأولى' : 'الثانية'}</span>
               </span>
+              
+              {/* زر العودة للصفحة الرئيسية (تحديث الصفحة) */}
               <button
-                onClick={() => setCurrentPeriod(currentPeriod === 1 ? 2 : 1)}
-                className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors text-sm font-medium shadow-md"
-                disabled={isFetching}
+                  onClick={() => window.location.reload()}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-all shadow-md border border-gray-500 font-bold text-sm"
+                  title="إعادة تحميل الصفحة للعودة للقائمة الرئيسية"
               >
-                <FaSyncAlt className={isFetching ? "animate-spin" : ""}/> تبديل الفترة
+                  <FaHome className="text-blue-300"/> العودة للصفحة الرئيسية
               </button>
+
             </div>
-            <p className="text-xs text-gray-400 mt-1">
-              ملاحظة: هذا الزر يسمح لك بتبديل عرض الدرجات بين فترتي التقييم (الأولى والثانية).
-            </p>
           </div>
-          {/* ******************************************************************** */}
           
         </div>
       </header>
@@ -842,7 +961,6 @@ function StudentView() {
             </div>
           </div>
           
-          {/* NEW: Reward Request Status Alert */}
           {lastRequest && lastRequest.status !== 'fulfilled' && (
               <div className={`p-4 rounded-xl mb-6 flex justify-between items-start ${
                   lastRequest.status === 'pending' ? 'bg-yellow-800 text-yellow-100 border border-yellow-700' :
@@ -859,7 +977,6 @@ function StudentView() {
                       </p>
                   </div>
                   
-                  {/* NEW: زر إخفاء الإشعار (يظهر فقط عند القبول أو الرفض) */}
                   {showClearButton && (
                       <button
                           onClick={() => clearRewardRequest(lastRequest.id)}
@@ -875,7 +992,6 @@ function StudentView() {
 
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8">
-            {/* Important Announcements Section */}
             <div className="md:col-span-2 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <h4 className="font-semibold text-xl flex items-center gap-2 text-gray-100 mb-4">
                 <FaCommentDots className="text-3xl text-yellow-400" /> إعلانات هامة
@@ -900,7 +1016,6 @@ function StudentView() {
               </div>
             </div>
             
-            {/* New: Latest Notes Section */}
             <div className="md:col-span-2 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <h4 className="font-semibold text-xl flex items-center gap-2 text-gray-100 mb-4">
                 <FaStickyNote className="text-3xl text-yellow-400" /> آخر الملاحظات (مشترك)
@@ -923,12 +1038,11 @@ function StudentView() {
 
 
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-4 md:gap-6 mb-8">
-            {/* 1. المجموع النهائي (100) */}
+            {/* المجموع النهائي */}
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
                   <h4 className="font-semibold text-gray-100">المجموع النهائي</h4>
-                  {/* **التعديل هنا: استخدام دالة calculateFinalTotalScore الموحدة** */}
                   <span className="text-xl md:text-2xl font-bold text-green-500">
                     {calculateFinalTotalScore(studentData.grades)} / 100
                   </span>
@@ -937,7 +1051,7 @@ function StudentView() {
               </div>
             </div>
 
-            {/* 3. أعمال السنة (40) */}
+            {/* أعمال السنة */}
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
@@ -949,7 +1063,7 @@ function StudentView() {
               </div>
             </div>
 
-            {/* 2. التقييمات الرئيسية (الاختبارات + القرآن) (60) */}
+            {/* التقييمات الرئيسية */}
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex flex-col text-right">
@@ -960,7 +1074,8 @@ function StudentView() {
               </div>
             </div>
             
-                        <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 col-span-1 flex flex-col items-center justify-center">
+            {/* النجوم */}
+            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 col-span-1 flex flex-col items-center justify-center">
               <h4 className="font-semibold text-gray-100 text-lg mb-4">النجوم</h4>
               <div className="flex flex-col items-center justify-center w-full">
                 <div className="flex items-center gap-4 mb-4">
@@ -1036,14 +1151,12 @@ function StudentView() {
 
             <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
               <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
-                {/* تم التعديل: تغيير المسمى إلى التفاعل الصفي */}
                 <FaMicrophone className="text-3xl text-yellow-400" /> التفاعل الصفي
                 <span className="text-yellow-400 font-bold text-2xl">
                   {calculateCategoryScore(studentData.grades, 'classInteraction', 'best')} / 10
                 </span>
               </h4>
               <div className="flex flex-wrap gap-2">
-                {/* تم التعديل: استخدام classInteraction وعدد المربعات 4 */}
                 {studentData.grades.classInteraction.slice(0, 4).map((grade, i) => (
                   <div key={i} className="w-16 p-2 border border-gray-600 rounded-lg text-center bg-gray-800 text-gray-300">
                     {grade !== null ? grade : '--'}
@@ -1090,7 +1203,6 @@ function StudentView() {
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {/* تم التعديل: عدد المربعات 4 */}
                 {studentData.grades.performanceTasks.slice(0, 4).map((grade, i) => (
                   <div key={i} className="w-16 p-2 border border-gray-600 rounded-lg text-center bg-gray-800 text-gray-300">
                     {grade !== null ? grade : '--'}
@@ -1119,7 +1231,6 @@ function StudentView() {
               <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
                 <FaQuran className="text-3xl text-blue-400" /> القرآن الكريم
                 <span className="text-blue-400 font-bold mr-2 text-2xl">
-                  {/* تم التعديل: التلاوة (Average) + الحفظ (Average) */}
                   {(parseFloat(calculateCategoryScore(studentData.grades, 'quranRecitation', 'average')) + parseFloat(calculateCategoryScore(studentData.grades, 'quranMemorization', 'average'))).toFixed(2)} / 20
                 </span>
               </h4>
@@ -1148,7 +1259,6 @@ function StudentView() {
                     <span className={`text-sm ${getStatusInfo(studentData, 'memorization', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(studentData, 'memorization', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(studentData, 'memorization', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
                       ({getStatusInfo(studentData, 'memorization', curriculum).text})
                     </span>
-                    {/* تم التعديل: أصبح Average ومن 10 */}
                     <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(studentData.grades, 'quranMemorization', 'average')} / 10</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1206,13 +1316,12 @@ function StudentView() {
         </div>
       </div>
       
-      {/* NEW: PrizesModal for the student */}
       {isPrizesModalOpen && 
         <PrizesModal 
             prizes={prizes} 
             onClose={() => {
                 setIsPrizesModalOpen(false);
-                refreshStudentData(); // Refresh data in case of request submission/rejection
+                refreshStudentData(); 
             }}
             currentStars={studentData.stars}
             pendingRequest={pendingRequest}
