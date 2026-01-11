@@ -2,25 +2,28 @@
 import React, { useState, useEffect } from 'react';
 import CustomModal from './CustomModal';
 import { supabase } from '../supabaseClient';
-import { FaLock, FaUnlock, FaSave, FaEye, FaCheckSquare, FaSquare } from 'react-icons/fa';
+import { 
+  FaLock, 
+  FaUnlock, 
+  FaSave, 
+  FaEye, 
+  FaCheckSquare, 
+  FaSquare, 
+  FaLayerGroup, 
+  FaStar, 
+  FaRegStar 
+} from 'react-icons/fa';
 
 const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState({
     is_locked: false,
     lock_message: "عذراً، الصفحة مغلقة حالياً للتحديث ورصد الدرجات.",
-    allowed_views: [] // ['period1', 'period2', 'semester1', 'semester2']
+    allowed_views: [], // مثال: ['sem1_period1', 'sem2_period1']
+    default_view: null // مثال: 'sem1_period1'
   });
 
-  // الخيارات المتاحة للعرض
-  const viewOptions = [
-    { id: 'period1', label: 'الفترة الأولى' },
-    { id: 'period2', label: 'الفترة الثانية' },
-    { id: 'semester1', label: 'الفصل الدراسي الأول' },
-    { id: 'semester2', label: 'الفصل الدراسي الثاني' },
-  ];
-
-  // جلب الإعدادات عند الفتح
+  // جلب الإعدادات عند فتح النافذة
   useEffect(() => {
     if (show) fetchSettings();
   }, [show]);
@@ -37,7 +40,14 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
       if (error) throw error;
 
       if (data && data.student_view_config) {
-        setConfig(data.student_view_config);
+        const loadedConfig = {
+            ...data.student_view_config,
+            allowed_views: Array.isArray(data.student_view_config.allowed_views) 
+                ? data.student_view_config.allowed_views 
+                : [],
+            default_view: data.student_view_config.default_view || null
+        };
+        setConfig(loadedConfig);
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -73,98 +83,153 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
     }
   };
 
+  // تفعيل/إلغاء تفعيل خيار عرض معين
   const toggleViewOption = (optionId) => {
     setConfig(prev => {
       const currentViews = prev.allowed_views || [];
+      let newViews;
+      let newDefault = prev.default_view;
+
       if (currentViews.includes(optionId)) {
-        return { ...prev, allowed_views: currentViews.filter(id => id !== optionId) };
+        // إذا كان مفعلاً، نقوم بإزالته
+        newViews = currentViews.filter(id => id !== optionId);
+        // إذا قمنا بإلغاء تفعيل الخيار الذي كان محدداً كافتراضي، نحذف الافتراضي
+        if (newDefault === optionId) newDefault = null;
       } else {
-        return { ...prev, allowed_views: [...currentViews, optionId] };
+        // تفعيل الخيار
+        newViews = [...currentViews, optionId];
       }
+      return { ...prev, allowed_views: newViews, default_view: newDefault };
     });
   };
+
+  // تعيين صفحة كافتراضية
+  const setDefaultView = (optionId) => {
+      // لا يمكن تعيين افتراضي إلا إذا كان الخيار مفعلاً أصلاً
+      if (config.allowed_views.includes(optionId)) {
+          setConfig(prev => ({ 
+              ...prev, 
+              default_view: optionId === prev.default_view ? null : optionId 
+          }));
+      }
+  };
+
+  const isSelected = (id) => config.allowed_views?.includes(id);
+  const isDefault = (id) => config.default_view === id;
+
+  // مكون فرعي لرسم خيار واحد (فترة)
+  const renderOption = (id, label) => (
+    <div className={`flex flex-col sm:flex-row items-center justify-between p-3 rounded-lg border transition-all gap-3 ${
+        isSelected(id) ? 'bg-gray-700 border-gray-500 shadow-sm' : 'bg-gray-800 border-gray-700 opacity-70'
+    }`}>
+        {/* الجزء الخاص بالتفعيل (Checkbox) */}
+        <div 
+            onClick={() => toggleViewOption(id)}
+            className="flex items-center gap-3 cursor-pointer w-full sm:w-auto hover:opacity-80 transition-opacity"
+        >
+            {isSelected(id) ? <FaCheckSquare className="text-blue-400 text-xl flex-shrink-0" /> : <FaSquare className="text-gray-500 text-xl flex-shrink-0" />}
+            <span className={`font-medium text-sm sm:text-base ${isSelected(id) ? 'text-white' : 'text-gray-400'}`}>{label}</span>
+        </div>
+
+        {/* زر تعيين الافتراضي (يظهر فقط عند التفعيل) */}
+        {isSelected(id) && (
+            <button
+                onClick={() => setDefaultView(id)}
+                className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all w-full sm:w-auto border ${
+                    isDefault(id) 
+                    ? 'bg-yellow-600/20 border-yellow-500 text-yellow-400 hover:bg-yellow-600/30' 
+                    : 'bg-gray-600/30 border-gray-500 text-gray-400 hover:bg-gray-600/50 hover:text-gray-200'
+                }`}
+                title="تعيين هذه الصفحة لتفتح تلقائياً للطالب"
+            >
+                {isDefault(id) ? <FaStar className="text-yellow-400" /> : <FaRegStar />}
+                {isDefault(id) ? 'الصفحة الافتراضية' : 'تعيين كافتراضي'}
+            </button>
+        )}
+    </div>
+  );
+
+  // مكون فرعي لرسم مجموعة الفصل الدراسي
+  const renderSemesterGroup = (title, semPrefix, colorClass, borderClass) => (
+    <div className={`p-4 rounded-xl border ${borderClass} bg-gray-800/40 mb-4`}>
+        <h4 className={`font-bold text-md mb-3 flex items-center gap-2 ${colorClass}`}>
+            <FaLayerGroup /> {title}
+        </h4>
+        <div className="grid grid-cols-1 gap-2">
+            {renderOption(`${semPrefix}_period1`, "الفترة الأولى")}
+            {renderOption(`${semPrefix}_period2`, "الفترة الثانية")}
+        </div>
+    </div>
+  );
 
   if (!show) return null;
 
   return (
     <CustomModal title="لوحة تحكم صفحة الطالب" onClose={onClose}>
-      <div className="flex flex-col gap-6 text-right" dir="rtl">
+      <div className="flex flex-col gap-6 text-right font-['Noto_Sans_Arabic',sans-serif]" dir="rtl">
         
-        {/* قسم القفل */}
-        <div className={`p-4 rounded-xl border-2 ${config.is_locked ? 'bg-red-900/20 border-red-500' : 'bg-green-900/20 border-green-500'}`}>
-          <div className="flex justify-between items-center mb-4">
+        {/* 1. قسم القفل */}
+        <div className={`p-4 rounded-xl border-2 transition-colors ${config.is_locked ? 'bg-red-900/10 border-red-500/50' : 'bg-green-900/10 border-green-500/50'}`}>
+          <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
             <h3 className="font-bold text-lg text-white flex items-center gap-2">
               {config.is_locked ? <FaLock className="text-red-500"/> : <FaUnlock className="text-green-500"/>}
-              حالة الصفحة: {config.is_locked ? <span className="text-red-400">مغلقة (لا يمكن للطلاب الدخول)</span> : <span className="text-green-400">مفتوحة</span>}
+              حالة الصفحة: {config.is_locked ? <span className="text-red-400">مغلقة</span> : <span className="text-green-400">مفتوحة</span>}
             </h3>
             <button
               onClick={() => setConfig({ ...config, is_locked: !config.is_locked })}
-              className={`px-4 py-2 rounded-lg font-bold transition-colors ${config.is_locked ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'}`}
+              className={`w-full sm:w-auto px-6 py-2 rounded-lg font-bold transition-all shadow-lg ${config.is_locked ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-red-600 hover:bg-red-500 text-white'}`}
             >
-              {config.is_locked ? 'فتح الصفحة' : 'قفل الصفحة'}
+              {config.is_locked ? 'فتح الصفحة للطلاب' : 'قفل الصفحة'}
             </button>
           </div>
 
           {config.is_locked && (
-            <div className="mt-2">
-              <label className="block text-gray-300 mb-2 text-sm">رسالة القفل (ستظهر للطالب):</label>
+            <div className="mt-2 animate-fadeIn">
+              <label className="block text-gray-300 mb-2 text-sm font-medium">رسالة القفل (ستظهر للطالب):</label>
               <textarea
                 value={config.lock_message}
                 onChange={(e) => setConfig({ ...config, lock_message: e.target.value })}
-                className="w-full p-3 rounded-lg bg-gray-800 border border-gray-600 text-white focus:ring-2 focus:ring-red-500"
-                rows="3"
-                placeholder="اكتب رسالة للطلاب..."
+                className="w-full p-3 rounded-lg bg-gray-900/50 border border-gray-600 text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all outline-none"
+                rows="2"
+                placeholder="مثال: جاري تحديث الدرجات، يرجى العودة لاحقاً..."
               />
             </div>
           )}
         </div>
 
-        {/* قسم تحديد العرض */}
-        <div className="bg-gray-700/50 p-4 rounded-xl border border-gray-600">
-          <h3 className="font-bold text-lg text-white mb-4 flex items-center gap-2">
-            <FaEye className="text-blue-400"/> تحديد ما يمكن للطالب عرضه:
-          </h3>
-          <p className="text-sm text-gray-400 mb-4">
-            حدد الفترات أو الفصول التي تريد أن تظهر للطالب. إذا تم تحديد أكثر من خيار، ستظهر للطالب قائمة ليختار منها.
-          </p>
+        {/* 2. قسم الصلاحيات والصفحة الافتراضية */}
+        <div className="bg-gray-700/30 p-4 rounded-xl border border-gray-600/50">
+          <div className="mb-4">
+             <h3 className="font-bold text-lg text-white flex items-center gap-2 mb-1">
+                <FaEye className="text-blue-400"/> إعدادات العرض
+             </h3>
+             <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                حدد الفترات التي تود إظهارها. اضغط على زر "تعيين كافتراضي" <FaStar className="inline text-yellow-500 mx-1"/> بجانب الفترة ليدخل الطالب عليها مباشرة دون المرور بقائمة الاختيار.
+             </p>
+          </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {viewOptions.map((option) => {
-              const isSelected = config.allowed_views?.includes(option.id);
-              return (
-                <div 
-                  key={option.id}
-                  onClick={() => toggleViewOption(option.id)}
-                  className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border ${
-                    isSelected 
-                      ? 'bg-blue-600/20 border-blue-500' 
-                      : 'bg-gray-800 border-gray-600 hover:bg-gray-700'
-                  }`}
-                >
-                  <span className={`font-medium ${isSelected ? 'text-blue-400' : 'text-gray-400'}`}>
-                    {option.label}
-                  </span>
-                  {isSelected ? <FaCheckSquare className="text-blue-400 text-xl" /> : <FaSquare className="text-gray-600 text-xl" />}
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {renderSemesterGroup("الفصل الدراسي الأول", "sem1", "text-indigo-400", "border-indigo-500/30")}
+              {renderSemesterGroup("الفصل الدراسي الثاني", "sem2", "text-teal-400", "border-teal-500/30")}
           </div>
         </div>
 
-        {/* زر الحفظ */}
-        <div className="flex gap-3 mt-4">
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-500 transition-all shadow-lg flex justify-center items-center gap-2"
-          >
-            {loading ? <span className="animate-spin">⌛</span> : <FaSave />} حفظ الإعدادات
-          </button>
-          <button
-            onClick={onClose}
-            className="px-6 py-3 bg-gray-600 text-white rounded-xl font-bold hover:bg-gray-500 transition-all"
+        {/* 3. أزرار التحكم السفلية */}
+        <div className="flex flex-col-reverse sm:flex-row gap-3 mt-2 border-t border-gray-700 pt-4">
+          <button 
+            onClick={onClose} 
+            className="px-6 py-3 bg-gray-700 text-gray-200 rounded-xl font-bold hover:bg-gray-600 hover:text-white transition-all w-full sm:w-auto"
           >
             إلغاء
+          </button>
+          
+          <button 
+            onClick={handleSave} 
+            disabled={loading} 
+            className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold hover:from-blue-500 hover:to-blue-600 transition-all shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto transform active:scale-[0.98]"
+          >
+            {loading ? <span className="animate-spin text-xl">⌛</span> : <FaSave className="text-lg" />} 
+            <span>حفظ التغييرات</span>
           </button>
         </div>
 
