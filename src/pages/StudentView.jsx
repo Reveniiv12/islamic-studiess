@@ -19,24 +19,22 @@ import {
   FaCoins,
   FaGift, 
   FaSyncAlt,
-  FaClock, 
   FaExclamationCircle,
   FaCheckCircle,
   FaTimes,
   FaLock,
   FaLayerGroup,
+  FaHistory,
   FaHome
 } from "react-icons/fa";
 
 import {
-  calculateTotalScore,
   calculateCategoryScore,
   getStatusInfo,
   getGradeNameById,
   getSectionNameById,
   taskStatusUtils,
 } from "../utils/gradeUtils";
-import { getRecitationStatus } from "../utils/recitationUtils";
 import PrizesModal from "../components/PrizesModal"; 
 import CustomDialog from "../components/CustomDialog"; 
 
@@ -113,12 +111,9 @@ function StudentView() {
   const [homeworkCurriculum, setHomeworkCurriculum] = useState([]); 
   
   const [error, setError] = useState(null);
-  const [testCalculationMethod, setTestCalculationMethod] = useState('average'); 
   const [teacherName, setTeacherName] = useState("");
   const [schoolName, setSchoolName] = useState("");
-  const [currentSemesterName, setCurrentSemesterName] = useState(""); 
-  const [defaultActiveSemesterKey, setDefaultActiveSemesterKey] = useState("semester1"); 
-
+  
   const [prizes, setPrizes] = useState([]);
   const [isPrizesModalOpen, setIsPrizesModalOpen] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
@@ -191,11 +186,11 @@ function StudentView() {
         // Fetch settings
         const { data: settingsData } = await supabase
           .from('settings')
-          .select('test_method, teacher_name, school_name, current_semester, current_period, student_view_config, active_semester_key')
+          .select('teacher_name, school_name, student_view_config')
           .eq('id', 'general')
           .single();
 
-        // --- منطق القفل والتحكم الجديد ---
+        // --- منطق القفل والتحكم والتوجيه التلقائي ---
         if (settingsData?.student_view_config) {
             const config = settingsData.student_view_config;
             setViewConfig(config);
@@ -206,34 +201,40 @@ function StudentView() {
                 setLoadingInitial(false);
                 return; 
             }
+
+            // 🔥 التوجيه التلقائي (الصفحة الافتراضية) 🔥
+            if (config.default_view) {
+                const defaultKey = config.default_view; // e.g., 'sem1_period1'
+                // التحقق من أن العرض الافتراضي لا يزال مسموحاً به
+                if (config.allowed_views && config.allowed_views.includes(defaultKey)) {
+                     const parts = defaultKey.split('_'); // ['sem1', 'period1']
+                     if (parts.length === 2) {
+                        const semKey = parts[0] === 'sem1' ? 'semester1' : 'semester2';
+                        const perNum = parts[1] === 'period1' ? 1 : 2;
+                        
+                        // التوجيه المباشر
+                        setSelectedSemester(semKey);
+                        setCurrentPeriod(perNum);
+                     }
+                }
+            } 
+            // إذا لم يكن هناك افتراضي، نطبق المنطق القديم (خيار واحد فقط متاح)
+            else if (config.allowed_views && config.allowed_views.length === 1) {
+                const singleView = config.allowed_views[0];
+                const parts = singleView.split('_');
+                if (parts.length === 2) {
+                    const semKey = parts[0] === 'sem1' ? 'semester1' : 'semester2';
+                    const perNum = parts[1] === 'period1' ? 1 : 2;
+                    setSelectedSemester(semKey);
+                    setCurrentPeriod(perNum);
+                }
+            }
         }
         // --------------------------------
 
-        setTestCalculationMethod(settingsData?.test_method || 'average');
         setTeacherName(settingsData?.teacher_name || "");
         setSchoolName(settingsData?.school_name || "");
-        setCurrentSemesterName(settingsData?.current_semester || "");
         
-        const currentActiveSemesterKey = settingsData?.active_semester_key || "semester1";
-        setDefaultActiveSemesterKey(currentActiveSemesterKey);
-        
-        // --- المنطق الذكي للتوجيه التلقائي ---
-        if (settingsData?.student_view_config?.allowed_views?.length === 1) {
-             const singleView = settingsData.student_view_config.allowed_views[0];
-             
-             if (singleView === 'period1') {
-                 setSelectedSemester(currentActiveSemesterKey);
-                 setCurrentPeriod(1);
-             }
-             if (singleView === 'period2') {
-                 setSelectedSemester(currentActiveSemesterKey);
-                 setCurrentPeriod(2);
-             }
-             
-             if (singleView === 'semester1') setSelectedSemester('semester1');
-             if (singleView === 'semester2') setSelectedSemester('semester2');
-        } 
-
         // Fetch curriculum
         if (teacherId) {
             const { data: curriculumData } = await supabase
@@ -373,7 +374,7 @@ function StudentView() {
   };
   
   // ======================================================
-  // 🔥🔥🔥 دالة التحقق الذكي قبل الدخول (الحل الجديد) 🔥🔥🔥
+  // 🔥🔥🔥 دالة التحقق الذكي قبل الدخول 🔥🔥🔥
   // ======================================================
   const verifyAndProceed = async (type, value) => {
       setVerifying(true); // إظهار مؤشر تحميل بسيط
@@ -400,21 +401,21 @@ function StudentView() {
           // 3. التحقق من الصلاحيات (allowed_views)
           const allowedViews = config?.allowed_views || [];
           
-          // إذا كانت القائمة فارغة، نسمح بالدخول افتراضياً (إلا إذا كنت تريد منع الدخول في حال القائمة فارغة)
-          // هنا نفترض أن القائمة الفارغة تعني "كل شيء مسموح" أو "لم يتم التقييد"
-          // لكن إذا أردت التشدد: if (allowedViews.length > 0)
-          
           if (allowedViews.length > 0) {
-              let targetView = value;
-              // تحويل القيمة الرقمية للفترة إلى نص للمقارنة
-              if (type === 'period') targetView = `period${value}`;
+              let keyToCheck = "";
               
-              if (!allowedViews.includes(targetView)) {
-                   handleDialog("عذراً", "لم يعد هذا القسم متاحاً للعرض بواسطة المعلم.", "error");
-                   // تحديث الإعدادات المحلية لتختفي الأزرار غير المتاحة
-                   setViewConfig(config); 
-                   setVerifying(false);
-                   return; // إيقاف العملية
+              if (type === 'period') {
+                   // نحتاج معرفة الفصل الحالي للتحقق
+                   const semPrefix = selectedSemester === 'semester1' ? 'sem1' : 'sem2';
+                   keyToCheck = `${semPrefix}_period${value}`;
+                   
+                   if (!allowedViews.includes(keyToCheck)) {
+                       handleDialog("عذراً", "لم يعد هذا القسم متاحاً للعرض بواسطة المعلم.", "error");
+                       // تحديث الإعدادات المحلية لتختفي الأزرار غير المتاحة
+                       setViewConfig(config); 
+                       setVerifying(false);
+                       return; // إيقاف العملية
+                   }
               }
           }
 
@@ -431,6 +432,13 @@ function StudentView() {
       } finally {
           setVerifying(false);
       }
+  };
+
+  // 🔥 وظيفة زر الرجوع للقائمة 🔥
+  const handleBackToMenu = () => {
+      // إفراغ القيم لإجبار المكون على إعادة رسم شاشة الاختيار
+      setSelectedSemester(null);
+      setCurrentPeriod(null);
   };
 
 
@@ -487,8 +495,30 @@ function StudentView() {
         .eq('is_visible', true) 
         .order('created_at', { ascending: false });
 
-      setAnnouncements(announcementsData || []);
+      // ===============================================
+      // 🔥 تصفية الإعلانات حسب الفصل الدراسي وتنظيف النص 🔥
+      // ===============================================
+      const processedAnnouncements = (announcementsData || []).filter(ann => {
+        const content = ann.content || "";
+        const semesterPrefix = `${semester}_`; // e.g. 'semester1_' or 'semester2_'
+
+        // 1. إذا كان الإعلان يحتوي على بادئة فصل (نظام جديد)
+        if (content.startsWith('semester1_') || content.startsWith('semester2_')) {
+          return content.startsWith(semesterPrefix);
+        }
+        
+        // 2. إذا لم يحتوي على بادئة (نظام قديم)، يعتبر للفصل الأول
+        return semester === 'semester1';
+      }).map(ann => ({
+        ...ann,
+        // تنظيف النص لإزالة البادئة قبل عرضه للطالب
+        content: ann.content.replace(/^semester\d+_/, '')
+      }));
+
+      setAnnouncements(processedAnnouncements);
       
+      // ===============================================
+
       let activeRecitationCurriculum = [];
       let activeHomeworkCurriculum = [];
 
@@ -711,91 +741,79 @@ function StudentView() {
       );
   }
 
-  // >>>>> 2. شاشة الاختيار المتعدد <<<<<
+  // >>>>> 2. شاشة الاختيار المتعدد (المنطق الجديد) <<<<<
   if (currentPeriod === null || currentPeriod === 0) {
     const studentName = studentBaseData?.name || "هذا الطالب";
-    const allowedViews = viewConfig?.allowed_views || []; 
+    const allowed = viewConfig?.allowed_views || []; 
 
-    const shouldShow = (viewId) => {
-        if (!allowedViews || allowedViews.length === 0) {
-            if (viewId === 'period1' || viewId === 'period2') return true;
-        }
-        return allowedViews.includes(viewId);
-    };
-
-    // سيناريو 1: لم يتم اختيار الفصل بعد
+    // التحقق من السماحيات بناءً على المفاتيح الجديدة (semX_periodY)
+    const hasSem1 = allowed.some(key => key.startsWith('sem1_'));
+    const hasSem2 = allowed.some(key => key.startsWith('sem2_'));
+    
+    // 1. منطق اختيار الفصل الدراسي (أو التحديد التلقائي)
     if (!selectedSemester) {
-        return (
-            <div className="p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center" dir="rtl">
-                <div className="bg-gray-800 p-6 md:p-10 rounded-xl shadow-2xl border border-gray-700 w-full max-w-2xl mx-auto">
-                    <h1 className="text-2xl md:text-3xl font-extrabold text-blue-400 text-center mb-6 border-b pb-3 border-gray-700">
-                        <FaLayerGroup className="inline mb-1 ml-2"/> اختر الفصل الدراسي
-                    </h1>
-                    <p className="text-gray-400 text-center mb-8 text-md">
-                        مرحباً **{studentName}**. يرجى اختيار الفصل الدراسي لعرض بياناته.
-                    </p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {shouldShow('semester1') && (
+        // حالة أ: فقط الفصل الأول متاح -> اختر الفصل الأول تلقائياً وأظهر الفترات
+        if (hasSem1 && !hasSem2) {
+            setSelectedSemester('semester1');
+            return null; // سيتم إعادة التصيير فوراً مع المتغير الجديد
+        }
+        // حالة ب: فقط الفصل الثاني متاح -> اختر الفصل الثاني تلقائياً
+        if (!hasSem1 && hasSem2) {
+            setSelectedSemester('semester2');
+            return null; 
+        }
+        // حالة ج: كلاهما متاح -> أظهر شاشة اختيار الفصل
+        if (hasSem1 && hasSem2) {
+             return (
+                <div className="p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center" dir="rtl">
+                    <div className="bg-gray-800 p-6 md:p-10 rounded-xl shadow-2xl border border-gray-700 w-full max-w-2xl mx-auto">
+                        <h1 className="text-2xl md:text-3xl font-extrabold text-blue-400 text-center mb-6 border-b pb-3 border-gray-700">
+                            <FaLayerGroup className="inline mb-1 ml-2"/> اختر الفصل الدراسي
+                        </h1>
+                        <p className="text-gray-400 text-center mb-8 text-md">
+                            مرحباً **{studentName}**. لديك سجلات متاحة في الفصلين، اختر للمتابعة.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <button 
                                 onClick={() => verifyAndProceed('semester', 'semester1')}
                                 disabled={verifying}
                                 className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفصل الدراسي الأول</span>}
-                                {!verifying && <span className="text-sm opacity-80 mt-1">اضغط لعرض فترات الفصل الأول</span>}
+                                {!verifying && <span className="text-sm opacity-80 mt-1">اضغط لعرض الفترات</span>}
                             </button>
-                        )}
 
-                        {shouldShow('semester2') && (
                             <button 
                                 onClick={() => verifyAndProceed('semester', 'semester2')}
                                 disabled={verifying}
                                 className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-teal-600 to-teal-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفصل الدراسي الثاني</span>}
-                                {!verifying && <span className="text-sm opacity-80 mt-1">اضغط لعرض فترات الفصل الثاني</span>}
+                                {!verifying && <span className="text-sm opacity-80 mt-1">اضغط لعرض الفترات</span>}
                             </button>
-                        )}
-                        
-                        {shouldShow('period1') && !shouldShow('semester1') && (
-                             <button 
-                                onClick={() => { 
-                                    setSelectedSemester(defaultActiveSemesterKey); 
-                                    verifyAndProceed('period', 1); 
-                                }}
-                                disabled={verifying}
-                                className="flex flex-col items-center justify-center p-6 bg-gray-700 text-white rounded-xl hover:bg-gray-600 border border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <span className="text-xl font-bold">الفترة الأولى</span>
-                                <span className="text-sm opacity-70">عرض مباشر</span>
-                            </button>
-                        )}
-                        
-                        {shouldShow('period2') && !shouldShow('semester2') && (
-                             <button 
-                                onClick={() => { 
-                                    setSelectedSemester(defaultActiveSemesterKey); 
-                                    verifyAndProceed('period', 2); 
-                                }}
-                                disabled={verifying}
-                                className="flex flex-col items-center justify-center p-6 bg-gray-700 text-white rounded-xl hover:bg-gray-600 border border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <span className="text-xl font-bold">الفترة الثانية</span>
-                                <span className="text-sm opacity-70">عرض مباشر</span>
-                            </button>
-                        )}
+                        </div>
                     </div>
-
-                    {allowedViews.length === 0 && (
-                         <p className="text-red-400 text-center mt-6">لا توجد سجلات متاحة للعرض حالياً. يرجى مراجعة المعلم.</p>
-                    )}
+                </div>
+            );
+        }
+        
+        // حالة د: لا يوجد شيء متاح
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white font-['Noto_Sans_Arabic',sans-serif]">
+                <div className="text-center p-8 bg-gray-800 rounded-xl border border-gray-700">
+                    <h2 className="text-xl font-bold text-red-400 mb-2">لا توجد سجلات متاحة</h2>
+                    <p className="text-gray-400">يرجى مراجعة المعلم لتفعيل العرض.</p>
                 </div>
             </div>
         );
     }
 
-    // سيناريو 2: تم اختيار الفصل، الآن اختر الفترة
+    // 2. إذا تم اختيار الفصل (أو تم اختياره تلقائياً)، أظهر خيارات الفترة
+    // تحقق أي الفترات مسموحة لهذا الفصل بالتحديد
+    const prefix = selectedSemester === 'semester1' ? 'sem1' : 'sem2';
+    const showP1 = allowed.includes(`${prefix}_period1`);
+    const showP2 = allowed.includes(`${prefix}_period2`);
+
     return (
         <div className="p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right bg-gray-900 text-gray-100 min-h-screen flex flex-col items-center justify-center" dir="rtl">
             <div className="bg-gray-800 p-6 md:p-10 rounded-xl shadow-2xl border border-gray-700 w-full max-w-2xl mx-auto animate-fadeIn">
@@ -803,12 +821,15 @@ function StudentView() {
                     <h1 className="text-2xl font-extrabold text-blue-400">
                          {selectedSemester === 'semester1' ? 'الفصل الدراسي الأول' : 'الفصل الدراسي الثاني'}
                     </h1>
-                    <button 
-                        onClick={() => setSelectedSemester(null)}
-                        className="text-sm text-gray-400 hover:text-white flex items-center gap-1"
-                    >
-                        <FaArrowLeft /> تغيير الفصل
-                    </button>
+                    {/* إظهار زر العودة فقط إذا كان الفصلين متاحين (يعني المستخدم وصل هنا باختيار) */}
+                    {(hasSem1 && hasSem2) && (
+                        <button 
+                            onClick={() => setSelectedSemester(null)}
+                            className="text-sm text-gray-400 hover:text-white flex items-center gap-1"
+                        >
+                            <FaArrowLeft /> تغيير الفصل
+                        </button>
+                    )}
                 </div>
 
                 <p className="text-gray-400 text-center mb-8 text-md">
@@ -816,23 +837,27 @@ function StudentView() {
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button 
-                        onClick={() => verifyAndProceed('period', 1)}
-                        disabled={verifying}
-                        className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-green-600 to-green-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفترة الأولى</span>}
-                        {!verifying && <span className="text-sm opacity-80 mt-1">عرض السجل</span>}
-                    </button>
+                    {showP1 && (
+                        <button 
+                            onClick={() => verifyAndProceed('period', 1)}
+                            disabled={verifying}
+                            className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-green-600 to-green-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفترة الأولى</span>}
+                            {!verifying && <span className="text-sm opacity-80 mt-1">عرض السجل</span>}
+                        </button>
+                    )}
 
-                    <button 
-                        onClick={() => verifyAndProceed('period', 2)}
-                        disabled={verifying}
-                        className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-yellow-600 to-yellow-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفترة الثانية</span>}
-                        {!verifying && <span className="text-sm opacity-80 mt-1">عرض السجل</span>}
-                    </button>
+                    {showP2 && (
+                        <button 
+                            onClick={() => verifyAndProceed('period', 2)}
+                            disabled={verifying}
+                            className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-yellow-600 to-yellow-800 text-white rounded-xl hover:scale-[1.02] transition-transform shadow-lg border border-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {verifying ? <FaSyncAlt className="animate-spin text-2xl"/> : <span className="text-xl font-bold">الفترة الثانية</span>}
+                            {!verifying && <span className="text-sm opacity-80 mt-1">عرض السجل</span>}
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -930,13 +955,13 @@ function StudentView() {
                 الفترة المعروضة: <span className="text-lg text-white">{currentPeriod === 1 ? 'الأولى' : 'الثانية'}</span>
               </span>
               
-              {/* زر العودة للصفحة الرئيسية (تحديث الصفحة) */}
+              {/* 🔥 زر العودة إلى القائمة بدلاً من التحديث 🔥 */}
               <button
-                  onClick={() => window.location.reload()}
+                  onClick={handleBackToMenu}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-all shadow-md border border-gray-500 font-bold text-sm"
-                  title="إعادة تحميل الصفحة للعودة للقائمة الرئيسية"
+                  title="العودة لاختيار الفصل أو الفترة"
               >
-                  <FaHome className="text-blue-300"/> العودة للصفحة الرئيسية
+                  <FaHistory className="text-blue-300"/> تغيير الفصل/الفترة
               </button>
 
             </div>
