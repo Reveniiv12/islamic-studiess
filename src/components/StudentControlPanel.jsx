@@ -19,8 +19,8 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
   const [config, setConfig] = useState({
     is_locked: false,
     lock_message: "عذراً، الصفحة مغلقة حالياً للتحديث ورصد الدرجات.",
-    allowed_views: [], // مثال: ['sem1_period1', 'sem2_period1']
-    default_view: null // مثال: 'sem1_period1'
+    allowed_views: [],
+    default_view: null
   });
 
   // جلب الإعدادات عند فتح النافذة
@@ -83,7 +83,6 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
     }
   };
 
-  // تفعيل/إلغاء تفعيل خيار عرض معين
   const toggleViewOption = (optionId) => {
     setConfig(prev => {
       const currentViews = prev.allowed_views || [];
@@ -91,21 +90,16 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
       let newDefault = prev.default_view;
 
       if (currentViews.includes(optionId)) {
-        // إذا كان مفعلاً، نقوم بإزالته
         newViews = currentViews.filter(id => id !== optionId);
-        // إذا قمنا بإلغاء تفعيل الخيار الذي كان محدداً كافتراضي، نحذف الافتراضي
         if (newDefault === optionId) newDefault = null;
       } else {
-        // تفعيل الخيار
         newViews = [...currentViews, optionId];
       }
       return { ...prev, allowed_views: newViews, default_view: newDefault };
     });
   };
 
-  // تعيين صفحة كافتراضية
   const setDefaultView = (optionId) => {
-      // لا يمكن تعيين افتراضي إلا إذا كان الخيار مفعلاً أصلاً
       if (config.allowed_views.includes(optionId)) {
           setConfig(prev => ({ 
               ...prev, 
@@ -117,12 +111,10 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
   const isSelected = (id) => config.allowed_views?.includes(id);
   const isDefault = (id) => config.default_view === id;
 
-  // مكون فرعي لرسم خيار واحد (فترة)
   const renderOption = (id, label) => (
     <div className={`flex flex-col sm:flex-row items-center justify-between p-3 rounded-lg border transition-all gap-3 ${
         isSelected(id) ? 'bg-gray-700 border-gray-500 shadow-sm' : 'bg-gray-800 border-gray-700 opacity-70'
     }`}>
-        {/* الجزء الخاص بالتفعيل (Checkbox) */}
         <div 
             onClick={() => toggleViewOption(id)}
             className="flex items-center gap-3 cursor-pointer w-full sm:w-auto hover:opacity-80 transition-opacity"
@@ -131,7 +123,6 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
             <span className={`font-medium text-sm sm:text-base ${isSelected(id) ? 'text-white' : 'text-gray-400'}`}>{label}</span>
         </div>
 
-        {/* زر تعيين الافتراضي (يظهر فقط عند التفعيل) */}
         {isSelected(id) && (
             <button
                 onClick={() => setDefaultView(id)}
@@ -149,7 +140,6 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
     </div>
   );
 
-  // مكون فرعي لرسم مجموعة الفصل الدراسي
   const renderSemesterGroup = (title, semPrefix, colorClass, borderClass) => (
     <div className={`p-4 rounded-xl border ${borderClass} bg-gray-800/40 mb-4`}>
         <h4 className={`font-bold text-md mb-3 flex items-center gap-2 ${colorClass}`}>
@@ -166,7 +156,16 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
 
   return (
     <CustomModal title="لوحة تحكم صفحة الطالب" onClose={onClose}>
-      <div className="flex flex-col gap-6 text-right font-['Noto_Sans_Arabic',sans-serif]" dir="rtl">
+      {/* 🔥🔥 التعديلات هنا 🔥🔥
+          1. max-h-[80vh]: تحديد أقصى ارتفاع ليناسب شاشات الجوال
+          2. overflow-y-auto: السماح بالتمرير العمودي
+          3. p-1: إضافة هوامش داخلية صغيرة لمنع قص الظلال
+          4. gap-4 md:gap-6: تقليل المسافات بين العناصر على الجوال
+      */}
+      <div 
+        className="flex flex-col gap-4 md:gap-6 text-right font-['Noto_Sans_Arabic',sans-serif] max-h-[80vh] overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent" 
+        dir="rtl"
+      >
         
         {/* 1. قسم القفل */}
         <div className={`p-4 rounded-xl border-2 transition-colors ${config.is_locked ? 'bg-red-900/10 border-red-500/50' : 'bg-green-900/10 border-green-500/50'}`}>
@@ -204,7 +203,7 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
                 <FaEye className="text-blue-400"/> إعدادات العرض
              </h3>
              <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
-                حدد الفترات التي تود إظهارها. اضغط على زر "تعيين كافتراضي" <FaStar className="inline text-yellow-500 mx-1"/> بجانب الفترة ليدخل الطالب عليها مباشرة دون المرور بقائمة الاختيار.
+                حدد الفترات التي تود إظهارها. اضغط على زر "تعيين كافتراضي" <FaStar className="inline text-yellow-500 mx-1"/> بجانب الفترة ليدخل الطالب عليها مباشرة.
              </p>
           </div>
           
@@ -215,7 +214,7 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
         </div>
 
         {/* 3. أزرار التحكم السفلية */}
-        <div className="flex flex-col-reverse sm:flex-row gap-3 mt-2 border-t border-gray-700 pt-4">
+        <div className="flex flex-col-reverse sm:flex-row gap-3 mt-2 border-t border-gray-700 pt-4 pb-2">
           <button 
             onClick={onClose} 
             className="px-6 py-3 bg-gray-700 text-gray-200 rounded-xl font-bold hover:bg-gray-600 hover:text-white transition-all w-full sm:w-auto"
