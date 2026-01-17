@@ -1,7 +1,7 @@
 // src/pages/BriefSheet.jsx
 import React, { useState } from 'react';
 import { FaStar } from 'react-icons/fa';
-import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun } from "docx";
+import { AlignmentType, Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun } from "docx";
 import { saveAs } from 'file-saver';
 
 const BriefSheet = ({
@@ -20,9 +20,8 @@ const BriefSheet = ({
     // تم إضافة حالة جديدة للتحكم في عرض الجدول
     const [activeView, setActiveView] = useState('full'); // 'full', 'sub_totals'
 
-    // دوال الحساب الفرعية (مكررة هنا للوصول السريع إلى studentData)
+    // دوال الحساب الفرعية
     const calculateMajorAssessments = (grades) => {
-        // الاختبارات (40) + التلاوة (10) + الحفظ (10) = 60
         const testsScore = parseFloat(calculateCategoryScore(grades, 'tests', 'sum'));
         const recitationScore = parseFloat(calculateCategoryScore(grades, 'quranRecitation', 'average'));
         const memorizationScore = parseFloat(calculateCategoryScore(grades, 'quranMemorization', 'average'));
@@ -30,7 +29,6 @@ const BriefSheet = ({
     };
 
     const calculateCoursework = (grades) => {
-        // الواجبات (10) + المشاركة (10) + المهام (10) + التفاعل (10) = 40
         const homeworkScore = parseFloat(calculateCategoryScore(grades, 'homework', 'sum'));
         const participationScore = parseFloat(calculateCategoryScore(grades, 'participation', 'sum'));
         const performanceScore = parseFloat(calculateCategoryScore(grades, 'performanceTasks', 'best'));
@@ -38,30 +36,30 @@ const BriefSheet = ({
         return (homeworkScore + participationScore + performanceScore + classInteractionScore).toFixed(2);
     };
 
-    // دالة التصدير إلى Word (تم تحديثها لـ full و sub_totals)
+    // دالة التصدير إلى Word
     const handleExportToWord = (viewType) => {
         const docSections = [];
-        const studentsPerPage = 20;
+        const studentsPerPage = 40; // عدد الطلاب في الصفحة الواحدة
 
         for (let i = 0; i < students.length; i += studentsPerPage) {
             const studentsChunk = students.slice(i, i + studentsPerPage);
             const tableRows = [];
 
-            // Define Headers and data fields based on viewType
+            // تعريف العناوين والحقول
             let headers;
             let dataFields;
 
             if (viewType === 'sub_totals') {
+                // ملاحظة: الترتيب في المصفوفة هنا: العنصر الأول سيكون في اليسار، والأخير في اليمين
                 headers = [ "النجوم", "المجموع الكلي (100)", "أعمال السنة (40)", "التقييمات الرئيسية (60)", "اسم الطالب" ];
                 dataFields = (student) => [
                     (student.stars || 0).toString(),
                     calculateTotalScore(student.grades).toString(),
-                    calculateCoursework(student.grades), // ✅ تصحيح: أعمال السنة (40)
-                    calculateMajorAssessments(student.grades), // ✅ تصحيح: التقييمات الرئيسية (60)
+                    calculateCoursework(student.grades),
+                    calculateMajorAssessments(student.grades),
                     student.name
                 ];
             } else {
-                 // عرض مفصل (Full Brief)
                  headers = [ 
                     "النجوم", "المجموع الكلي (100)", "مجموع القرآن (20)", "المهام الأدائية (10)",
                     "المشاركات (10)", "الواجبات (10)", "التفاعل الصفي (10)", "الاختبارات (40)", "اسم الطالب" 
@@ -79,17 +77,17 @@ const BriefSheet = ({
                  ];
             }
 
-
-            // Add Header Row
+            // إضافة صف العناوين (تم إزالة .reverse() ليظهر الاسم يمين والنجوم يسار)
             tableRows.push(new TableRow({
-                children: headers.reverse().map(header => new TableCell({ 
-                    children: [new Paragraph({ children: [new TextRun({ text: header.replace(/\s\(.*\)/, ''), bold: true })], alignment: "center" })] // إزالة الأقواس من عناوين وورد
+                children: headers.map(header => new TableCell({ 
+                    children: [new Paragraph({ children: [new TextRun({ text: header.replace(/\s\(.*\)/, ''), bold: true })], alignment: "center" })] 
                 })),
             }));
 
-            // Add Student Data Rows
+            // إضافة صفوف بيانات الطلاب
             studentsChunk.forEach(student => {
-                const rowData = dataFields(student).reverse();
+                // تم إزالة .reverse() هنا أيضاً ليتطابق مع العناوين
+                const rowData = dataFields(student);
                 tableRows.push(new TableRow({
                     children: rowData.map(data => new TableCell({ 
                         children: [new Paragraph({ text: data, alignment: "center" })] 
@@ -97,15 +95,48 @@ const BriefSheet = ({
                 }));
             });
 
-            docSections.push({
-                children: [
-                    new Paragraph({ text: `كشف مختصر - ${viewType === 'sub_totals' ? 'المجاميع الفرعية' : 'الدرجات المفصلة'} - صفحة ${Math.floor(i / studentsPerPage) + 1}`, heading: "Heading1", alignment: "right" }),
-                    new Paragraph({ text: `المدرسة: ${schoolName} | المعلم: ${teacherName} | الفصل الدراسي: ${currentSemester}`, alignment: "right" }),
-                    new Paragraph({ text: `الصف: ${gradeName} | الفصل: ${sectionName}`, alignment: "right" }),
-                    new Paragraph({ text: " " }), // Spacer
-                    new Table({ rows: tableRows }),
-                ],
-            });
+docSections.push({
+    children: [
+        // العنوان الرئيسي
+        new Paragraph({
+            text: `كشف مختصر – ${viewType === 'sub_totals' ? 'المجاميع الفرعية' : 'الدرجات المفصلة'} – صفحة ${Math.floor(i / studentsPerPage) + 1}`,
+            heading: "Heading1",
+            alignment: AlignmentType.RIGHT, // محاذاة لليمين
+            bidirectional: true, // تفعيل اتجاه النص العربي
+            spacing: { after: 300 },
+        }),
+
+        // معلومات المدرسة والمعلم والفصل
+        new Paragraph({
+            text: `المدرسة: ${schoolName}   |   المعلم: ${teacherName}   |   ${currentSemester}`,
+            alignment: AlignmentType.RIGHT, // محاذاة لليمين
+            bidirectional: true,
+            spacing: { after: 200 },
+        }),
+
+        // الصف والفصل
+        new Paragraph({
+            text: `${gradeName}   |   الفصل: ${sectionName}`,
+            alignment: AlignmentType.RIGHT, // محاذاة لليمين
+            bidirectional: true,
+            spacing: { after: 300 },
+        }),
+
+        // فراغ قبل الجدول
+        new Paragraph({
+            text: "",
+            spacing: { after: 200 },
+        }),
+
+        // الجدول
+        new Table({
+            rows: tableRows,
+            width: { size: 100, type: "pct" },
+            alignment: AlignmentType.RIGHT, // هذا يجعل الجدول نفسه يبدأ من اليمين (مهم للعربي)
+        }),
+    ],
+});
+
         }
 
         const doc = new Document({
@@ -118,7 +149,7 @@ const BriefSheet = ({
     };
 
     // ------------------------------------
-    // رندرة العرض المفصل (الكشف المختصر الأصلي)
+    // رندرة العرض المفصل (للعرض في الشاشة)
     // ------------------------------------
     const renderFullBrief = () => (
         <div className="overflow-y-auto max-h-[65vh] overflow-x-auto">
@@ -196,7 +227,7 @@ const BriefSheet = ({
     );
     
     // ------------------------------------
-    // رندرة عرض المجاميع الفرعية (الجديد)
+    // رندرة عرض المجاميع الفرعية (للعرض في الشاشة)
     // ------------------------------------
     const renderSubTotalsBrief = () => (
         <div className="overflow-y-auto max-h-[65vh]">
@@ -225,10 +256,10 @@ const BriefSheet = ({
                                 {student.name}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-blue-400">
-                                {calculateCoursework(student.grades)} {/* ✅ تم التبديل: أعمال السنة (40) */}
+                                {calculateCoursework(student.grades)}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-yellow-400">
-                                {calculateMajorAssessments(student.grades)} {/* ✅ تم التبديل: التقييمات الرئيسية (60) */}
+                                {calculateMajorAssessments(student.grades)}
                             </td>
                             <td className="px-4 py-4 whitespace-nowrap text-sm text-center font-bold text-green-400">
                                 {calculateTotalScore(student.grades)}
@@ -240,7 +271,6 @@ const BriefSheet = ({
         </div>
     );
 
-
     return (
         <div className="bg-gray-800 p-4 md:p-8 rounded-xl shadow-lg mt-4 md:mt-6 overflow-x-auto border border-gray-700 max-h-[80vh]">
             <h3 className="text-xl md:text-2xl font-bold text-blue-400 text-right mb-4">كشف مختصر</h3>
@@ -251,7 +281,6 @@ const BriefSheet = ({
                     <span className="text-gray-400 self-center">طريقة عرض البيانات:</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    {/* زر التبديل بين العرضين */}
                     <button
                         onClick={() => setActiveView('full')}
                         className={`px-3 py-1 rounded-lg transition-colors ${activeView === 'full' ? 'bg-indigo-600 text-white' : 'bg-gray-600 text-gray-300 hover:bg-gray-500'}`}>
@@ -270,7 +299,6 @@ const BriefSheet = ({
                 </div>
             </div>
 
-            {/* عرض الجدول المختار */}
             <div className="mt-4">
                 {activeView === 'full' ? renderFullBrief() : renderSubTotalsBrief()}
             </div>
@@ -279,4 +307,3 @@ const BriefSheet = ({
 };
 
 export default BriefSheet;
-
