@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { FaClock } from "react-icons/fa"; 
 
-// دالة تحويل الأرقام (لم تتغير)
+// دالة تحويل الأرقام
 const convertToEnglishNumbers = (input) => {
     if (input === null || input === undefined) {
         return null;
@@ -15,7 +15,6 @@ const convertToEnglishNumbers = (input) => {
     return output;
 };
 
-
 // ----------------------------------------------------------------------
 // المكون المُذَكَّر (Memoized Component) لصف الطالب الواحد
 // ----------------------------------------------------------------------
@@ -27,25 +26,67 @@ const StudentRowComponent = ({
     calculateCategoryScore, 
     selectedStudents, 
     toggleStudentSelection,
-    inputCount
+    inputCount,
+    curriculum,           // استقبال بيانات التلاوة
+    homeworkCurriculum    // استقبال بيانات الواجبات والاختبارات
 }) => {
 
     const isSelected = selectedStudents.includes(student.id);
 
-    // دالة مساعدة لتوليد حقول إدخال الدرجات
+    // دالة للتحقق مما إذا كان هناك منهج لهذا المؤشر
+    const checkCurriculumExists = (category, index) => {
+        // الفئات المستثناة (تبقى كما هي)
+        if (category === 'classInteraction' || category === 'participation') {
+            return true; 
+        }
+
+        let items = [];
+        // التأكد من أن المصفوفات موجودة لتجنب الأخطاء
+        const safeCurriculum = Array.isArray(curriculum) ? curriculum : [];
+        const safeHomework = Array.isArray(homeworkCurriculum) ? homeworkCurriculum : [];
+
+        if (category === 'quranRecitation') {
+            items = safeCurriculum.filter(c => c.type === 'recitation');
+        } else if (category === 'quranMemorization') {
+            items = safeCurriculum.filter(c => c.type === 'memorization');
+        } else if (category === 'homework') {
+            items = safeHomework.filter(c => c.type === 'homework');
+        } else if (category === 'performanceTasks') {
+            items = safeHomework.filter(c => c.type === 'performanceTask');
+        } else if (category === 'tests') {
+            items = safeHomework.filter(c => c.type === 'test');
+        }
+
+        return index < items.length;
+    };
+
+    // دالة رسم خانات الإدخال مع الألوان الجديدة
     const renderGradeInputs = (category, color, count) => {
-        return Array(count).fill(0).map((_, i) => (
-            <td key={`${category}_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-500">
-                <input
-                    type="text"
-                    inputMode="numeric"
-                    value={student.grades[category]?.[i] ?? ''} 
-                    onChange={(e) => handleGradeChange(student.id, category, i, e.target.value)}
-                    // تم التعديل: w-16 إلى w-10 و p-2 إلى p-1 لتصغير المربعات في الجوال
-                    className={`w-10 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
-                />
-            </td>
-        ));
+        return Array(count).fill(0).map((_, i) => {
+            const hasCurriculum = checkCurriculumExists(category, i);
+            
+            // تحديد التصميم بناءً على وجود المنهج
+            // 1. إذا وجد منهج: أبيض شفاف (bg-white/10)
+            // 2. إذا لم يوجد منهج: أسود شفاف (bg-black/50) مع مؤشر افتراضي
+            const inputStyle = hasCurriculum 
+                ? `bg-white/10 text-white focus:ring-${color}-500 border-transparent hover:bg-white/20`
+                : `bg-black/50 text-gray-500 border border-gray-800 focus:ring-gray-600 cursor-default placeholder-gray-700`;
+
+            const titleText = hasCurriculum ? "" : "لا يوجد منهج محدد لهذا البند";
+
+            return (
+                <td key={`${category}_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-600">
+                    <input
+                        type="text"
+                        inputMode="numeric"
+                        title={titleText}
+                        value={student.grades[category]?.[i] ?? ''} 
+                        onChange={(e) => handleGradeChange(student.id, category, i, e.target.value)}
+                        className={`w-10 p-1 text-center rounded focus:outline-none focus:ring-2 transition-all duration-200 ${inputStyle}`}
+                    />
+                </td>
+            );
+        });
     };
 
     const renderContent = () => {
@@ -118,7 +159,6 @@ const StudentRowComponent = ({
         }
     };
 
-
     return (
         <tr className="hover:bg-gray-700 transition-colors group">
             <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
@@ -129,15 +169,11 @@ const StudentRowComponent = ({
                         onChange={() => toggleStudentSelection(student.id)}
                         className="accent-blue-500"
                     />
-                    {/* ========================================================= */}
-                    {/* الإضافة المطلوبة: عرض صورة الطالب */}
-                    {/* ========================================================= */}
                     <img 
                         src={student.photo || '/images/1.webp'} 
                         alt={student.name} 
                         className="w-8 h-8 rounded-full object-cover border border-gray-600"
                     />
-                    {/* ========================================================= */}
                     <span className="whitespace-nowrap text-gray-100">{student.name}</span>
                 </div>
             </td>
@@ -146,52 +182,47 @@ const StudentRowComponent = ({
     );
 };
 
-// تذكير المكون: لن يتم إعادة تصييره إلا إذا تغيرت خصائصه (student object)
 const MemoizedStudentRow = React.memo(StudentRowComponent);
 
 // ----------------------------------------------------------------------
-// المكون الرئيسي GradesModal (تم تبسيط دوال العرض لاستخدام StudentRow)
+// المكون الرئيسي GradesModal
 // ----------------------------------------------------------------------
 
 const GradesModal = ({
     students,
     onClose,
     onSave,
+    curriculum = [],         
+    homeworkCurriculum = [], 
     testCalculationMethod: propTestCalculationMethod,
     onTestCalculationMethodChange
 }) => {
     
-    // تم تغيير 'oralTest' إلى 'classInteraction' لتمثيل التفاعل الصفي
     const initialTabs = ['tests', 'homework', 'performanceTasks', 'participation', 'quranRecitation', 'quranMemorization', 'classInteraction'];
     
     const [activeTab, setActiveTab] = useState('tests');
     const [modalStudents, setModalStudents] = useState(students);
     const [testCalculationMethod, setTestCalculationMethod] = useState(propTestCalculationMethod);
     
-    // فصل حالات البحث لكل تبويب
     const [searchQueries, setSearchQueries] = useState(
         initialTabs.reduce((acc, tab) => ({ ...acc, [tab]: '' }), {})
     );
 
-    // فصل حالات الطلاب المحددين لكل تبويب
     const [selectedStudentsPerTab, setSelectedStudentsPerTab] = useState(
         initialTabs.reduce((acc, tab) => ({ ...acc, [tab]: [] }), {})
     );
 
     const [batchGrade, setBatchGrade] = useState('');
     
-    // فصل المؤشرات لكل تبويب
     const [homeworkIndex, setHomeworkIndex] = useState(0);
     const [testIndex, setTestIndex] = useState(0);
     const [performanceTaskIndex, setPerformanceTaskIndex] = useState(0);
     const [recitationIndex, setRecitationIndex] = useState(0);
     const [memorizationIndex, setMemorizationIndex] = useState(0);
-    const [classInteractionIndex, setClassInteractionIndex] = useState(0); // تم التعديل
+    const [classInteractionIndex, setClassInteractionIndex] = useState(0);
     
-    // حالة منفصلة للطلاب المفلترين لكل تبويب
     const [filteredStudents, setFilteredStudents] = useState(students);
 
-    // حالة النافذة المنبثقة
     const [customDialog, setCustomDialog] = useState({
         isOpen: false,
         title: '',
@@ -200,7 +231,7 @@ const GradesModal = ({
 
     useEffect(() => {
         setModalStudents(students);
-        setFilteredStudents(students); // إعادة تعيين الطلاب المفلترين عند التحديث
+        setFilteredStudents(students);
     }, [students]);
 
     useEffect(() => {
@@ -220,30 +251,17 @@ const GradesModal = ({
     }, [searchQueries, modalStudents, activeTab]);
 
     const handleTabChange = (tab) => {
-        // إعادة تعيين جميع حالات التبويب الحالي إلى حالتها الأولية
-        setSearchQueries(prev => ({
-            ...prev,
-            [activeTab]: '',
-        }));
-
+        setSearchQueries(prev => ({ ...prev, [activeTab]: '' }));
         setBatchGrade('');
         setSelectedStudentsPerTab(prev => ({ ...prev, [activeTab]: [] }));
         setFilteredStudents(modalStudents);
 
-        // هذه الخطوة تضمن إعادة تعيين المؤشر عند الانتقال بين الأقسام
-        if (tab === 'tests') {
-            setTestIndex(0);
-        } else if (tab === 'homework') {
-            setHomeworkIndex(0);
-        } else if (tab === 'performanceTasks') {
-            setPerformanceTaskIndex(0);
-        } else if (tab === 'quranRecitation') {
-            setRecitationIndex(0);
-        } else if (tab === 'quranMemorization') {
-            setMemorizationIndex(0);
-        } else if (tab === 'classInteraction') {
-            setClassInteractionIndex(0); // تم التعديل
-        }
+        if (tab === 'tests') { setTestIndex(0); } 
+        else if (tab === 'homework') { setHomeworkIndex(0); } 
+        else if (tab === 'performanceTasks') { setPerformanceTaskIndex(0); } 
+        else if (tab === 'quranRecitation') { setRecitationIndex(0); } 
+        else if (tab === 'quranMemorization') { setMemorizationIndex(0); } 
+        else if (tab === 'classInteraction') { setClassInteractionIndex(0); }
 
         setActiveTab(tab);
     };
@@ -252,9 +270,7 @@ const GradesModal = ({
         setSearchQueries(prev => ({ ...prev, [activeTab]: e.target.value }));
     };
 
-    // تم تغليف هذه الدالة بـ useCallback للحفاظ على مرجع دالة ثابت
     const handleGradeChange = React.useCallback((studentId, category, index, value) => {
-        // استخدام دالة التحويل لدعم الأرقام العربية
         const englishValue = convertToEnglishNumbers(value);
         const numericValue = englishValue === '' ? null : Number(englishValue);
         
@@ -262,36 +278,14 @@ const GradesModal = ({
         let errorMessage = '';
 
         switch(category) {
-            case 'tests':
-                maxLimit = 20; // تم التعديل
-                errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 20.";
-                break;
-            case 'classInteraction': // تم التعديل
-                maxLimit = 10; // تم التعديل
-                errorMessage = "خطأ: درجة التفاعل الصفي لا يمكن أن تتجاوز 10.";
-                break;
-            case 'homework':
-                maxLimit = 1;
-                errorMessage = "خطأ: درجة الواجب لا يمكن أن تتجاوز 1.";
-                break;
-            case 'performanceTasks':
-                maxLimit = 10; // تم التعديل
-                errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 10.";
-                break;
-            case 'participation':
-                maxLimit = 1;
-                errorMessage = "خطأ: درجة المشاركة لا يمكن أن تتجاوز 1.";
-                break;
-            case 'quranRecitation':
-                maxLimit = 10;
-                errorMessage = "خطأ: درجة تلاوة القرآن لا يمكن أن تتجاوز 10.";
-                break;
-            case 'quranMemorization':
-                maxLimit = 10; // تم التعديل
-                errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 10.";
-                break;
-            default:
-                break;
+            case 'tests': maxLimit = 20; errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 20."; break;
+            case 'classInteraction': maxLimit = 10; errorMessage = "خطأ: درجة التفاعل الصفي لا يمكن أن تتجاوز 10."; break;
+            case 'homework': maxLimit = 1; errorMessage = "خطأ: درجة الواجب لا يمكن أن تتجاوز 1."; break;
+            case 'performanceTasks': maxLimit = 10; errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 10."; break;
+            case 'participation': maxLimit = 1; errorMessage = "خطأ: درجة المشاركة لا يمكن أن تتجاوز 1."; break;
+            case 'quranRecitation': maxLimit = 10; errorMessage = "خطأ: درجة تلاوة القرآن لا يمكن أن تتجاوز 10."; break;
+            case 'quranMemorization': maxLimit = 10; errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 10."; break;
+            default: break;
         }
 
         if (numericValue !== null && (numericValue > maxLimit || numericValue < 0)) {
@@ -321,29 +315,15 @@ const GradesModal = ({
         );
     }, [setCustomDialog]);
 
-    // تم تغليف هذه الدالة بـ useCallback للحفاظ على مرجع دالة ثابت
     const calculateCategoryScore = React.useCallback((student, category) => {
         if (!student.grades || !student.grades[category]) return 0;
-
         const grades = student.grades[category].filter(g => g !== null && g !== undefined && g !== '');
         if (grades.length === 0) return 0;
-
         const sum = grades.reduce((acc, curr) => acc + curr, 0);
 
-        if (category === 'tests') {
-            // تم التعديل: أصبح الاحتساب الافتراضي هو المجموع الكلي
-            return sum.toFixed(2);
-        }
-        
-        if (category === 'classInteraction' || category === 'performanceTasks') { // تم التعديل
-             return Math.max(...grades).toFixed(2);
-        }
-
-        if (category === 'quranRecitation' || category === 'quranMemorization') {
-            // تم التعديل: حفظ القرآن أصبح متوسط
-            return (sum / grades.length).toFixed(2);
-        }
-
+        if (category === 'tests') { return sum.toFixed(2); }
+        if (category === 'classInteraction' || category === 'performanceTasks') { return Math.max(...grades).toFixed(2); }
+        if (category === 'quranRecitation' || category === 'quranMemorization') { return (sum / grades.length).toFixed(2); }
         return sum.toFixed(2);
     }, []);
 
@@ -356,7 +336,6 @@ const GradesModal = ({
         }
     };
 
-    // تم تغليف هذه الدالة بـ useCallback للحفاظ على مرجع دالة ثابت
     const toggleStudentSelection = React.useCallback((studentId) => {
         setSelectedStudentsPerTab(prev => {
             const newSelected = prev[activeTab].includes(studentId)
@@ -366,58 +345,29 @@ const GradesModal = ({
         });
     }, [activeTab]);
 
-
     const handleBatchGradeChange = (e) => {
         setBatchGrade(e.target.value);
     };
 
     const applyBatchGrade = () => {
-        // استخدام دالة التحويل لدعم الأرقام العربية
         const englishBatchGrade = convertToEnglishNumbers(batchGrade);
         const batchNumericValue = englishBatchGrade !== '' ? Number(englishBatchGrade) : null;
-
         let maxLimit = 0;
         let errorMessage = '';
 
         switch(activeTab) {
-            case 'tests':
-                maxLimit = 20; // تم التعديل
-                errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 20.";
-                break;
-            case 'classInteraction': // تم التعديل
-                maxLimit = 10; // تم التعديل
-                errorMessage = "خطأ: درجة التفاعل الصفي لا يمكن أن تتجاوز 10.";
-                break;
-            case 'homework':
-                maxLimit = 1;
-                errorMessage = "خطأ: درجة الواجب لا يمكن أن تتجاوز 1.";
-                break;
-            case 'performanceTasks':
-                maxLimit = 10; // تم التعديل
-                errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 10.";
-                break;
-            case 'participation':
-                maxLimit = 1;
-                errorMessage = "خطأ: درجة المشاركة لا يمكن أن تتجاوز 1.";
-                break;
-            case 'quranRecitation':
-                maxLimit = 10;
-                errorMessage = "خطأ: درجة تلاوة القرآن لا يمكن أن تتجاوز 10.";
-                break;
-            case 'quranMemorization':
-                maxLimit = 10; // تم التعديل
-                errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 10.";
-                break;
-            default:
-                break;
+            case 'tests': maxLimit = 20; errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 20."; break;
+            case 'classInteraction': maxLimit = 10; errorMessage = "خطأ: درجة التفاعل الصفي لا يمكن أن تتجاوز 10."; break;
+            case 'homework': maxLimit = 1; errorMessage = "خطأ: درجة الواجب لا يمكن أن تتجاوز 1."; break;
+            case 'performanceTasks': maxLimit = 10; errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 10."; break;
+            case 'participation': maxLimit = 1; errorMessage = "خطأ: درجة المشاركة لا يمكن أن تتجاوز 1."; break;
+            case 'quranRecitation': maxLimit = 10; errorMessage = "خطأ: درجة تلاوة القرآن لا يمكن أن تتجاوز 10."; break;
+            case 'quranMemorization': maxLimit = 10; errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 10."; break;
+            default: break;
         }
 
         if (batchNumericValue !== null && (batchNumericValue > maxLimit || batchNumericValue < 0)) {
-            setCustomDialog({
-                isOpen: true,
-                title: 'خطأ في إدخال الدرجة',
-                message: errorMessage
-            });
+            setCustomDialog({ isOpen: true, title: 'خطأ في إدخال الدرجة', message: errorMessage });
             return;
         }
 
@@ -426,50 +376,31 @@ const GradesModal = ({
                 if (selectedStudentsPerTab[activeTab].includes(student.id)) {
                     const newGrades = [...(student.grades[activeTab] || [])];
                     let updated = false;
-
                     let indexToUpdate;
-                    if (activeTab === 'tests') {
-                        indexToUpdate = testIndex;
-                    } else if (activeTab === 'homework') {
-                        indexToUpdate = homeworkIndex;
-                    } else if (activeTab === 'performanceTasks') {
-                        indexToUpdate = performanceTaskIndex;
-                    } else if (activeTab === 'quranRecitation') {
-                        indexToUpdate = recitationIndex;
-                    } else if (activeTab === 'quranMemorization') {
-                        indexToUpdate = memorizationIndex;
-                    } else if (activeTab === 'classInteraction') { // تم التعديل
-                        indexToUpdate = classInteractionIndex; // تم التعديل
-                    }
+                    if (activeTab === 'tests') indexToUpdate = testIndex;
+                    else if (activeTab === 'homework') indexToUpdate = homeworkIndex;
+                    else if (activeTab === 'performanceTasks') indexToUpdate = performanceTaskIndex;
+                    else if (activeTab === 'quranRecitation') indexToUpdate = recitationIndex;
+                    else if (activeTab === 'quranMemorization') indexToUpdate = memorizationIndex;
+                    else if (activeTab === 'classInteraction') indexToUpdate = classInteractionIndex;
 
                     if (indexToUpdate !== undefined && indexToUpdate !== -1) {
                         newGrades[indexToUpdate] = batchNumericValue;
                         updated = true;
                     } else if (activeTab === 'participation') {
                         const emptyIndex = newGrades.findIndex(grade => grade === null || grade === undefined || grade === '');
-                        
-                        if (emptyIndex !== -1) {
-                            newGrades[emptyIndex] = batchNumericValue;
-                            updated = true;
-                        } else {
-                            // لم يعد هناك منطق لإضافة "1" بشكل تلقائي، فقط تحديث القيم الموجودة
-                        }
+                        if (emptyIndex !== -1) { newGrades[emptyIndex] = batchNumericValue; updated = true; }
                     }
                     
                     if (updated) {
-                        return {
-                            ...student,
-                            grades: {
-                                ...student.grades,
-                                [activeTab]: newGrades,
-                            },
-                        };
+                        return { ...student, grades: { ...student.grades, [activeTab]: newGrades } };
                     }
                 }
                 return student;
             })
         );
     };
+
     const handleSave = () => {
         onSave(modalStudents);
         onClose();
@@ -482,12 +413,7 @@ const GradesModal = ({
                 <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
                     <h3 className="text-xl font-bold text-red-400 mb-4">{title}</h3>
                     <p className="text-gray-300 mb-6">{message}</p>
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition"
-                    >
-                        فهمت
-                    </button>
+                    <button onClick={onClose} className="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition">فهمت</button>
                 </div>
             </div>
         );
@@ -505,6 +431,8 @@ const GradesModal = ({
                     selectedStudents={selectedStudentsPerTab[category]}
                     toggleStudentSelection={toggleStudentSelection}
                     inputCount={count}
+                    curriculum={curriculum}
+                    homeworkCurriculum={homeworkCurriculum}
                 />
             ))}
         </tbody>
@@ -523,7 +451,6 @@ const GradesModal = ({
                     className="w-full p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
             </div>
-            {/* تم إزالة خيار طريقة الاحتساب من الاختبارات لأنها أصبحت مجموع (Sum) */}
             <div className="flex flex-col md:flex-row items-center gap-4">
                 <div className="flex items-center gap-2">
                     <label htmlFor="batch-test-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
@@ -580,7 +507,6 @@ const GradesModal = ({
         </div>
     );
     
-    // تم تغيير اسم الدالة والمحتوى لتمثيل التفاعل الصفي (Class Interaction)
     const renderClassInteraction = () => (
         <div className="space-y-4">
             <div className="mb-4">
@@ -604,7 +530,7 @@ const GradesModal = ({
                         onChange={(e) => setClassInteractionIndex(Number(e.target.value))}
                         className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
                     >
-                        {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
+                        {[...Array(4)].map((_, i) => (
                             <option key={i} value={i}>{i + 1}</option>
                         ))}
                     </select>
@@ -639,7 +565,7 @@ const GradesModal = ({
                                     <span className="font-semibold text-gray-100">اسم الطالب</span>
                                 </div>
                             </th>
-                            {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
+                            {[...Array(4)].map((_, i) => (
                                 <th key={`classInteraction_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">تفاعل {i + 1} </th>
                             ))}
                             <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">أفضل درجة </th>
@@ -745,7 +671,7 @@ const GradesModal = ({
                         onChange={(e) => setPerformanceTaskIndex(Number(e.target.value))}
                         className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
                     >
-                        {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
+                        {[...Array(4)].map((_, i) => (
                             <option key={i} value={i}>{i + 1}</option>
                         ))}
                     </select>
@@ -780,7 +706,7 @@ const GradesModal = ({
                                     <span className="font-semibold text-gray-100">اسم الطالب</span>
                                 </div>
                             </th>
-                            {[...Array(4)].map((_, i) => ( // تم التعديل: 4 مربعات
+                            {[...Array(4)].map((_, i) => (
                                 <th key={`pt_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مهمة {i + 1} </th>
                             ))}
                             <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">أفضل درجة </th>
@@ -922,8 +848,8 @@ const GradesModal = ({
         switch (activeTab) {
             case 'tests':
                 return <React.Fragment key="tests">{renderTests()}</React.Fragment>;
-            case 'classInteraction': // تم التعديل
-                return <React.Fragment key="classInteraction">{renderClassInteraction()}</React.Fragment>; // تم التعديل
+            case 'classInteraction': 
+                return <React.Fragment key="classInteraction">{renderClassInteraction()}</React.Fragment>; 
             case 'homework':
                 return <React.Fragment key="homework">{renderHomework()}</React.Fragment>;
             case 'performanceTasks':
@@ -979,7 +905,7 @@ const GradesModal = ({
                         الاختبارات 
                     </button>
                     <button
-                        onClick={() => handleTabChange('classInteraction')} // تم التعديل
+                        onClick={() => handleTabChange('classInteraction')} 
                         className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'classInteraction' ? "border-b-2 md:border-b-0 md:border-r-2 border-yellow-500 text-yellow-500" : "text-gray-400 hover:text-gray-200"}`}
                     >
                         التفاعل الصفي 
