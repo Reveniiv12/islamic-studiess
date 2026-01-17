@@ -841,189 +841,196 @@ const handleAddStudent = async () => {
   // *****************************************************************
   // دالة تصدير الـ QR المعدلة (16 في الصفحة، أفقي)
   // *****************************************************************
- const handleExportQRCodes = async () => {
-    // 1. التحقق من الطلاب المحددين
-    const studentsToExport = filteredStudents.filter(s => selectedQrStudentIds.has(s.id));
-    
-    if (studentsToExport.length === 0) {
-      handleDialog("تنبيه", "يرجى اختيار طالب واحد على الأقل للطباعة.", "warning");
-      return;
+const handleExportQRCodes = async () => {
+  const studentsToExport = filteredStudents.filter(s => selectedQrStudentIds.has(s.id));
+
+  if (studentsToExport.length === 0) {
+    handleDialog("تنبيه", "يرجى اختيار طالب واحد على الأقل للطباعة.", "warning");
+    return;
+  }
+
+  try {
+    handleDialog("جاري التصدير", "جاري إنشاء ملف Word (ملء الصفحة بالكامل)...", "info");
+
+    const [{ Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, ImageRun, AlignmentType, TextRun, BorderStyle, HeightRule, VerticalAlign, TableLayoutType }, { toDataURL }, { saveAs }] = await Promise.all([
+      import('docx'),
+      import('qrcode'),
+      import('file-saver')
+    ]);
+
+    const dataURLToUint8Array = (dataUrl) => {
+      const base64 = dataUrl.split(',')[1];
+      const binaryString = window.atob(base64);
+      const len = binaryString.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes;
+    };
+
+    const mainTableRows = [];
+    const cellsPerBatch = 2; // عمودين
+    const ROWS_PER_PAGE = 8; // عدد الصفوف في الصفحة
+
+    // حساب الارتفاع الآمن: 
+    // ارتفاع A4 الكامل هو 16838.
+    // 16838 / 8 = 2104.75
+    // نستخدم 2090 لنترك هامش أمان بسيط جداً (حوالي 1 ملم) في الأسفل لمنع فتح صفحة جديدة
+    const EXACT_ROW_HEIGHT = 2090; 
+
+    // 1. تجميع البيانات في صفوف
+    let allRowsData = [];
+    for (let i = 0; i < studentsToExport.length; i += cellsPerBatch) {
+      allRowsData.push(studentsToExport.slice(i, i + cellsPerBatch));
     }
 
-    try {
-      handleDialog("جاري التصدير", "جاري إنشاء ملف Word (16 ملصق - QR يسار / نص يمين)...", "info");
-      
-      const [{ Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, ImageRun, AlignmentType, TextRun, BorderStyle, HeightRule, VerticalAlign }, { toDataURL }, { saveAs }] = await Promise.all([
-        import('docx'),
-        import('qrcode'),
-        import('file-saver')
-      ]);
+    // 2. إكمال الصفوف الفارغة لضمان امتلاء الصفحة بـ 8 صفوف
+    // إذا كان لدينا صفحة واحدة أو نريد ملء الصفحة الأخيرة
+    while (allRowsData.length % ROWS_PER_PAGE !== 0 || allRowsData.length === 0) {
+       allRowsData.push([]); // إضافة صف فارغ
+    }
+    // ملاحظة: إذا كنت تريد صفحة واحدة فقط بحد أقصى 16 طالب، يمكنك استخدام الشرط:
+    // while (allRowsData.length < ROWS_PER_PAGE) { allRowsData.push([]); }
 
-      const dataURLToUint8Array = (dataUrl) => {
-        const base64 = dataUrl.split(',')[1];
-        const binaryString = window.atob(base64);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        return bytes;
-      };
 
-      const mainTableRows = [];
-      const cellsPerBatch = 2; // عمودين
+    // 3. بناء هيكل الجدول
+    for (const batch of allRowsData) {
+      const rowCells = [];
 
-      for (let i = 0; i < studentsToExport.length; i += cellsPerBatch) {
-        const batch = studentsToExport.slice(i, i + cellsPerBatch);
-        const rowCells = [];
+      // معالجة الخلايا في الصف (طالبين أو فراغ)
+      for (let k = 0; k < cellsPerBatch; k++) {
+        const student = batch[k]; // قد يكون undefined إذا كان الصف تكميلياً
 
-        for (const student of batch) {
+        if (student) {
+          // --- يوجد طالب: إنشاء البطاقة ---
           try {
-            // توليد صورة الـ QR بجودة متوسطة
             const qrDataUrl = await toDataURL(`${window.location.origin}${student.viewKey}`, {
               errorCorrectionLevel: 'M',
               type: 'image/png',
-              width: 200, // دقة عالية لضمان الوضوح عند الطباعة
+              width: 200,
               margin: 0
             });
             const qrImage = dataURLToUint8Array(qrDataUrl);
 
-            // إنشاء الجدول الداخلي (البطاقة)
             const innerTable = new Table({
               width: { size: 100, type: WidthType.PERCENTAGE },
               borders: {
-                top: { style: BorderStyle.NONE },
-                bottom: { style: BorderStyle.NONE },
-                left: { style: BorderStyle.NONE },
-                right: { style: BorderStyle.NONE },
+                top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE },
+                left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE },
                 insideVertical: { style: BorderStyle.NONE },
               },
               rows: [
                 new TableRow({
                   children: [
-                    // ============================================
-                    // الخلية اليسرى: صورة الـ QR (حجم كبير)
-                    // ============================================
+                    // QR Code Cell
                     new TableCell({
-                      width: { size: 35, type: WidthType.PERCENTAGE }, // 35% للصورة
+                      width: { size: 35, type: WidthType.PERCENTAGE },
                       verticalAlign: VerticalAlign.CENTER,
                       children: [
                         new Paragraph({
                           alignment: AlignmentType.CENTER,
-                          children: [
-                            new ImageRun({
-                              data: qrImage,
-                              // تكبير الصورة لتملأ الحيز المتاح (حوالي 2.5 سم)
-                              transformation: { width: 85, height: 85 }, 
-                            }),
-                          ],
+                          children: [new ImageRun({ data: qrImage, transformation: { width: 90, height: 90 } })], // تصغير طفيف للصورة
                         }),
                       ],
                     }),
-
-                    // ============================================
-                    // الخلية اليمنى: النصوص (بيانات الطالب)
-                    // ============================================
+                    // Text Data Cell
                     new TableCell({
-                      width: { size: 65, type: WidthType.PERCENTAGE }, // 65% للنص
-                      verticalAlign: VerticalAlign.CENTER, // محاذاة عمودية في المنتصف
+                      width: { size: 65, type: WidthType.PERCENTAGE },
+                      verticalAlign: VerticalAlign.CENTER,
                       children: [
-                        // الاسم (خط كبير وعريض)
                         new Paragraph({
                           alignment: AlignmentType.RIGHT,
-                          children: [new TextRun({ text: student.name, bold: true, size: 24, font: "Arial" })], // Size 24 = 12pt
-                          spacing: { after: 60 }, // مسافة بعد الاسم
+                          children: [new TextRun({ text: student.name, bold: true, size: 22, font: "Arial" })],
+                          spacing: { after: 0 }, // إزالة المسافات الزائدة
                         }),
-                        // السجل المدني
                         new Paragraph({
                           alignment: AlignmentType.RIGHT,
-                          children: [new TextRun({ text: `السجل: ${student.nationalId}`, size: 20, font: "Arial" })], // Size 20 = 10pt
+                          children: [new TextRun({ text: `السجل: ${student.nationalId}`, size: 18, font: "Arial" })],
+                          spacing: { before: 50, after: 0 },
                         }),
-                        // الصف والفصل
                         new Paragraph({
                           alignment: AlignmentType.RIGHT,
-                          children: [new TextRun({ text: `${gradeName} - ${sectionName}`, size: 18, font: "Arial" })], // Size 18 = 9pt
+                          children: [new TextRun({ text: `${gradeName} - ${sectionName}`, size: 16, font: "Arial" })],
+                          spacing: { before: 20, after: 0 },
                         }),
                       ],
-                      margins: { right: 100, left: 50 }, // هوامش داخلية لعدم التصاق النص بالحدود
+                      margins: { right: 80, left: 20 },
                     }),
                   ],
                 }),
               ],
             });
 
-            // إضافة البطاقة إلى الصف الرئيسي
-            rowCells.push(
-              new TableCell({
-                children: [innerTable],
-                width: { size: 50, type: WidthType.PERCENTAGE },
-                // حدود البطاقة الخارجية
-                borders: {
-                  top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                  bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                  left: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                  right: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                },
-                // هوامش بين البطاقات
-                margins: { top: 50, bottom: 50, left: 50, right: 50 },
-              })
-            );
+            rowCells.push(new TableCell({
+              children: [innerTable],
+              width: { size: 50, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                left: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                right: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+              },
+              margins: { top: 0, bottom: 0, left: 0, right: 0 },
+              verticalAlign: VerticalAlign.CENTER,
+            }));
 
           } catch (error) {
             console.error(`Error processing student ${student.name}:`, error);
+            // في حالة الخطأ، أضف خلية فارغة للحفاظ على التنسيق
+            rowCells.push(new TableCell({ children: [], width: { size: 50, type: WidthType.PERCENTAGE } }));
           }
-        }
-
-        // ملء الخانات الفارغة إذا كان العدد فردياً للحفاظ على التنسيق
-        if (rowCells.length < cellsPerBatch) {
-          rowCells.push(new TableCell({ 
-            children: [], 
-            width: { size: 50, type: WidthType.PERCENTAGE }, 
-            borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } } 
+        } else {
+          // --- لا يوجد طالب (مكان فارغ) ---
+          // نقوم برسم الحدود أيضاً حتى تظهر الشبكة فارغة
+          rowCells.push(new TableCell({
+            children: [new Paragraph({})],
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            borders: {
+                top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                left: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                right: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+            },
           }));
         }
-
-        // تحديد ارتفاع الصف بدقة لضمان ظهور 8 صفوف في الصفحة
-        // ارتفاع الصفحة A4 حوالي 16838 Twips.
-        // مع الهوامش، المتاح حوالي 15000. 
-        // 15000 / 8 = 1875. نستخدم 1850 للأمان.
-        mainTableRows.push(new TableRow({ 
-          children: rowCells, 
-          height: { value: 1850, rule: HeightRule.EXACT } 
-        }));
       }
 
-      const doc = new Document({
-        sections: [{
-          properties: {
-            page: {
-              margin: {
-                top: 400, // هوامش صغيرة (حوالي 0.7 سم)
-                bottom: 400,
-                left: 400,
-                right: 400,
-              },
-            },
-          },
-          children: [
-            new Table({
-              rows: mainTableRows,
-              width: { size: 100, type: WidthType.PERCENTAGE },
-            }),
-          ],
-        }],
-      });
-
-      Packer.toBlob(doc).then((blob) => {
-        saveAs(blob, `QR_Cards_Formatted_${sectionName}.docx`);
-        handleDialog("نجاح", "تم تصدير الملف بنجاح!", "success");
-      });
-
-    } catch (error) {
-      console.error(error);
-      handleDialog("خطأ", "حدث خطأ أثناء تصدير الملف.", "error");
+      // إضافة الصف إلى الجدول الرئيسي بارتفاع ثابت
+      mainTableRows.push(new TableRow({
+        children: rowCells,
+        height: { value: EXACT_ROW_HEIGHT, rule: HeightRule.EXACT }
+      }));
     }
-  };
+
+    const doc = new Document({
+      sections: [{
+        properties: {
+          page: {
+            size: { width: 11906, height: 16838 }, // A4 exact dimensions
+            margin: { top: 0, bottom: 0, left: 0, right: 0, header: 0, footer: 0 },
+          },
+        },
+        children: [
+          new Table({
+            rows: mainTableRows,
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            layout: TableLayoutType.FIXED, // إجبار الجدول على الالتزام بالأبعاد
+          }),
+        ],
+      }],
+    });
+
+    Packer.toBlob(doc).then((blob) => {
+      saveAs(blob, `QR_Cards_FullGrid_${sectionName}.docx`);
+      handleDialog("نجاح", "تم تصدير الملف بنجاح!", "success");
+    });
+
+  } catch (error) {
+    console.error(error);
+    handleDialog("خطأ", "حدث خطأ أثناء تصدير الملف.", "error");
+  }
+};
 
   const handleDownloadImage = async () => {
     // ... logic remains same
