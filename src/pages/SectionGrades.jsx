@@ -954,6 +954,26 @@ const handleExportQRCodes = async () => {
                           children: [new TextRun({ text: `${gradeName} - ${sectionName}`, size: 16, font: "Arial" })],
                           spacing: { before: 20, after: 0 },
                         }),
+                        new Paragraph({
+  children: [
+    new TextRun({
+      text: "المادة: القرآن الكريم و الدراسات الإسلامية ",
+      size: 14,
+    }),
+  ],
+  alignment: AlignmentType.RIGHT,
+}),
+new Paragraph({
+  children: [
+    new TextRun({
+      text: " معلم المادة: أحمد فهد البديوي",
+      size: 14,
+    }),
+  ],
+  alignment: AlignmentType.RIGHT,
+}),
+
+
                       ],
                       margins: { right: 80, left: 20 },
                     }),
