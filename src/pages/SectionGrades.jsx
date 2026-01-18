@@ -873,11 +873,11 @@ const handleExportQRCodes = async () => {
     const cellsPerBatch = 2; // عمودين
     const ROWS_PER_PAGE = 8; // عدد الصفوف في الصفحة
 
-    // حساب الارتفاع الآمن: 
+    // حساب الارتفاع الآمن:
     // ارتفاع A4 الكامل هو 16838.
     // 16838 / 8 = 2104.75
     // نستخدم 2090 لنترك هامش أمان بسيط جداً (حوالي 1 ملم) في الأسفل لمنع فتح صفحة جديدة
-    const EXACT_ROW_HEIGHT = 2090; 
+    const EXACT_ROW_HEIGHT = 2090;
 
     // 1. تجميع البيانات في صفوف
     let allRowsData = [];
@@ -888,7 +888,7 @@ const handleExportQRCodes = async () => {
     // 2. إكمال الصفوف الفارغة لضمان امتلاء الصفحة بـ 8 صفوف
     // إذا كان لدينا صفحة واحدة أو نريد ملء الصفحة الأخيرة
     while (allRowsData.length % ROWS_PER_PAGE !== 0 || allRowsData.length === 0) {
-       allRowsData.push([]); // إضافة صف فارغ
+      allRowsData.push([]); // إضافة صف فارغ
     }
     // ملاحظة: إذا كنت تريد صفحة واحدة فقط بحد أقصى 16 طالب، يمكنك استخدام الشرط:
     // while (allRowsData.length < ROWS_PER_PAGE) { allRowsData.push([]); }
@@ -955,23 +955,23 @@ const handleExportQRCodes = async () => {
                           spacing: { before: 20, after: 0 },
                         }),
                         new Paragraph({
-  children: [
-    new TextRun({
-      text: "المادة: القرآن الكريم و الدراسات الإسلامية ",
-      size: 14,
-    }),
-  ],
-  alignment: AlignmentType.RIGHT,
-}),
-new Paragraph({
-  children: [
-    new TextRun({
-      text: " معلم المادة: أحمد فهد البديوي",
-      size: 14,
-    }),
-  ],
-  alignment: AlignmentType.RIGHT,
-}),
+                          children: [
+                            new TextRun({
+                              text: "المادة: القرآن الكريم و الدراسات الإسلامية ",
+                              size: 14,
+                            }),
+                          ],
+                          alignment: AlignmentType.RIGHT,
+                        }),
+                        new Paragraph({
+                          children: [
+                            new TextRun({
+                              text: " معلم المادة: أحمد فهد البديوي",
+                              size: 14,
+                            }),
+                          ],
+                          alignment: AlignmentType.RIGHT,
+                        }),
 
 
                       ],
@@ -985,12 +985,16 @@ new Paragraph({
             rowCells.push(new TableCell({
               children: [innerTable],
               width: { size: 50, type: WidthType.PERCENTAGE },
+              // ============================================================
+              // التعديل الأول هنا: جعل حدود الخلية التي تحتوي على طالب شفافة
+              // ============================================================
               borders: {
-                top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                left: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                right: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+                top: { style: BorderStyle.NONE },
+                bottom: { style: BorderStyle.NONE },
+                left: { style: BorderStyle.NONE },
+                right: { style: BorderStyle.NONE },
               },
+              // ============================================================
               margins: { top: 0, bottom: 0, left: 0, right: 0 },
               verticalAlign: VerticalAlign.CENTER,
             }));
@@ -1002,16 +1006,20 @@ new Paragraph({
           }
         } else {
           // --- لا يوجد طالب (مكان فارغ) ---
-          // نقوم برسم الحدود أيضاً حتى تظهر الشبكة فارغة
+          // نقوم برسم الحدود أيضاً حتى تظهر الشبكة فارغة (الآن ستكون شفافة)
           rowCells.push(new TableCell({
             children: [new Paragraph({})],
             width: { size: 50, type: WidthType.PERCENTAGE },
+            // ============================================================
+            // التعديل الثاني هنا: جعل حدود الخلية الفارغة شفافة
+            // ============================================================
             borders: {
-                top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                left: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
-                right: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
+              top: { style: BorderStyle.NONE },
+              bottom: { style: BorderStyle.NONE },
+              left: { style: BorderStyle.NONE },
+              right: { style: BorderStyle.NONE },
             },
+            // ============================================================
           }));
         }
       }
@@ -1036,6 +1044,18 @@ new Paragraph({
             rows: mainTableRows,
             width: { size: 100, type: WidthType.PERCENTAGE },
             layout: TableLayoutType.FIXED, // إجبار الجدول على الالتزام بالأبعاد
+            // ============================================================
+            // تعديل إضافي اختياري: ضمان عدم وجود حدود للجدول الرئيسي نفسه
+            // ============================================================
+            borders: {
+                top: { style: BorderStyle.NONE },
+                bottom: { style: BorderStyle.NONE },
+                left: { style: BorderStyle.NONE },
+                right: { style: BorderStyle.NONE },
+                insideVertical: { style: BorderStyle.NONE },
+                insideHorizontal: { style: BorderStyle.NONE },
+            }
+            // ============================================================
           }),
         ],
       }],
