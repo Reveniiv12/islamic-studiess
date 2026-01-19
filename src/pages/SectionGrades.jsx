@@ -26,6 +26,7 @@ import { getHijriToday } from '../utils/recitationUtils';
 import StudentControlPanel from '../components/StudentControlPanel'; 
 import FilterGradesModal from "../components/FilterGradesModal";
 import { FaCogs } from "react-icons/fa"; 
+import * as XLSX from 'xlsx'; // تأكد من تثبيت المكتبة npm install xlsx
 
 // استيراد Supabase من الملف الموجود
 import { supabase } from "../supabaseClient";
@@ -679,15 +680,51 @@ const SectionGrades = () => {
   };
 
   const startCamera = async () => {
-    // ... camera logic
+    setShowCamera(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facingMode }
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      handleDialog("خطأ", "لا يمكن الوصول للكاميرا", "error");
+      setShowCamera(false);
+    }
   };
 
   const stopCamera = () => {
-    // ... stop camera logic
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = videoRef.current.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setShowCamera(false);
   };
 
   const capturePhoto = () => {
-    // ... capture logic
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      const photoData = canvas.toDataURL('image/jpeg');
+      
+      if (showAddStudentModal) {
+        setNewStudent(prev => ({ ...prev, photo: photoData }));
+      } else if (showEditStudentModal && editingStudent) {
+        setEditingStudent(prev => ({ ...prev, photo: photoData }));
+      }
+      
+      stopCamera();
+    }
   };
 
   const handleFileUpload = async (e, isNewStudent) => {
@@ -719,32 +756,211 @@ const SectionGrades = () => {
   };
 
   const exportToExcel = async () => {
-    // ... existing Excel logic
+    try {
+      if (!XLSX) {
+        handleDialog("خطأ", "المكتبة المسؤولة عن التصدير غير موجودة", "error");
+        return;
+      }
+      
+      const exportData = students.map(student => ({
+        "الاسم": student.name,
+        "السجل المدني": student.nationalId,
+        "رقم ولي الأمر": student.parentPhone,
+        "المجموع النهائي": calculateFinalTotalScore(student.grades),
+        // يمكنك إضافة المزيد من الأعمدة حسب الحاجة
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "الطلاب");
+      XLSX.writeFile(wb, `${gradeName}-${sectionName}-grades.xlsx`);
+      
+    } catch (error) {
+      console.error("Excel Export Error:", error);
+      handleDialog("خطأ", "فشل تصدير ملف الإكسل", "error");
+    }
   };
 
   const handleFileImport = async (e) => {
-    // ... existing Import logic
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      if (!XLSX) {
+        handleDialog("خطأ", "المكتبة المسؤولة عن الاستيراد غير موجودة", "error");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+        
+        // معالجة البيانات وإضافتها للطلاب
+        // يتطلب الأمر مواءمة الأعمدة مع بنية البيانات لديك
+        handleDialog("تنبيه", "هذه الميزة تتطلب مطابقة أسماء الأعمدة في ملف الإكسل.", "info");
+      };
+      reader.readAsBinaryString(file);
+    } catch (error) {
+      console.error("Excel Import Error:", error);
+      handleDialog("خطأ", "فشل قراءة الملف", "error");
+    }
   };
 
 
 const handleAddStudent = async () => {
-    // ... existing add student logic
+    if (!newStudent.name || !newStudent.nationalId) {
+        handleDialog("تنبيه", "يرجى تعبئة الاسم والسجل المدني", "warning");
+        return;
+    }
+    
+    try {
+        const defaultGradesStructure = {
+            semester1: createEmptySemesterStructure(),
+            semester2: createEmptySemesterStructure()
+        };
+        
+        const studentToAdd = {
+            name: newStudent.name,
+            national_id: newStudent.nationalId,
+            grade_level: gradeId,
+            section: sectionId,
+            teacher_id: teacherId,
+            parent_phone: newStudent.parentPhone,
+            phone: newStudent.phone,
+            photo: newStudent.photo,
+            grades: defaultGradesStructure,
+            acquired_stars: 0,
+            consumed_stars: 0,
+            recitation_history: []
+        };
+
+        const { data, error } = await supabase
+            .from('students')
+            .insert([studentToAdd])
+            .select();
+            
+        if (error) throw error;
+        
+        // تحديث القائمة المحلية
+        await fetchDataFromSupabase();
+        
+        setShowAddStudentModal(false);
+        setNewStudent({ name: "", nationalId: "", phone: "", parentPhone: "", photo: "" });
+        handleDialog("نجاح", "تم إضافة الطالب بنجاح", "success");
+        
+    } catch (error) {
+        console.error("Error adding student:", error);
+        handleDialog("خطأ", "فشل إضافة الطالب. ربما السجل المدني مكرر.", "error");
+    }
   };
 
-  const updateStudentGrade = async (studentId, category, index, value) => {
-    // ... existing grade update logic
+  // ***************************************************************
+  // تم إصلاح دالة تحديث الدرجات لتعمل بشكل صحيح وتحدث الـ State والـ DB
+  // ***************************************************************
+// في بداية المكون (بجانب الـ refs الأخرى)، تأكد من وجود هذا السطر:
+const updateStudentGrade = async (studentId, category, index, value) => {
+    // 1. تحويل الأرقام ومعالجة المدخلات
+    const englishValue = convertToEnglishNumbers(value);
+    const numValue = englishValue === '' ? null : Number(englishValue);
+    
+    // 2. تحديد الحدود القصوى لكل فئة (كما في ملفك القديم)
+    let maxLimit = 0;
+    let errorMessage = '';
+
+    switch(category) {
+      case 'tests': maxLimit = 20; errorMessage = "خطأ: درجة الاختبار لا يمكن أن تتجاوز 20."; break;
+      case 'classInteraction': maxLimit = 10; errorMessage = "خطأ: درجة التفاعل الصفي لا يمكن أن تتجاوز 10."; break;
+      case 'homework': maxLimit = 1; errorMessage = "خطأ: درجة الواجب لا يمكن أن تتجاوز 1."; break;
+      case 'performanceTasks': maxLimit = 10; errorMessage = "خطأ: درجة المهمة الأدائية لا يمكن أن تتجاوز 10."; break;
+      case 'participation': maxLimit = 1; errorMessage = "خطأ: درجة المشاركة لا يمكن أن تتجاوز 1."; break;
+      case 'quranRecitation': maxLimit = 10; errorMessage = "خطأ: درجة تلاوة القرآن لا يمكن أن تتجاوز 10."; break;
+      case 'quranMemorization': maxLimit = 10; errorMessage = "خطأ: درجة حفظ القرآن لا يمكن أن تتجاوز 10."; break;
+      default: maxLimit = 100; break;
+    }
+    
+    // 3. التحقق من تجاوز الحد الأقصى
+    if (numValue !== null && (numValue > maxLimit || numValue < 0)) {
+      handleDialog("خطأ", errorMessage, "error");
+      
+      // تفريغ الحقل في حالة الخطأ
+      const updatedStudents = students.map(s => {
+        if (s.id === studentId) {
+          const newGrades = { ...s.grades };
+          if (Array.isArray(newGrades[category])) {
+             const newArr = [...newGrades[category]];
+             newArr[index] = null;
+             newGrades[category] = newArr;
+          }
+          return { ...s, grades: newGrades };
+        }
+        return s;
+      });
+      setStudents(updatedStudents);
+      
+      // تحديث الطالب المختار ليظهر الفراغ فوراً
+      if (selectedStudent && selectedStudent.id === studentId) {
+         const resetStudent = updatedStudents.find(s => s.id === studentId);
+         setSelectedStudent(resetStudent);
+      }
+      return;
+    }
+
+    try {
+      // 4. التحديث الفعلي للبيانات
+      const updatedStudents = students.map((student) => {
+        if (student.id === studentId) {
+          const updatedGrades = { ...student.grades };
+          
+          if (Array.isArray(updatedGrades[category])) {
+            const newCategoryArray = [...updatedGrades[category]];
+            // التأكد من حجم المصفوفة قبل التحديث
+            if (index < newCategoryArray.length) {
+                newCategoryArray[index] = numValue;
+                updatedGrades[category] = newCategoryArray;
+            }
+          } else {
+            updatedGrades[category] = numValue;
+          }
+          
+          // ************************************************************
+          // هذا هو السطر السحري الموجود في ملفك القديم والذي يحل المشكلة
+          // تحديث بيانات الطالب المختار لتعكس التغيير فوراً في المربعات
+          // ************************************************************
+          if (selectedStudent && selectedStudent.id === studentId) {
+             setSelectedStudent({ ...student, grades: updatedGrades });
+          }
+          
+          return { ...student, grades: updatedGrades };
+        }
+        return student;
+      });
+
+      setStudents(updatedStudents);
+      
+      // حفظ البيانات
+      await updateStudentsData(updatedStudents); 
+      
+    } catch (error) {
+      console.error("Error updating grade:", error);
+      handleDialog("خطأ", "حدث خطأ أثناء تحديث الدرجة", "error");
+    }
   };
 
-  const updateStudentStars = async (updatedStudents) => {
-    // ... existing star update logic
-  };
-
-  const updateRecitationData = async (updatedStudents) => {
-    // ... existing recitation logic
-  };
-
+  // ***************************************************************
+  // تم إصلاح دالة تحديث الملاحظات لتقوم بالحفظ الفعلي
+  // ***************************************************************
   const updateNotesData = async (updatedStudents) => {
-    // ... existing notes logic
+    try {
+        setStudents(updatedStudents);
+        await updateStudentsData(updatedStudents);
+        handleDialog("نجاح", "تم حفظ الملاحظات بنجاح", "success");
+    } catch (error) {
+        console.error("Error saving notes:", error);
+        handleDialog("خطأ", "فشل حفظ الملاحظات", "error");
+    }
   };
 
   const handleSaveAttendance = async (updatedStudents) => {
@@ -788,11 +1004,40 @@ const handleAddStudent = async () => {
   };
 
   const getTroubledStudents = () => {
-     // ... logic remains same
+     // هذه دالة مساعدة يمكن استخدامها داخل الـ Component الخاص بالمتعثرين
+     // أو يمكن إرجاع الطلاب الذين تقل درجاتهم عن حد معين
+     return students.filter(student => calculateTotalScore(student.grades) < 50);
   };
 
   const handleEditStudent = async () => {
-    // ... logic remains same
+    if (!editingStudent || !editingStudent.name || !editingStudent.nationalId) {
+        handleDialog("تنبيه", "بيانات غير مكتملة", "warning");
+        return;
+    }
+    
+    try {
+        const { error } = await supabase
+            .from('students')
+            .update({
+                name: editingStudent.name,
+                national_id: editingStudent.nationalId,
+                parent_phone: editingStudent.parentPhone,
+                photo: editingStudent.photo
+            })
+            .eq('id', editingStudent.id);
+            
+        if (error) throw error;
+        
+        // تحديث القائمة المحلية
+        setStudents(prev => prev.map(s => s.id === editingStudent.id ? editingStudent : s));
+        setShowEditStudentModal(false);
+        setEditingStudent(null);
+        handleDialog("نجاح", "تم تعديل بيانات الطالب", "success");
+        
+    } catch (error) {
+        console.error("Error updating student:", error);
+        handleDialog("خطأ", "فشل تعديل البيانات", "error");
+    }
   };
 
   const filteredStudents = students
@@ -1073,7 +1318,15 @@ const handleExportQRCodes = async () => {
 };
 
   const handleDownloadImage = async () => {
-    // ... logic remains same
+    // دالة لتنزيل صورة الطالب إذا لزم الأمر
+    if (selectedStudent && selectedStudent.photo) {
+        const link = document.createElement('a');
+        link.href = selectedStudent.photo;
+        link.download = `${selectedStudent.name}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
   };
 
   const handleUpdatePrizes = (updatedPrizes) => {
@@ -1081,7 +1334,8 @@ const handleExportQRCodes = async () => {
   };
 
   const handleAddGrade = () => {
-    // ... logic remains same
+    // هذه الدالة قد لا تكون مستخدمة إذا كنا نستخدم التحديث المباشر عبر الحقول
+    // لكن يمكن استخدامها لإضافة عمود جديد للدراجات ديناميكياً
   };
 
   const handleResetDataClick = () => {
@@ -1095,8 +1349,37 @@ const handleExportQRCodes = async () => {
     );
   };
 
-  const onVerificationSuccess = async (user) => {
-    // ... logic remains same
+  const onVerificationSuccess = async (verifiedUser) => {
+    if (verifiedUser) {
+        setShowVerificationModal(false);
+        try {
+            const emptyStructure = createEmptySemesterStructure();
+            
+            // تصفير الدرجات للطلاب في الـ State
+            const resetStudents = students.map(student => {
+                const fullStructure = { ...student.fullGradesStructure };
+                // تصفير الفصل الدراسي الحالي فقط
+                fullStructure[activeSemesterKey] = emptyStructure;
+                
+                return {
+                    ...student,
+                    grades: emptyStructure.period1, // افتراضياً العودة للفترة الأولى
+                    fullGradesStructure: fullStructure,
+                    acquiredStars: 0,
+                    consumedStars: 0,
+                    stars: 0
+                };
+            });
+            
+            // حفظ في قاعدة البيانات
+            await updateStudentsData(resetStudents);
+            handleDialog("نجاح", "تم تصفير البيانات بنجاح", "success");
+            
+        } catch (error) {
+            console.error("Reset error:", error);
+            handleDialog("خطأ", "حدث خطأ أثناء تصفير البيانات", "error");
+        }
+    }
   };
   
   // ==========================================================
@@ -1395,6 +1678,26 @@ const handleExportQRCodes = async () => {
           <div className="flex items-center justify-center mb-4">
             <img src={newStudent.photo || '/images/1.webp'} alt="صورة الطالب" className="w-24 h-24 rounded-full object-cover border-2 border-gray-600" />
           </div>
+          <div className="flex flex-col gap-2 mb-4">
+               {/* زر الكاميرا */}
+              <button
+                onClick={startCamera}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 shadow-md text-sm"
+              >
+                <FaCamera /> التقاط صورة
+              </button>
+              
+              {showCamera && (
+                <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center">
+                    <video ref={videoRef} className="w-full max-w-md rounded-lg mb-4" />
+                    <canvas ref={canvasRef} className="hidden" />
+                    <div className="flex gap-4">
+                        <button onClick={capturePhoto} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold">التقاط</button>
+                        <button onClick={stopCamera} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold">إلغاء</button>
+                    </div>
+                </div>
+              )}
+          </div>
           <input type="text" placeholder="اسم الطالب" value={newStudent.name} onChange={(e) => setNewStudent({ ...newStudent, name: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <input type="text" placeholder="السجل المدني" value={newStudent.nationalId} onChange={(e) => setNewStudent({ ...newStudent, nationalId: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <input type="text" placeholder="رقم ولي الأمر" value={newStudent.parentPhone} onChange={(e) => setNewStudent({ ...newStudent, parentPhone: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
@@ -1421,6 +1724,25 @@ const handleExportQRCodes = async () => {
         <CustomModal title="تعديل بيانات الطالب" onClose={() => { setShowEditStudentModal(false); setEditingStudent(null); }}>
           <div className="flex items-center justify-center mb-4">
             <img src={editingStudent.photo || '/images/1.webp'} alt="صورة الطالب" className="w-24 h-24 rounded-full object-cover border-2 border-gray-600" />
+          </div>
+           <div className="flex flex-col gap-2 mb-4">
+               {/* زر الكاميرا للتعديل */}
+              <button
+                onClick={startCamera}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 shadow-md text-sm"
+              >
+                <FaCamera /> تغيير الصورة بالكاميرا
+              </button>
+               {showCamera && (
+                <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center">
+                    <video ref={videoRef} className="w-full max-w-md rounded-lg mb-4" />
+                    <canvas ref={canvasRef} className="hidden" />
+                    <div className="flex gap-4">
+                        <button onClick={capturePhoto} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold">التقاط</button>
+                        <button onClick={stopCamera} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold">إلغاء</button>
+                    </div>
+                </div>
+              )}
           </div>
           <input type="text" placeholder="اسم الطالب" value={editingStudent.name} onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
           <input type="text" placeholder="السجل المدني" value={editingStudent.nationalId} onChange={(e) => setEditingStudent({ ...editingStudent, nationalId: e.target.value })} className="w-full mb-3 p-3 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500 text-right text-sm" />
