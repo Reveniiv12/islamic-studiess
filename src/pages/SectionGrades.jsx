@@ -21,16 +21,16 @@ import AnnouncementsModal from "../components/AnnouncementsModal";
 import VisitLogModal from "../components/VisitLogModal.jsx";
 import RewardRequestsModal from '../components/RewardRequestsModal'; 
 import RewardRequestsButton from '../components/RewardRequestsButton'; 
-import { QRCodeSVG } from 'qrcode.react';
-import { getHijriToday } from '../utils/recitationUtils';
 import StudentControlPanel from '../components/StudentControlPanel'; 
 import FilterGradesModal from "../components/FilterGradesModal";
-import { FaCogs } from "react-icons/fa"; 
-import * as XLSX from 'xlsx'; // تأكد من تثبيت المكتبة npm install xlsx
+import StudentGradesPopup from "../components/StudentGradesPopup"; // <--- استيراد المكون الجديد
 
-// استيراد Supabase من الملف الموجود
+import { QRCodeSVG } from 'qrcode.react';
+import { getHijriToday } from '../utils/recitationUtils';
+import { FaCogs } from "react-icons/fa"; 
+import * as XLSX from 'xlsx'; 
+
 import { supabase } from "../supabaseClient";
-// استيراد مكتبة ضغط الصور
 import imageCompression from 'browser-image-compression';
 
 import {
@@ -112,36 +112,10 @@ const convertToEnglishNumbers = (input) => {
 const ensureGradesArraySize = (array, size) => {
     const newArray = Array(size).fill(null);
     const sourceArray = array && Array.isArray(array) ? array : [];
-    
-    // نقل القيم الموجودة من المصفوفة المصدر إلى المصفوفة الجديدة
     for (let i = 0; i < Math.min(sourceArray.length, size); i++) {
         newArray[i] = sourceArray[i];
     }
     return newArray;
-};
-
-
-const StarRating = ({ count, max = 10, color = "yellow", size = "md" }) => {
-  const sizes = {
-    sm: 'text-sm',
-    md: 'text-base',
-    lg: 'text-lg',
-    xl: 'text-xl'
-  };
-
-  return (
-    <div className="flex gap-1 items-center">
-      <span className={`${sizes[size]} font-bold mr-2 text-${color}-400`}>{count}</span>
-      <div className="flex gap-0.5">
-        {Array.from({ length: max }).map((_, index) => (
-          <FaStar
-            key={index}
-            className={`${sizes[size]} ${index < count ? `text-${color}-400` : 'text-gray-600'}`}
-          />
-        ))}
-      </div>
-    </div>
-  );
 };
 
 // هيكلية فترة واحدة (فارغة)
@@ -160,14 +134,14 @@ const createEmptySemesterStructure = () => ({
     period1: createEmptyGradesStructure(),
     period2: createEmptyGradesStructure(),
     weeklyNotes: Array(20).fill(null),
-    stars: { acquired: 0, consumed: 0 } // إضافة هيكل النجوم لكل فصل
+    stars: { acquired: 0, consumed: 0 } 
 });
 
 
 const SectionGrades = () => {
   const { gradeId, sectionId } = useParams();
   const navigate = useNavigate();
-  const gradesSectionRef = useRef(null);
+  // const gradesSectionRef = useRef(null); // لم يعد مطلوباً
 
   const [students, setStudents] = useState([]);
   const [teacherName, setTeacherName] = useState("المعلم الافتراضي");
@@ -176,8 +150,8 @@ const SectionGrades = () => {
   
   // ==========================================================
   // States for Periods and Semester
-  const [currentPeriod, setCurrentPeriod] = useState("period1"); // 'period1' or 'period2'
-  const [activeSemesterKey, setActiveSemesterKey] = useState("semester1"); // 'semester1' or 'semester2'
+  const [currentPeriod, setCurrentPeriod] = useState("period1"); 
+  const [activeSemesterKey, setActiveSemesterKey] = useState("semester1"); 
   const [showPeriodSelection, setShowPeriodSelection] = useState(true); 
   
   const [fullCurriculum, setFullCurriculum] = useState({ period1: [], period2: [] });
@@ -190,10 +164,8 @@ const SectionGrades = () => {
   const [showHomeworkModal, setShowHomeworkModal] = useState(false);
   const [showHomeworkCurriculumModal, setShowHomeworkCurriculumModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [showAddForm, setShowAddForm] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showStarsModal, setShowStarsModal] = useState(false);
-  // NEW: Reward Requests State
   const [showRewardRequestsModal, setShowRewardRequestsModal] = useState(false); 
   
   const [showRecitationModal, setShowRecitationModal] = useState(false);
@@ -207,10 +179,6 @@ const SectionGrades = () => {
     parentPhone: "",
     photo: "",
   });
-  const [newGrade, setNewGrade] = useState('');
-  const [selectedHomework, setSelectedHomework] = useState('');
-  const [homeworks, setHomeworks] = useState([]);
-  const [grades, setGrades] = useState([]);
   const [prizes, setPrizes] = useState([]);
   const [showTransferDeleteModal, setShowTransferDeleteModal] = useState(false);
   const [showGradeSheet, setShowGradeSheet] = useState(false);
@@ -219,7 +187,8 @@ const SectionGrades = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showQrList, setShowQrList] = useState(false);
   const fileInputRef = useRef(null);
-  const [showEditForm, setShowEditForm] = useState(false);
+  const [showEditStudentModal, setShowEditStudentModal] = useState(false);
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
   const [showTroubledStudentsModal, setShowTroubledStudentsModal] = useState(false);
@@ -236,14 +205,9 @@ const SectionGrades = () => {
   const [dialogAction, setDialogAction] = useState(null);
 
   const [facingMode, setFacingMode] = useState('user');
-  const [qrCodesPerPage, setQrCodesPerPage] = useState(9); // (ملاحظة: هذا المتغير يمكن إهماله أو تحديثه للنظام الجديد)
   
-  const [user, setUser] = useState(null);
   const [teacherId, setTeacherId] = useState(null);
 
-  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [showEditStudentModal, setShowEditStudentModal] = useState(false);
-  
   const [showAnnouncementsModal, setShowAnnouncementsModal] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   const [showVisitLogModal, setShowVisitLogModal] = useState(false);
@@ -628,54 +592,37 @@ const SectionGrades = () => {
     }
   };
 
-  const updateCurriculumData = async (updatedCurriculum) => {
-    // ... logic remains same, currently not used in main flow but good to keep
+  const updateRecitationData = async (updatedStudents) => {
+    // ... logic remains same
+    updateStudentsData(updatedStudents);
   };
-
-  const updateHomeworkCurriculumData = async (updatedCurriculum) => {
-     // ... logic remains same
-  };
-
-  const handleDeleteNote = (studentId, weekIndex, noteIndex) => {
-    handleDialog(
-      "تأكيد الحذف",
-      "هل أنت متأكد من حذف هذه الملاحظة؟",
-      "confirm",
-      async () => {
-        try {
-          const updatedStudents = students.map(s => {
-            if (s.id === studentId) {
-              const updatedNotes = [...(s.grades.weeklyNotes || [])];
-              if (updatedNotes[weekIndex]) {
-                updatedNotes[weekIndex] = updatedNotes[weekIndex].filter((_, i) => i !== noteIndex);
-              }
-              return {
-                ...s,
-                grades: {
-                  ...s.grades,
-                  weeklyNotes: updatedNotes
-                }
-              };
-            }
-            return s;
-          });
-
-          await updateStudentsData(updatedStudents);
-          setSelectedStudent(updatedStudents.find(s => s.id === studentId));
-          handleDialog("نجاح", "تم حذف الملاحظة بنجاح", "success");
-        } catch (error) {
-          console.error("Error deleting note:", error);
-          handleDialog("خطأ", "حدث خطأ أثناء حذف الملاحظة", "error");
-        }
-      }
-    );
-  };
-
 
   const handleSelectStudent = (student) => {
     setSelectedStudent(student);
-    if (gradesSectionRef.current) {
-        gradesSectionRef.current.scrollIntoView({ behavior: 'smooth' });
+    // تم إزالة الكود الخاص بالتمرير لأسفل (Scroll) لأنه الآن نافذة منبثقة
+  };
+
+  // ***************************************************************
+  // دالة الحفظ الجديدة الخاصة بالنافذة المنبثقة
+  // ***************************************************************
+  const handleSaveChanges = async (modifiedStudent) => {
+    try {
+        // تحديث القائمة المحلية بالبيانات الجديدة
+        const updatedStudents = students.map(s => 
+            s.id === modifiedStudent.id ? modifiedStudent : s
+        );
+        setStudents(updatedStudents);
+        
+        // إغلاق النافذة
+        setSelectedStudent(null);
+
+        // إرسال البيانات للسيرفر (Supabase)
+        await updateStudentsData(updatedStudents);
+        
+        handleDialog("نجاح", "تم حفظ التعديلات بنجاح", "success");
+    } catch (error) {
+        console.error("Save Error:", error);
+        handleDialog("خطأ", "فشل الحفظ", "error");
     }
   };
 
@@ -767,7 +714,6 @@ const SectionGrades = () => {
         "السجل المدني": student.nationalId,
         "رقم ولي الأمر": student.parentPhone,
         "المجموع النهائي": calculateFinalTotalScore(student.grades),
-        // يمكنك إضافة المزيد من الأعمدة حسب الحاجة
       }));
 
       const ws = XLSX.utils.json_to_sheet(exportData);
@@ -798,8 +744,6 @@ const SectionGrades = () => {
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
         
-        // معالجة البيانات وإضافتها للطلاب
-        // يتطلب الأمر مواءمة الأعمدة مع بنية البيانات لديك
         handleDialog("تنبيه", "هذه الميزة تتطلب مطابقة أسماء الأعمدة في ملف الإكسل.", "info");
       };
       reader.readAsBinaryString(file);
@@ -844,7 +788,6 @@ const handleAddStudent = async () => {
             
         if (error) throw error;
         
-        // تحديث القائمة المحلية
         await fetchDataFromSupabase();
         
         setShowAddStudentModal(false);
@@ -857,16 +800,11 @@ const handleAddStudent = async () => {
     }
   };
 
-  // ***************************************************************
-  // تم إصلاح دالة تحديث الدرجات لتعمل بشكل صحيح وتحدث الـ State والـ DB
-  // ***************************************************************
-// في بداية المكون (بجانب الـ refs الأخرى)، تأكد من وجود هذا السطر:
-const updateStudentGrade = async (studentId, category, index, value) => {
-    // 1. تحويل الأرقام ومعالجة المدخلات
+  // دالة تحديث الدرجة (تستخدم الآن فقط في وضع الجدول GradesSheet)
+  const updateStudentGrade = async (studentId, category, index, value) => {
     const englishValue = convertToEnglishNumbers(value);
     const numValue = englishValue === '' ? null : Number(englishValue);
     
-    // 2. تحديد الحدود القصوى لكل فئة (كما في ملفك القديم)
     let maxLimit = 0;
     let errorMessage = '';
 
@@ -881,11 +819,9 @@ const updateStudentGrade = async (studentId, category, index, value) => {
       default: maxLimit = 100; break;
     }
     
-    // 3. التحقق من تجاوز الحد الأقصى
     if (numValue !== null && (numValue > maxLimit || numValue < 0)) {
       handleDialog("خطأ", errorMessage, "error");
       
-      // تفريغ الحقل في حالة الخطأ
       const updatedStudents = students.map(s => {
         if (s.id === studentId) {
           const newGrades = { ...s.grades };
@@ -899,24 +835,16 @@ const updateStudentGrade = async (studentId, category, index, value) => {
         return s;
       });
       setStudents(updatedStudents);
-      
-      // تحديث الطالب المختار ليظهر الفراغ فوراً
-      if (selectedStudent && selectedStudent.id === studentId) {
-         const resetStudent = updatedStudents.find(s => s.id === studentId);
-         setSelectedStudent(resetStudent);
-      }
       return;
     }
 
     try {
-      // 4. التحديث الفعلي للبيانات
       const updatedStudents = students.map((student) => {
         if (student.id === studentId) {
           const updatedGrades = { ...student.grades };
           
           if (Array.isArray(updatedGrades[category])) {
             const newCategoryArray = [...updatedGrades[category]];
-            // التأكد من حجم المصفوفة قبل التحديث
             if (index < newCategoryArray.length) {
                 newCategoryArray[index] = numValue;
                 updatedGrades[category] = newCategoryArray;
@@ -925,22 +853,12 @@ const updateStudentGrade = async (studentId, category, index, value) => {
             updatedGrades[category] = numValue;
           }
           
-          // ************************************************************
-          // هذا هو السطر السحري الموجود في ملفك القديم والذي يحل المشكلة
-          // تحديث بيانات الطالب المختار لتعكس التغيير فوراً في المربعات
-          // ************************************************************
-          if (selectedStudent && selectedStudent.id === studentId) {
-             setSelectedStudent({ ...student, grades: updatedGrades });
-          }
-          
           return { ...student, grades: updatedGrades };
         }
         return student;
       });
 
       setStudents(updatedStudents);
-      
-      // حفظ البيانات
       await updateStudentsData(updatedStudents); 
       
     } catch (error) {
@@ -949,9 +867,6 @@ const updateStudentGrade = async (studentId, category, index, value) => {
     }
   };
 
-  // ***************************************************************
-  // تم إصلاح دالة تحديث الملاحظات لتقوم بالحفظ الفعلي
-  // ***************************************************************
   const updateNotesData = async (updatedStudents) => {
     try {
         setStudents(updatedStudents);
@@ -1003,12 +918,6 @@ const updateStudentGrade = async (studentId, category, index, value) => {
     }
   };
 
-  const getTroubledStudents = () => {
-     // هذه دالة مساعدة يمكن استخدامها داخل الـ Component الخاص بالمتعثرين
-     // أو يمكن إرجاع الطلاب الذين تقل درجاتهم عن حد معين
-     return students.filter(student => calculateTotalScore(student.grades) < 50);
-  };
-
   const handleEditStudent = async () => {
     if (!editingStudent || !editingStudent.name || !editingStudent.nationalId) {
         handleDialog("تنبيه", "بيانات غير مكتملة", "warning");
@@ -1028,7 +937,6 @@ const updateStudentGrade = async (studentId, category, index, value) => {
             
         if (error) throw error;
         
-        // تحديث القائمة المحلية
         setStudents(prev => prev.map(s => s.id === editingStudent.id ? editingStudent : s));
         setShowEditStudentModal(false);
         setEditingStudent(null);
@@ -1062,9 +970,6 @@ const updateStudentGrade = async (studentId, category, index, value) => {
     handleDialog("نجاح", "تم نسخ الرابط بنجاح!", "success");
   };
 
-  // *****************************************************************
-  // دوال إدارة تحديد الطلاب لطباعة الـ QR
-  // *****************************************************************
   const toggleQrSelection = (id) => {
     const newSet = new Set(selectedQrStudentIds);
     if (newSet.has(id)) {
@@ -1077,15 +982,12 @@ const updateStudentGrade = async (studentId, category, index, value) => {
 
   const handleSelectAllQr = () => {
     if (selectedQrStudentIds.size === filteredStudents.length) {
-      setSelectedQrStudentIds(new Set()); // إلغاء تحديد الكل
+      setSelectedQrStudentIds(new Set()); 
     } else {
-      setSelectedQrStudentIds(new Set(filteredStudents.map(s => s.id))); // تحديد الكل
+      setSelectedQrStudentIds(new Set(filteredStudents.map(s => s.id))); 
     }
   };
 
-  // *****************************************************************
-  // دالة تصدير الـ QR المعدلة (16 في الصفحة، أفقي)
-  // *****************************************************************
 const handleExportQRCodes = async () => {
   const studentsToExport = filteredStudents.filter(s => selectedQrStudentIds.has(s.id));
 
@@ -1115,40 +1017,27 @@ const handleExportQRCodes = async () => {
     };
 
     const mainTableRows = [];
-    const cellsPerBatch = 2; // عمودين
-    const ROWS_PER_PAGE = 8; // عدد الصفوف في الصفحة
+    const cellsPerBatch = 2; 
+    const ROWS_PER_PAGE = 8; 
 
-    // حساب الارتفاع الآمن:
-    // ارتفاع A4 الكامل هو 16838.
-    // 16838 / 8 = 2104.75
-    // نستخدم 2090 لنترك هامش أمان بسيط جداً (حوالي 1 ملم) في الأسفل لمنع فتح صفحة جديدة
     const EXACT_ROW_HEIGHT = 2090;
 
-    // 1. تجميع البيانات في صفوف
     let allRowsData = [];
     for (let i = 0; i < studentsToExport.length; i += cellsPerBatch) {
       allRowsData.push(studentsToExport.slice(i, i + cellsPerBatch));
     }
 
-    // 2. إكمال الصفوف الفارغة لضمان امتلاء الصفحة بـ 8 صفوف
-    // إذا كان لدينا صفحة واحدة أو نريد ملء الصفحة الأخيرة
     while (allRowsData.length % ROWS_PER_PAGE !== 0 || allRowsData.length === 0) {
-      allRowsData.push([]); // إضافة صف فارغ
+      allRowsData.push([]); 
     }
-    // ملاحظة: إذا كنت تريد صفحة واحدة فقط بحد أقصى 16 طالب، يمكنك استخدام الشرط:
-    // while (allRowsData.length < ROWS_PER_PAGE) { allRowsData.push([]); }
 
-
-    // 3. بناء هيكل الجدول
     for (const batch of allRowsData) {
       const rowCells = [];
 
-      // معالجة الخلايا في الصف (طالبين أو فراغ)
       for (let k = 0; k < cellsPerBatch; k++) {
-        const student = batch[k]; // قد يكون undefined إذا كان الصف تكميلياً
+        const student = batch[k]; 
 
         if (student) {
-          // --- يوجد طالب: إنشاء البطاقة ---
           try {
             const qrDataUrl = await toDataURL(`${window.location.origin}${student.viewKey}`, {
               errorCorrectionLevel: 'M',
@@ -1168,18 +1057,16 @@ const handleExportQRCodes = async () => {
               rows: [
                 new TableRow({
                   children: [
-                    // QR Code Cell
                     new TableCell({
                       width: { size: 35, type: WidthType.PERCENTAGE },
                       verticalAlign: VerticalAlign.CENTER,
                       children: [
                         new Paragraph({
                           alignment: AlignmentType.CENTER,
-                          children: [new ImageRun({ data: qrImage, transformation: { width: 90, height: 90 } })], // تصغير طفيف للصورة
+                          children: [new ImageRun({ data: qrImage, transformation: { width: 90, height: 90 } })], 
                         }),
                       ],
                     }),
-                    // Text Data Cell
                     new TableCell({
                       width: { size: 65, type: WidthType.PERCENTAGE },
                       verticalAlign: VerticalAlign.CENTER,
@@ -1187,7 +1074,7 @@ const handleExportQRCodes = async () => {
                         new Paragraph({
                           alignment: AlignmentType.RIGHT,
                           children: [new TextRun({ text: student.name, bold: true, size: 22, font: "Arial" })],
-                          spacing: { after: 0 }, // إزالة المسافات الزائدة
+                          spacing: { after: 0 }, 
                         }),
                         new Paragraph({
                           alignment: AlignmentType.RIGHT,
@@ -1230,46 +1117,34 @@ const handleExportQRCodes = async () => {
             rowCells.push(new TableCell({
               children: [innerTable],
               width: { size: 50, type: WidthType.PERCENTAGE },
-              // ============================================================
-              // التعديل الأول هنا: جعل حدود الخلية التي تحتوي على طالب شفافة
-              // ============================================================
               borders: {
                 top: { style: BorderStyle.NONE },
                 bottom: { style: BorderStyle.NONE },
                 left: { style: BorderStyle.NONE },
                 right: { style: BorderStyle.NONE },
               },
-              // ============================================================
               margins: { top: 0, bottom: 0, left: 0, right: 0 },
               verticalAlign: VerticalAlign.CENTER,
             }));
 
           } catch (error) {
             console.error(`Error processing student ${student.name}:`, error);
-            // في حالة الخطأ، أضف خلية فارغة للحفاظ على التنسيق
             rowCells.push(new TableCell({ children: [], width: { size: 50, type: WidthType.PERCENTAGE } }));
           }
         } else {
-          // --- لا يوجد طالب (مكان فارغ) ---
-          // نقوم برسم الحدود أيضاً حتى تظهر الشبكة فارغة (الآن ستكون شفافة)
           rowCells.push(new TableCell({
             children: [new Paragraph({})],
             width: { size: 50, type: WidthType.PERCENTAGE },
-            // ============================================================
-            // التعديل الثاني هنا: جعل حدود الخلية الفارغة شفافة
-            // ============================================================
             borders: {
               top: { style: BorderStyle.NONE },
               bottom: { style: BorderStyle.NONE },
               left: { style: BorderStyle.NONE },
               right: { style: BorderStyle.NONE },
             },
-            // ============================================================
           }));
         }
       }
 
-      // إضافة الصف إلى الجدول الرئيسي بارتفاع ثابت
       mainTableRows.push(new TableRow({
         children: rowCells,
         height: { value: EXACT_ROW_HEIGHT, rule: HeightRule.EXACT }
@@ -1280,7 +1155,7 @@ const handleExportQRCodes = async () => {
       sections: [{
         properties: {
           page: {
-            size: { width: 11906, height: 16838 }, // A4 exact dimensions
+            size: { width: 11906, height: 16838 }, 
             margin: { top: 0, bottom: 0, left: 0, right: 0, header: 0, footer: 0 },
           },
         },
@@ -1288,10 +1163,7 @@ const handleExportQRCodes = async () => {
           new Table({
             rows: mainTableRows,
             width: { size: 100, type: WidthType.PERCENTAGE },
-            layout: TableLayoutType.FIXED, // إجبار الجدول على الالتزام بالأبعاد
-            // ============================================================
-            // تعديل إضافي اختياري: ضمان عدم وجود حدود للجدول الرئيسي نفسه
-            // ============================================================
+            layout: TableLayoutType.FIXED, 
             borders: {
                 top: { style: BorderStyle.NONE },
                 bottom: { style: BorderStyle.NONE },
@@ -1300,7 +1172,6 @@ const handleExportQRCodes = async () => {
                 insideVertical: { style: BorderStyle.NONE },
                 insideHorizontal: { style: BorderStyle.NONE },
             }
-            // ============================================================
           }),
         ],
       }],
@@ -1317,25 +1188,8 @@ const handleExportQRCodes = async () => {
   }
 };
 
-  const handleDownloadImage = async () => {
-    // دالة لتنزيل صورة الطالب إذا لزم الأمر
-    if (selectedStudent && selectedStudent.photo) {
-        const link = document.createElement('a');
-        link.href = selectedStudent.photo;
-        link.download = `${selectedStudent.name}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-  };
-
   const handleUpdatePrizes = (updatedPrizes) => {
     setPrizes(updatedPrizes);
-  };
-
-  const handleAddGrade = () => {
-    // هذه الدالة قد لا تكون مستخدمة إذا كنا نستخدم التحديث المباشر عبر الحقول
-    // لكن يمكن استخدامها لإضافة عمود جديد للدراجات ديناميكياً
   };
 
   const handleResetDataClick = () => {
@@ -1355,15 +1209,13 @@ const handleExportQRCodes = async () => {
         try {
             const emptyStructure = createEmptySemesterStructure();
             
-            // تصفير الدرجات للطلاب في الـ State
             const resetStudents = students.map(student => {
                 const fullStructure = { ...student.fullGradesStructure };
-                // تصفير الفصل الدراسي الحالي فقط
                 fullStructure[activeSemesterKey] = emptyStructure;
                 
                 return {
                     ...student,
-                    grades: emptyStructure.period1, // افتراضياً العودة للفترة الأولى
+                    grades: emptyStructure.period1, 
                     fullGradesStructure: fullStructure,
                     acquiredStars: 0,
                     consumedStars: 0,
@@ -1371,7 +1223,6 @@ const handleExportQRCodes = async () => {
                 };
             });
             
-            // حفظ في قاعدة البيانات
             await updateStudentsData(resetStudents);
             handleDialog("نجاح", "تم تصفير البيانات بنجاح", "success");
             
@@ -1679,7 +1530,6 @@ const handleExportQRCodes = async () => {
             <img src={newStudent.photo || '/images/1.webp'} alt="صورة الطالب" className="w-24 h-24 rounded-full object-cover border-2 border-gray-600" />
           </div>
           <div className="flex flex-col gap-2 mb-4">
-               {/* زر الكاميرا */}
               <button
                 onClick={startCamera}
                 className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 shadow-md text-sm"
@@ -1726,7 +1576,6 @@ const handleExportQRCodes = async () => {
             <img src={editingStudent.photo || '/images/1.webp'} alt="صورة الطالب" className="w-24 h-24 rounded-full object-cover border-2 border-gray-600" />
           </div>
            <div className="flex flex-col gap-2 mb-4">
-               {/* زر الكاميرا للتعديل */}
               <button
                 onClick={startCamera}
                 className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 shadow-md text-sm"
@@ -1896,393 +1745,20 @@ const handleExportQRCodes = async () => {
         </div>
       )}
 
+      {/* *************************************************************** */}
+      {/* نافذة تعديل الدرجات المنبثقة (استبدال القسم السفلي القديم) */}
+      {/* *************************************************************** */}
       {selectedStudent && !showGradeSheet && !showBriefSheet && !showQrList && (
-        <div ref={gradesSectionRef} className="bg-gray-800 p-4 md:p-8 rounded-xl shadow-lg mt-4 md:mt-6 border border-gray-700" dir="rtl">
-          <div className="flex items-center gap-4 mb-6 pb-4 border-b border-gray-700">
-            <div className="flex flex-col text-right min-w-0 flex-grow">
-              <h3 className="text-xl md:text-2xl font-bold text-blue-400 break-words">
-                {`درجات الطالب: ${selectedStudent.name} (الفترة ${currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})`}
-              </h3>
-              <p className="text-sm md:text-md text-gray-400 break-words">السجل المدني: {selectedStudent.nationalId}</p>
-              <p className="text-sm md:text-md text-gray-400 break-words">رقم ولي الأمر: {selectedStudent.parentPhone}</p>
-            </div>
-            <div className="relative flex-shrink-0">
-              <img src={selectedStudent.photo || '/images/1.webp'} alt={selectedStudent.name} className="w-16 h-16 rounded-full object-cover border-2 border-gray-600" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-3 gap-4 md:gap-6">
-            
-            {/* 1. المجموع النهائي (100) */}
-            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col text-right">
-                  <h4 className="font-semibold text-gray-100">المجموع النهائي</h4>
-                  <span className="text-xl md:text-2xl font-bold text-green-500">{calculateFinalTotalScore(selectedStudent.grades)} / 100</span>
-                </div>
-                <FaAward className="text-4xl text-green-400" />
-              </div>
-            </div>
-
-            {/* 3. أعمال السنة (40) */}
-            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col text-right">
-                  <h4 className="font-semibold text-gray-100">المهام الأدائية والمشاركة والتفاعل الصفي
-</h4>
-                  <span className="text-xl md:text-2xl font-bold text-yellow-400">{calculateCoursework(selectedStudent.grades)} / 40</span>
-                </div>
-                <FaTasks className="text-4xl text-yellow-400" />
-              </div>
-            </div>
-
-            {/* 2. التقييمات الرئيسية (الاختبارات + القرآن) (60) */}
-            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col text-right">
-                  <h4 className="font-semibold text-gray-100">تقويمات شفهية وتحريرية</h4>
-                  <span className="text-xl md:text-2xl font-bold text-blue-400">{calculateMajorAssessments(selectedStudent.grades)} / 60</span>
-                </div>
-                <FaBookOpen className="text-4xl text-blue-400" />
-              </div>
-            </div>
-            
-                        <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 col-span-1 flex flex-col items-center justify-center">
-              <h4 className="font-semibold text-gray-100 text-lg mb-4">النجوم</h4>
-              <div className="flex flex-col items-center justify-center w-full">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex items-center gap-2">
-                    <FaStar className="text-3xl text-yellow-400" />
-                    <span className="text-md font-semibold text-yellow-400">الحالية</span>
-                    <span className="text-lg font-bold text-yellow-400">({selectedStudent.stars || 0})</span>
-                  </div>
-                  <div className="flex items-center flex-wrap justify-center gap-1">
-                    {[...Array(10)].map((_, i) => (
-                      <FaStar
-                        key={`total-${i}`}
-                        className={`text-xl ${i < (selectedStudent.stars || 0) ? 'text-yellow-400' : 'text-gray-400'}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex items-center gap-2">
-                    <FaCoins className="text-3xl text-green-400" />
-                    <span className="text-md font-semibold text-green-400">المكتسبة</span>
-                    <span className="text-lg font-bold text-green-400">({selectedStudent.acquiredStars || 0})</span>
-                  </div>
-                  <div className="flex items-center flex-wrap justify-center gap-1">
-                    {[...Array(10)].map((_, i) => (
-                      <FaStar
-                        key={`acquired-${i}`}
-                        className={`text-xl ${i < (selectedStudent.acquiredStars || 0) ? 'text-green-400' : 'text-gray-400'}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <FaRegStar className="text-3xl text-red-400" />
-                    <span className="text-md font-semibold text-red-400">المستهلكة</span>
-                    <span className="text-lg font-bold text-red-400">({selectedStudent.consumedStars || 0})</span>
-                  </div>
-                  <div className="flex items-center flex-wrap justify-center gap-1">
-                    {[...Array(10)].map((_, i) => (
-                      <FaStar
-                        key={`consumed-${i}`}
-                        className={`text-xl ${i < (selectedStudent.consumedStars || 0) ? 'text-red-400' : 'text-gray-400'}`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* --- المجاميع الفرعية التفصيلية --- */}
-
-            <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
-                <FaBookOpen className="text-3xl text-red-400" /> الاختبارات
-                <span className="text-red-400 font-bold mr-2 text-2xl">
-                  {calculateCategoryScore(selectedStudent.grades, 'tests', 'sum')} / 40
-                </span>
-              </h4>
-                          <div className="flex items-center gap-2 mb-2">
-                <h5 className="font-medium text-gray-100">حالة الاختبارات</h5>
-                {taskStatusUtils(selectedStudent, homeworkCurriculum, 'test').icon}
-                <span className="text-sm text-gray-400">
-                  ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'test').text})
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selectedStudent.grades.tests.slice(0, 2).map((grade, i) => {
-                  const hasCurriculum = checkCurriculumExists('tests', i);
-                  return (
-                    <input 
-                      key={i} 
-                      type="text" 
-                      inputMode="numeric" 
-                      placeholder={`--`} 
-                      title={hasCurriculum ? "" : "لا يوجد منهج"}
-                      value={grade === null ? '' : grade} 
-                      onChange={(e) => updateStudentGrade(selectedStudent.id, "tests", i, e.target.value)} 
-                      className={`w-20 p-2 border rounded-lg text-center text-base focus:outline-none focus:ring-2 transition-colors ${getInputStyle(hasCurriculum, 'green')}`}
-                      style={{ touchAction: 'manipulation' }} 
-                    />
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-              <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
-                <FaMicrophone className="text-3xl text-yellow-400" /> التفاعل الصفي  <span className="text-yellow-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'classInteraction', 'best')} / 10</span>
-              </h4>
-             <div className="flex flex-wrap gap-2">
-                {selectedStudent.grades.classInteraction.slice(0, 4).map((grade, i) => {
-                  // التفاعل الصفي دائماً true، ولكن نستخدم الدالة للتوحيد
-                  const hasCurriculum = checkCurriculumExists('classInteraction', i);
-                  return (
-                    <input 
-                      key={i} 
-                      type="text" 
-                      inputMode="numeric" 
-                      placeholder={`--`} 
-                      value={grade === null ? '' : grade} 
-                      onChange={(e) => updateStudentGrade(selectedStudent.id, "classInteraction", i, e.target.value)} 
-                      className={`w-16 p-2 border rounded-lg text-center text-base focus:outline-none focus:ring-2 transition-colors ${getInputStyle(hasCurriculum, 'yellow')}`}
-                      style={{ touchAction: 'manipulation' }} 
-                    />
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
-                <FaTasks className="text-3xl text-green-400" /> الواجبات
-                <span className="text-green-400 font-bold mr-2 text-2xl">
-                  {calculateCategoryScore(selectedStudent.grades, 'homework', 'sum')} / 10
-                </span>
-              </h4>
-              <div className="flex items-center gap-2 mb-2">
-                <h5 className="font-medium text-gray-100">حالة الواجبات</h5>
-                {taskStatusUtils(selectedStudent, homeworkCurriculum, 'homework').icon}
-                <span className="text-sm text-gray-400">
-                  ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'homework').text})
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selectedStudent.grades.homework.slice(0, 10).map((grade, i) => {
-                  const hasCurriculum = checkCurriculumExists('homework', i);
-                  return (
-                    <input 
-                      key={i} 
-                      type="text" 
-                      inputMode="numeric" 
-                      placeholder={`--`} 
-                      title={hasCurriculum ? "" : "لا يوجد منهج"}
-                      value={grade === null ? '' : grade} 
-                      onChange={(e) => updateStudentGrade(selectedStudent.id, "homework", i, e.target.value)} 
-                      className={`w-10 p-2 border rounded-lg text-center text-base focus:outline-none focus:ring-2 transition-colors ${getInputStyle(hasCurriculum, 'purple')}`}
-                      style={{ touchAction: 'manipulation' }} 
-                    />
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="col-span-full md:col-span-2 lg:col-span-1 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-              <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
-                <FaPencilAlt className="text-3xl text-purple-400" /> المهام الأدائية
-                <span className="text-purple-400 font-bold mr-2 text-2xl">
-                  {calculateCategoryScore(selectedStudent.grades, 'performanceTasks', 'best')} / 10
-                </span>
-              </h4>
-              <div className="flex items-center gap-2 mb-2">
-                <h5 className="font-medium text-gray-100">حالة المهام</h5>
-                {taskStatusUtils(selectedStudent, homeworkCurriculum, 'performanceTask').icon}
-                <span className="text-sm text-gray-400">
-                  ({taskStatusUtils(selectedStudent, homeworkCurriculum, 'performanceTask').text})
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {selectedStudent.grades.performanceTasks.slice(0, 4).map((grade, i) => {
-                  const hasCurriculum = checkCurriculumExists('performanceTasks', i);
-                  return (
-                    <input
-                      key={i}
-                      type="text"
-                      inputMode="numeric"
-                      placeholder={`--`}
-                      title={hasCurriculum ? "" : "لا يوجد منهج"}
-                      value={grade === null ? '' : grade}
-                      onChange={(e) => updateStudentGrade(selectedStudent.id, "performanceTasks", i, e.target.value)}
-                      className={`w-16 p-2 border rounded-lg text-center text-base focus:outline-none focus:ring-2 transition-colors ${getInputStyle(hasCurriculum, 'rose')}`}
-                      style={{ touchAction: 'manipulation' }}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-              <h4 className="font-semibold mb-3 flex items-center gap-2 text-gray-100 text-xl">
-                <FaCommentDots className="text-3xl text-cyan-400" /> المشاركة  <span className="text-cyan-400 font-bold text-2xl">{calculateCategoryScore(selectedStudent.grades, 'participation', 'sum')} / 10</span>
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {selectedStudent.grades.participation.slice(0, 10).map((grade, i) => {
-                   // المشاركة دائماً true
-                   const hasCurriculum = checkCurriculumExists('participation', i);
-                   return (
-                    <input 
-                      key={i} 
-                      type="text" 
-                      inputMode="numeric" 
-                      placeholder={`--`} 
-                      value={grade === null ? '' : grade} 
-                      onChange={(e) => updateStudentGrade(selectedStudent.id, "participation", i, e.target.value)} 
-                      className={`w-10 p-2 border rounded-lg text-center text-base focus:outline-none focus:ring-2 transition-colors ${getInputStyle(hasCurriculum, 'cyan')}`}
-                      style={{ touchAction: 'manipulation' }} 
-                    />
-                  );
-                })}
-              </div>
-            </div>
-
-<div className="col-span-full md:col-span-2 lg:col-span-3 bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600">
-  <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-100 text-xl">
-    <FaQuran className="text-3xl text-blue-400" /> القرآن الكريم
-    <span className="text-blue-400 font-bold mr-2 text-2xl">
-      {(parseFloat(calculateCategoryScore(selectedStudent.grades, 'quranRecitation', 'average')) + parseFloat(calculateCategoryScore(selectedStudent.grades, 'quranMemorization', 'average'))).toFixed(2)} / 20
-    </span>
-  </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <h5 className="font-medium text-gray-100">تلاوة القرآن </h5>
-                    {getStatusInfo(selectedStudent, 'recitation', curriculum).icon}
-                    <span className={`text-sm ${getStatusInfo(selectedStudent, 'recitation', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(selectedStudent, 'recitation', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(selectedStudent, 'recitation', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
-                      ({getStatusInfo(selectedStudent, 'recitation', curriculum).text})
-                    </span>
-                    <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(selectedStudent.grades, 'quranRecitation', 'average')} / 10</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedStudent.grades.quranRecitation.slice(0, 5).map((grade, i) => {
-                      const hasCurriculum = checkCurriculumExists('quranRecitation', i);
-                      return (
-                        <input
-                          key={i}
-                          type="text"
-                          inputMode="numeric"
-                          placeholder={`--`}
-                          title={hasCurriculum ? "" : "لا يوجد منهج"}
-                          value={grade === null ? '' : grade}
-                          onChange={(e) => updateStudentGrade(selectedStudent.id, "quranRecitation", i, e.target.value)}
-                          className={`w-12 p-2 border rounded-lg text-center text-base focus:outline-none focus:ring-2 transition-colors ${getInputStyle(hasCurriculum, 'blue')}`}
-                          style={{ touchAction: 'manipulation' }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <h5 className="font-medium text-gray-100">حفظ القرآن </h5>
-                    {getStatusInfo(selectedStudent, 'memorization', curriculum).icon}
-                    <span className={`text-sm ${getStatusInfo(selectedStudent, 'memorization', curriculum).icon.props.className.includes('text-green') ? 'text-green-400' : getStatusInfo(selectedStudent, 'memorization', curriculum).icon.props.className.includes('text-red') ? 'text-red-400' : getStatusInfo(selectedStudent, 'memorization', curriculum).icon.props.className.includes('text-yellow') ? 'text-yellow-400' : 'text-gray-400'}`}>
-                      ({getStatusInfo(selectedStudent, 'memorization', curriculum).text})
-                    </span>
-                    <span className="text-blue-400 font-bold text-xl">{calculateCategoryScore(selectedStudent.grades, 'quranMemorization', 'average')} / 10</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedStudent.grades.quranMemorization.slice(0, 5).map((grade, i) => {
-                      const hasCurriculum = checkCurriculumExists('quranMemorization', i);
-                      return (
-                        <input
-                          key={i}
-                          type="text"
-                          inputMode="numeric"
-                          placeholder={`--`}
-                          title={hasCurriculum ? "" : "لا يوجد منهج"}
-                          value={grade === null ? '' : grade}
-                          onChange={(e) => updateStudentGrade(selectedStudent.id, "quranMemorization", i, e.target.value)}
-                          className={`w-12 p-2 border rounded-lg text-center text-base focus:outline-none focus:ring-2 transition-colors ${getInputStyle(hasCurriculum, 'blue')}`}
-                          style={{ touchAction: 'manipulation' }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-<div className="bg-gray-700 p-5 rounded-xl shadow-md border border-gray-600 col-span-full">
-  <div className="flex justify-between items-center mb-3">
-    <h4 className="font-semibold text-xl flex items-center gap-2 text-gray-100">
-      <FaStickyNote className="text-2xl text-yellow-400" /> الملاحظات الأسبوعية
-    </h4>
-    <button onClick={() => setShowNotesModal(true)} className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500 transition-colors text-sm">
-      إدارة الملاحظات
-    </button>
-  </div>
-  <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
-    <h5 className="font-bold text-gray-200 mb-2">آخر الملاحظات</h5>
-    <div className="h-px bg-gray-600 mb-2"></div>
-    {selectedStudent.grades.weeklyNotes?.reduce((acc, notes, weekIndex) => {
-      notes?.forEach(note => {
-        acc.push({ note, weekIndex });
-      });
-      return acc;
-    }, []).reverse().slice(0, 5).length > 0 ? (
-      selectedStudent.grades.weeklyNotes.reduce((acc, notes, weekIndex) => {
-        notes?.forEach(note => {
-          acc.push({ note, weekIndex });
-        });
-        return acc;
-      }, []).reverse().slice(0, 5).map((item, index) => (
-        <div key={index} className="bg-gray-800 p-3 rounded-lg border border-gray-600">
-          <p className="text-sm text-gray-300">
-            <span className="font-bold">الأسبوع {item.weekIndex + 1}:</span> {item.note}
-          </p>
-        </div>
-      ))
-    ) : (
-      <p className="text-gray-400 text-sm text-center">لا توجد ملاحظات حاليًا.</p>
-    )}
-  </div>
-  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 max-h-96 overflow-y-auto">
-    {(selectedStudent.grades.weeklyNotes || []).map((notes, weekIndex) => (
-      <div key={weekIndex} className="bg-gray-800 p-3 rounded-lg border border-gray-600 min-h-[120px] relative">
-        <h5 className="font-bold text-gray-200 mb-1 text-center">الأسبوع {weekIndex + 1}</h5>
-        <div className="h-px bg-gray-600 mb-2"></div>
-        {notes && notes.length > 0 ? (
-          <ul className="list-none pr-0 text-gray-300 text-sm space-y-1">
-            {notes.map((note, noteIndex) => (
-              <li key={noteIndex} className="pb-1 flex justify-between items-start border-b border-gray-700 last:border-b-0">
-                <span>{note}</span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteNote(selectedStudent.id, weekIndex, noteIndex);
-                  }}
-                  className="text-red-400 hover:text-red-300 text-xs p-1"
-                  title="حذف الملاحظة"
-                >
-                  <FaTimesCircle />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-gray-400 text-sm text-center">لا توجد ملاحظات</p>
-        )}
-      </div>
-    ))}
-  </div>
-</div>
-</div>
-        </div>
+        <StudentGradesPopup 
+            student={selectedStudent}
+            onClose={() => setSelectedStudent(null)}
+            onSave={handleSaveChanges}
+            curriculum={curriculum}
+            homeworkCurriculum={homeworkCurriculum}
+            currentPeriod={currentPeriod}
+            checkCurriculumExists={checkCurriculumExists}
+            getInputStyle={getInputStyle}
+        />
       )}
 
       <button
