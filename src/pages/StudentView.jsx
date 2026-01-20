@@ -1310,7 +1310,7 @@ function StudentView() {
         <div className="p-4 bg-gray-900 border-t border-gray-700 rounded-b-2xl flex flex-col md:flex-row justify-between items-center gap-4 shadow-2xl z-10">
              <div className="flex items-center gap-2">
                 <FaGift className="text-2xl text-purple-400" />
-                <span className="text-gray-300 font-bold">طلب المكافآت</span>
+                <span className="text-gray-300 font-bold">المكافآت المتاحة</span>
              </div>
              
              <button
@@ -1352,4 +1352,5 @@ function StudentView() {
 }
 
 export default StudentView;
+
 
