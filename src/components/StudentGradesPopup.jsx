@@ -1,3 +1,5 @@
+// src/components/StudentGradesPopup.jsx
+
 import React, { useState } from "react";
 import {
   FaTimes,
@@ -192,31 +194,34 @@ const StudentGradesPopup = ({
           
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {/* المجموع النهائي */}
             <div className="bg-gray-700 p-4 rounded-xl border border-gray-600 flex justify-between items-center shadow-lg">
               <div>
-                <h4 className="text-gray-300 text-sm font-bold">المجموع النهائي</h4>
+                <h4 className="text-gray-300 text-sm font-bold mb-1">المجموع النهائي</h4>
                 <span className="text-3xl font-bold text-green-400 font-mono">
-                  {calculateFinalTotalScore(localStudent.grades)}
+                  {calculateFinalTotalScore(localStudent.grades)} <span className="text-lg text-gray-400">/ 100</span>
                 </span>
               </div>
               <FaAward className="text-4xl text-green-500/20" />
             </div>
 
+            {/* المهام الأدائية والواجبات والمشاركة */}
             <div className="bg-gray-700 p-4 rounded-xl border border-gray-600 flex justify-between items-center shadow-lg">
               <div>
-                <h4 className="text-gray-300 text-sm font-bold">أعمال السنة (40)</h4>
+                <h4 className="text-gray-300 text-xs font-bold mb-1 leading-relaxed">المهام الأدائية والمشاركة والتفاعل الصفي والواجبات</h4>
                 <span className="text-3xl font-bold text-yellow-400 font-mono">
-                  {calculateCoursework(localStudent.grades)}
+                  {calculateCoursework(localStudent.grades)} <span className="text-lg text-gray-400">/ 40</span>
                 </span>
               </div>
               <FaTasks className="text-4xl text-yellow-500/20" />
             </div>
 
+            {/* التقويمات */}
             <div className="bg-gray-700 p-4 rounded-xl border border-gray-600 flex justify-between items-center shadow-lg">
               <div>
-                <h4 className="text-gray-300 text-sm font-bold">التقويمات (60)</h4>
+                <h4 className="text-gray-300 text-sm font-bold mb-1">تقويمات شفهية وتحريرية</h4>
                 <span className="text-3xl font-bold text-blue-400 font-mono">
-                  {calculateMajorAssessments(localStudent.grades)}
+                  {calculateMajorAssessments(localStudent.grades)} <span className="text-lg text-gray-400">/ 60</span>
                 </span>
               </div>
               <FaBookOpen className="text-4xl text-blue-500/20" />
