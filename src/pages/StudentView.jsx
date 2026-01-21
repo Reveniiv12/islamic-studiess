@@ -3,8 +3,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
-import { QRCodeSVG } from 'qrcode.react'; // تأكد من تثبيت هذه المكتبة
-import * as htmlToImage from 'html-to-image'; // npm install html-to-image
+import { QRCodeSVG } from 'qrcode.react'; 
+import * as htmlToImage from 'html-to-image'; 
 
 import {
   FaQuran,
@@ -989,6 +989,13 @@ function StudentView() {
     return logStr; 
   };
 
+  // ✅✅✅✅ تعديل هام: تحديد الرابط الصحيح للـ QR Code ✅✅✅✅
+  // إذا كان هناك رابط مخصص في قاعدة البيانات (studentData.viewKey) نستخدمه.
+  // وإلا نقوم بإنشاء الرابط التفصيلي (Long Path) الذي يعمل بشكل مؤكد بدلاً من الرابط المختصر.
+  const qrCodeUrl = studentData.viewKey
+    ? `${window.location.origin}${studentData.viewKey}`
+    : `${window.location.origin}/grades/${studentData.grade_level}/sections/${studentData.section}/students/${studentData.id}`;
+
   return (
     <div className="min-h-screen bg-gray-900 p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100 flex justify-center items-start" dir="rtl">
       
@@ -1069,7 +1076,7 @@ function StudentView() {
               </div>
             )}
             
-{/* 2.5 بطاقة QR الرقمية */}
+            {/* 2.5 بطاقة QR الرقمية */}
             <div className="bg-gray-700/40 p-4 md:p-5 rounded-xl border border-gray-600 flex flex-col gap-6 items-center justify-center">
                 <div className="text-center w-full">
                    <h4 className="font-bold text-xl flex items-center justify-center gap-2 text-white mb-2">
@@ -1100,8 +1107,9 @@ function StudentView() {
                       {/* QR Code (يسار) */}
                       {/* border-r يضع خط فاصل يمين الباركود (بين الباركود والنص) */}
                       <div className="flex-shrink-0 border-r pr-3 border-gray-200">
+                         {/* ✅✅ تم التعديل هنا لاستخدام الرابط المصحح qrCodeUrl ✅✅ */}
                          <QRCodeSVG 
-                            value={`${window.location.origin}${studentData.viewKey || `/student-view/${studentId}`}`}
+                            value={qrCodeUrl}
                             size={85} // حجم أصغر قليلاً لضمان التوافق مع الجوال
                             level="M"
                             className="w-20 h-20 md:w-24 md:h-24" // تحكم إضافي عبر كلاسات Tailwind
@@ -1135,8 +1143,9 @@ function StudentView() {
 
                         {/* QR Code (يسار) */}
                         <div className="flex-shrink-0 border-r pr-4 border-gray-200">
+                             {/* ✅✅ تم التعديل هنا لاستخدام الرابط المصحح qrCodeUrl ✅✅ */}
                             <QRCodeSVG 
-                                value={`${window.location.origin}${studentData.viewKey || `/student-view/${studentId}`}`}
+                                value={qrCodeUrl}
                                 size={100}
                                 level="M"
                             />
