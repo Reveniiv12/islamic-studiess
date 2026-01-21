@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { FaClock } from "react-icons/fa"; 
+// تأكد من أن المكتبة مثبتة أو استبدل الأيقونات بصور/نصوص إذا لم تكن موجودة
+// import { FaClock } from "react-icons/fa"; 
 
 // دالة تحويل الأرقام
 const convertToEnglishNumbers = (input) => {
@@ -27,21 +28,18 @@ const StudentRowComponent = ({
     selectedStudents, 
     toggleStudentSelection,
     inputCount,
-    curriculum,           // استقبال بيانات التلاوة
-    homeworkCurriculum    // استقبال بيانات الواجبات والاختبارات
+    curriculum,           
+    homeworkCurriculum    
 }) => {
 
     const isSelected = selectedStudents.includes(student.id);
 
-    // دالة للتحقق مما إذا كان هناك منهج لهذا المؤشر
     const checkCurriculumExists = (category, index) => {
-        // الفئات المستثناة (تبقى كما هي)
         if (category === 'classInteraction' || category === 'participation') {
             return true; 
         }
 
         let items = [];
-        // التأكد من أن المصفوفات موجودة لتجنب الأخطاء
         const safeCurriculum = Array.isArray(curriculum) ? curriculum : [];
         const safeHomework = Array.isArray(homeworkCurriculum) ? homeworkCurriculum : [];
 
@@ -60,14 +58,10 @@ const StudentRowComponent = ({
         return index < items.length;
     };
 
-    // دالة رسم خانات الإدخال مع الألوان الجديدة
     const renderGradeInputs = (category, color, count) => {
         return Array(count).fill(0).map((_, i) => {
             const hasCurriculum = checkCurriculumExists(category, i);
             
-            // تحديد التصميم بناءً على وجود المنهج
-            // 1. إذا وجد منهج: أبيض شفاف (bg-white/10)
-            // 2. إذا لم يوجد منهج: أسود شفاف (bg-black/50) مع مؤشر افتراضي
             const inputStyle = hasCurriculum 
                 ? `bg-white/10 text-white focus:ring-${color}-500 border-transparent hover:bg-white/20`
                 : `bg-black/50 text-gray-500 border border-gray-800 focus:ring-gray-600 cursor-default placeholder-gray-700`;
@@ -78,11 +72,11 @@ const StudentRowComponent = ({
                 <td key={`${category}_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-600">
                     <input
                         type="text"
-                        inputMode="numeric"
+                        inputMode="decimal"
                         title={titleText}
                         value={student.grades[category]?.[i] ?? ''} 
                         onChange={(e) => handleGradeChange(student.id, category, i, e.target.value)}
-                        className={`w-10 p-1 text-center rounded focus:outline-none focus:ring-2 transition-all duration-200 ${inputStyle}`}
+                        className={`w-10 p-1 text-base md:text-sm text-center rounded focus:outline-none focus:ring-2 transition-all duration-200 ${inputStyle}`}
                     />
                 </td>
             );
@@ -160,21 +154,31 @@ const StudentRowComponent = ({
     };
 
     return (
-        <tr className="hover:bg-gray-700 transition-colors group">
-            <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-700 z-10">
-                <div className="flex items-center gap-2">
-                    <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleStudentSelection(student.id)}
-                        className="accent-blue-500"
-                    />
-                    <img 
-                        src={student.photo || '/images/1.webp'} 
-                        alt={student.name} 
-                        className="w-8 h-8 rounded-full object-cover border border-gray-600"
-                    />
-                    <span className="whitespace-nowrap text-gray-100">{student.name}</span>
+        <tr className={`transition-colors group ${isSelected ? 'bg-blue-900/20' : 'hover:bg-gray-700'}`}>
+            <td 
+                // جعل الخلية بالكامل قابلة للنقر للتحديد
+                onClick={() => toggleStudentSelection(student.id)}
+                className="px-2 md:px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-100 sticky right-0 bg-gray-800 text-right group-hover:bg-gray-750 z-10 border-l border-gray-600 cursor-pointer select-none"
+            >
+                <div className="flex items-center gap-3">
+                    {/* تم إزالة الـ Checkbox واستبداله بمنطق الصورة */}
+                    <div className="relative">
+                        <img 
+                            src={student.photo || '/images/1.webp'} 
+                            alt={student.name} 
+                            className={`w-10 h-10 rounded-full object-cover transition-all duration-300 ${isSelected ? 'ring-4 ring-green-500 scale-110' : 'border border-gray-600 opacity-80'}`}
+                        />
+                        {isSelected && (
+                            <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full w-4 h-4 flex items-center justify-center border border-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                        )}
+                    </div>
+                    <span className={`whitespace-nowrap text-xs md:text-sm font-bold transition-colors ${isSelected ? 'text-green-400' : 'text-gray-100'}`}>
+                        {student.name}
+                    </span>
                 </div>
             </td>
             {renderContent()}
@@ -409,8 +413,8 @@ const GradesModal = ({
     const CustomDialog = ({ isOpen, title, message, onClose }) => {
         if (!isOpen) return null;
         return (
-            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100]">
-                <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md mx-4 text-center">
+            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-70 z-[100] px-4">
+                <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md text-center">
                     <h3 className="text-xl font-bold text-red-400 mb-4">{title}</h3>
                     <p className="text-gray-300 mb-6">{message}</p>
                     <button onClick={onClose} className="px-6 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition">فهمت</button>
@@ -438,10 +442,39 @@ const GradesModal = ({
         </tbody>
     );
 
+    // مكون لرأس الجدول مع زر "تحديد الكل"
+    const TableHeaderCell = ({ title, children }) => {
+        const isAllSelected = selectedStudentsPerTab[activeTab].length > 0 && selectedStudentsPerTab[activeTab].length === filteredStudents.length;
+        
+        return (
+            <thead className="bg-gray-700 sticky top-0 z-30 shadow-md">
+                <tr>
+                    <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider sticky right-0 bg-gray-700 z-20 whitespace-nowrap border-l border-gray-600">
+                        {/* زر تحديد الكل بدلاً من المربع */}
+                        <div 
+                            onClick={toggleSelectAll}
+                            className={`flex items-center gap-2 cursor-pointer select-none p-1 rounded ${isAllSelected ? 'text-green-400' : 'text-gray-100 hover:text-white'}`}
+                        >
+                            <span className="font-extrabold text-sm">
+                                {isAllSelected ? 'إلغاء الكل' : 'تحديد الكل'}
+                            </span>
+                             {/* أيقونة بسيطة للتوضيح */}
+                             <div className={`w-4 h-4 rounded-full border border-current flex items-center justify-center ${isAllSelected ? 'bg-green-500 border-green-500 text-white' : ''}`}>
+                                {isAllSelected && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                             </div>
+                        </div>
+                    </th>
+                    {children}
+                    <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
+                </tr>
+            </thead>
+        );
+    };
+
 
     const renderTests = () => (
-        <div className="space-y-4">
-            <div className="mb-4">
+        <div className="space-y-4 h-full flex flex-col">
+            <div className="mb-2">
                 <input
                     type="text"
                     inputMode="text"
@@ -481,26 +514,13 @@ const GradesModal = ({
                     تطبيق الدرجة
                 </button>
             </div>
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] rounded-lg border border-gray-700" dir="rtl">
+            {/* تم جعل هذا القسم flex-1 ليأخذ باقي المساحة ويسمح بالتمرير داخله فقط */}
+            <div className="flex-1 overflow-auto rounded-lg border border-gray-700 bg-gray-800" dir="rtl">
                 <table className="w-full divide-y divide-gray-700">
-                    <thead className="bg-gray-700 sticky top-0 z-30">
-                        <tr>
-                            <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider sticky right-0 bg-gray-700 z-20 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedStudentsPerTab.tests.length > 0 && selectedStudentsPerTab.tests.length === filteredStudents.length}
-                                        onChange={toggleSelectAll}
-                                        className="accent-blue-500"
-                                    />
-                                    <span className="font-semibold text-gray-100">اسم الطالب</span>
-                                </div>
-                            </th>
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 1 </th>
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 2 </th>
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
-                        </tr>
-                    </thead>
+                    <TableHeaderCell>
+                        <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 1 </th>
+                        <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">اختبار 2 </th>
+                    </TableHeaderCell>
                     {renderStudentsTableBody('tests', 2)}
                 </table>
             </div>
@@ -508,8 +528,8 @@ const GradesModal = ({
     );
     
     const renderClassInteraction = () => (
-        <div className="space-y-4">
-            <div className="mb-4">
+        <div className="space-y-4 h-full flex flex-col">
+            <div className="mb-2">
                 <input
                     type="text"
                     inputMode="text"
@@ -550,27 +570,13 @@ const GradesModal = ({
                     تطبيق الدرجة
                 </button>
             </div>
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] rounded-lg border border-gray-700" dir="rtl">
+            <div className="flex-1 overflow-auto rounded-lg border border-gray-700 bg-gray-800" dir="rtl">
                 <table className="w-full divide-y divide-gray-700">
-                    <thead className="bg-gray-700 sticky top-0 z-30">
-                        <tr>
-                            <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider sticky right-0 bg-gray-700 z-20 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedStudentsPerTab.classInteraction.length > 0 && selectedStudentsPerTab.classInteraction.length === filteredStudents.length}
-                                        onChange={toggleSelectAll}
-                                        className="accent-blue-500"
-                                    />
-                                    <span className="font-semibold text-gray-100">اسم الطالب</span>
-                                </div>
-                            </th>
-                            {[...Array(4)].map((_, i) => (
-                                <th key={`classInteraction_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">تفاعل {i + 1} </th>
-                            ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">أفضل درجة </th>
-                        </tr>
-                    </thead>
+                    <TableHeaderCell>
+                        {[...Array(4)].map((_, i) => (
+                            <th key={`classInteraction_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">تفاعل {i + 1} </th>
+                        ))}
+                    </TableHeaderCell>
                     {renderStudentsTableBody('classInteraction', 4)}
                 </table>
             </div>
@@ -579,8 +585,8 @@ const GradesModal = ({
 
 
     const renderHomework = () => (
-        <div className="space-y-4">
-            <div className="mb-4">
+        <div className="space-y-4 h-full flex flex-col">
+            <div className="mb-2">
                 <input
                     type="text"
                     inputMode="text"
@@ -621,27 +627,13 @@ const GradesModal = ({
                     تطبيق الدرجة
                 </button>
             </div>
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] rounded-lg border border-gray-700" dir="rtl">
+            <div className="flex-1 overflow-auto rounded-lg border border-gray-700 bg-gray-800" dir="rtl">
                 <table className="w-full divide-y divide-gray-700">
-                    <thead className="bg-gray-700 sticky top-0 z-30">
-                        <tr>
-                            <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider sticky right-0 bg-gray-700 z-20 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedStudentsPerTab.homework.length > 0 && selectedStudentsPerTab.homework.length === filteredStudents.length}
-                                        onChange={toggleSelectAll}
-                                        className="accent-blue-500"
-                                    />
-                                    <span className="font-semibold text-gray-100">اسم الطالب</span>
-                                </div>
-                            </th>
-                            {[...Array(10)].map((_, i) => (
-                                <th key={`hw_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">واجب {i + 1} </th>
-                            ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
-                        </tr>
-                    </thead>
+                    <TableHeaderCell>
+                        {[...Array(10)].map((_, i) => (
+                            <th key={`hw_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">واجب {i + 1} </th>
+                        ))}
+                    </TableHeaderCell>
                     {renderStudentsTableBody('homework', 10)}
                 </table>
             </div>
@@ -649,8 +641,8 @@ const GradesModal = ({
     );
 
     const renderPerformanceTasks = () => (
-        <div className="space-y-4">
-            <div className="mb-4">
+        <div className="space-y-4 h-full flex flex-col">
+            <div className="mb-2">
                 <input
                     type="text"
                     inputMode="text"
@@ -691,27 +683,13 @@ const GradesModal = ({
                     تطبيق الدرجة
                 </button>
             </div>
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] rounded-lg border border-gray-700" dir="rtl">
+            <div className="flex-1 overflow-auto rounded-lg border border-gray-700 bg-gray-800" dir="rtl">
                 <table className="w-full divide-y divide-gray-700">
-                    <thead className="bg-gray-700 sticky top-0 z-30">
-                        <tr>
-                            <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider sticky right-0 bg-gray-700 z-20 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedStudentsPerTab.performanceTasks.length > 0 && selectedStudentsPerTab.performanceTasks.length === filteredStudents.length}
-                                        onChange={toggleSelectAll}
-                                        className="accent-blue-500"
-                                    />
-                                    <span className="font-semibold text-gray-100">اسم الطالب</span>
-                                </div>
-                            </th>
-                            {[...Array(4)].map((_, i) => (
-                                <th key={`pt_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مهمة {i + 1} </th>
-                            ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">أفضل درجة </th>
-                        </tr>
-                    </thead>
+                    <TableHeaderCell>
+                        {[...Array(4)].map((_, i) => (
+                            <th key={`pt_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مهمة {i + 1} </th>
+                        ))}
+                    </TableHeaderCell>
                     {renderStudentsTableBody('performanceTasks', 4)}
                 </table>
             </div>
@@ -719,8 +697,8 @@ const GradesModal = ({
     );
 
     const renderParticipation = () => (
-        <div className="space-y-4">
-            <div className="mb-4">
+        <div className="space-y-4 h-full flex flex-col">
+            <div className="mb-2">
                 <input
                     type="text"
                     inputMode="text"
@@ -746,27 +724,13 @@ const GradesModal = ({
                     تطبيق الدرجة
                 </button>
             </div>
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] rounded-lg border border-gray-700" dir="rtl">
+            <div className="flex-1 overflow-auto rounded-lg border border-gray-700 bg-gray-800" dir="rtl">
                 <table className="w-full divide-y divide-gray-700">
-                    <thead className="bg-gray-700 sticky top-0 z-30">
-                        <tr>
-                            <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider sticky right-0 bg-gray-700 z-20 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedStudentsPerTab.participation.length > 0 && selectedStudentsPerTab.participation.length === filteredStudents.length}
-                                        onChange={toggleSelectAll}
-                                        className="accent-blue-500"
-                                    />
-                                    <span className="font-semibold text-gray-100">اسم الطالب</span>
-                                </div>
-                            </th>
-                            {[...Array(10)].map((_, i) => (
-                                <th key={`part_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مشاركة {i + 1} </th>
-                            ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
-                        </tr>
-                    </thead>
+                    <TableHeaderCell>
+                         {[...Array(10)].map((_, i) => (
+                            <th key={`part_header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">مشاركة {i + 1} </th>
+                        ))}
+                    </TableHeaderCell>
                     {renderStudentsTableBody('participation', 10)}
                 </table>
             </div>
@@ -774,8 +738,8 @@ const GradesModal = ({
     );
 
     const renderQuran = (category, count, label, color, state, setState) => (
-        <div className="space-y-4">
-            <div className="mb-4">
+        <div className="space-y-4 h-full flex flex-col">
+            <div className="mb-2">
                 <input
                     type="text"
                     inputMode="text"
@@ -816,27 +780,13 @@ const GradesModal = ({
                     تطبيق الدرجة
                 </button>
             </div>
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-450px)] rounded-lg border border-gray-700" dir="rtl">
+            <div className="flex-1 overflow-auto rounded-lg border border-gray-700 bg-gray-800" dir="rtl">
                 <table className="w-full divide-y divide-gray-700">
-                    <thead className="bg-gray-700 sticky top-0 z-30">
-                        <tr>
-                            <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider sticky right-0 bg-gray-700 z-20 whitespace-nowrap">
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedStudentsPerTab[category].length > 0 && selectedStudentsPerTab[category].length === filteredStudents.length}
-                                        onChange={toggleSelectAll}
-                                        className="accent-blue-500"
-                                    />
-                                    <span className="font-semibold text-gray-100">اسم الطالب</span>
-                                </div>
-                            </th>
-                            {[...Array(count)].map((_, i) => (
-                                <th key={`header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">{label} {i + 1} </th>
-                            ))}
-                            <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 whitespace-nowrap">المجموع </th>
-                        </tr>
-                    </thead>
+                    <TableHeaderCell>
+                        {[...Array(count)].map((_, i) => (
+                            <th key={`header_${i}`} scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-400 border-r border-gray-600 whitespace-nowrap">{label} {i + 1} </th>
+                        ))}
+                    </TableHeaderCell>
                     {renderStudentsTableBody(category, count)}
                 </table>
             </div>
@@ -866,7 +816,8 @@ const GradesModal = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex justify-center items-center p-4 z-50">
+        // استخدام h-[100dvh] لضمان ملء الشاشة بشكل صحيح على الجوال
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-95 flex justify-center items-center p-0 md:p-4 z-50 overflow-hidden h-[100dvh]">
             <CustomDialog
                 isOpen={customDialog.isOpen}
                 title={customDialog.title}
@@ -874,79 +825,77 @@ const GradesModal = ({
                 onClose={() => setCustomDialog({ ...customDialog, isOpen: false })}
             />
             
-            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-7xl relative overflow-y-auto max-h-[95vh]" dir="rtl">
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 left-4 text-gray-400 hover:text-gray-100 transition-colors"
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-8 w-8"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+            {/* الهيكل الرئيسي: flex flex-col لضمان توزيع المساحات */}
+            <div className="bg-gray-800 rounded-none md:rounded-lg shadow-xl w-full h-full md:h-[90vh] md:max-w-7xl relative flex flex-col" dir="rtl">
+                
+                {/* 1. رأس النافذة (ثابت) */}
+                <div className="flex justify-between items-center p-4 border-b border-gray-700 bg-gray-800 flex-shrink-0">
+                    <h2 className="text-xl md:text-2xl font-extrabold text-white">إدارة الدرجات</h2>
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-white transition-colors"
                     >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                        />
-                    </svg>
-                </button>
-                <div className="mb-4 text-center">
-                    <h2 className="text-3xl font-extrabold text-white">إدارة الدرجات</h2>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
-                <div className="flex flex-wrap justify-center mb-6 border-b-2 border-gray-700">
+                
+                {/* 2. شريط التبويبات (ثابت) */}
+                <div className="flex flex-nowrap overflow-x-auto justify-start md:justify-center p-2 border-b border-gray-700 bg-gray-800 flex-shrink-0 scrollbar-hide">
                     <button
                         onClick={() => handleTabChange('tests')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'tests' ? "border-b-2 md:border-b-0 md:border-r-2 border-blue-500 text-blue-500" : "text-gray-400 hover:text-gray-200"}`}
+                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'tests' ? "bg-blue-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
                     >
                         الاختبارات 
                     </button>
                     <button
                         onClick={() => handleTabChange('classInteraction')} 
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'classInteraction' ? "border-b-2 md:border-b-0 md:border-r-2 border-yellow-500 text-yellow-500" : "text-gray-400 hover:text-gray-200"}`}
+                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'classInteraction' ? "bg-yellow-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
                     >
                         التفاعل الصفي 
                     </button>
                     <button
                         onClick={() => handleTabChange('homework')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'homework' ? "border-b-2 md:border-b-0 md:border-r-2 border-purple-500 text-purple-500" : "text-gray-400 hover:text-gray-200"}`}
+                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'homework' ? "bg-purple-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
                     >
                         الواجبات 
                     </button>
                     <button
                         onClick={() => handleTabChange('performanceTasks')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'performanceTasks' ? "border-b-2 md:border-b-0 md:border-r-2 border-orange-500 text-orange-500" : "text-gray-400 hover:text-gray-200"}`}
+                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'performanceTasks' ? "bg-orange-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
                     >
                         المهام الأدائية 
                     </button>
                     <button
                         onClick={() => handleTabChange('participation')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'participation' ? "border-b-2 md:border-b-0 md:border-r-2 border-cyan-500 text-cyan-500" : "text-gray-400 hover:text-gray-200"}`}
+                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'participation' ? "bg-cyan-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
                     >
                         المشاركة 
                     </button>
                     <button
                         onClick={() => handleTabChange('quranRecitation')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'quranRecitation' ? "border-b-2 md:border-b-0 md:border-r-2 border-indigo-500 text-indigo-500" : "text-gray-400 hover:text-gray-200"}`}
+                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'quranRecitation' ? "bg-indigo-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
                     >
                         تلاوة القرآن 
                     </button>
                     <button
                         onClick={() => handleTabChange('quranMemorization')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 w-full md:w-auto ${activeTab === 'quranMemorization' ? "border-b-2 md:border-b-0 md:border-r-2 border-emerald-500 text-emerald-500" : "text-gray-400 hover:text-gray-200"}`}
+                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'quranMemorization' ? "bg-emerald-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
                     >
                         حفظ القرآن 
                     </button>
                 </div>
                 
-                {renderContent()}
+                {/* 3. منطقة المحتوى (الجدول) - تأخذ المساحة المتبقية وتمرر داخلياً */}
+                <div className="flex-1 overflow-hidden p-4 relative flex flex-col">
+                    {renderContent()}
+                </div>
 
-                <div className="mt-6 text-center">
-                    <button onClick={handleSave} className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-500 transition-colors font-bold">
-                        حفظ
+                {/* 4. تذييل الصفحة (زر الحفظ) - ثابت في الأسفل دائماً */}
+                <div className="p-4 border-t border-gray-700 bg-gray-800 flex-shrink-0 pb-8 md:pb-4">
+                    <button onClick={handleSave} className="bg-green-600 text-white w-full md:w-auto px-6 py-4 md:py-3 rounded-lg hover:bg-green-500 transition-colors font-bold text-lg shadow-lg">
+                        حفظ التغييرات
                     </button>
                 </div>
             </div>
