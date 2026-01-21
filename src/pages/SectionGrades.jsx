@@ -217,6 +217,17 @@ const SectionGrades = () => {
   const [showControlPanel, setShowControlPanel] = useState(false); 
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+// === إضـــافـــة جـــديـــدة ===
+// حالة لتخزين الإعدادات الأولية لنافذة الملاحظات (الطالب المحدد والتبويب)
+const [notesModalConfig, setNotesModalConfig] = useState(null);
+
+// دالة التعامل مع زر "إرسال ملاحظة خاصة" أو "سجل الطالب"
+const handleOpenNotes = (studentId, tabName) => {
+    setSelectedStudent(null); // 1. إغلاق نافذة الدرجات
+    setNotesModalConfig({ selectedIds: [studentId], activeTab: tabName }); // 2. حفظ الإعدادات
+    setShowNotesModal(true); // 3. فتح نافذة الملاحظات
+};
+// =============================
 
   // **********************************************
   // حالة جديدة لتحديد الطلاب لطباعة QR
@@ -519,13 +530,16 @@ const SectionGrades = () => {
     }
   };
 
-  const updateStudentsData = async (updatedStudents) => {
+const updateStudentsData = async (updatedStudents) => {
     if (!teacherId) {
       handleDialog("خطأ", "لا يمكن حفظ البيانات. معرف المعلم غير متوفر.", "error");
       return;
     }
     try {
-        const sortedStudents = [...updatedStudents].sort((a, b) => b.name.localeCompare(a.name, 'ar'));
+        // ********************************************************
+        // تم التعديل هنا: (a, b) => a.name... بدلاً من b.name...
+        // ********************************************************
+        const sortedStudents = [...updatedStudents].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
         
         const studentsToUpdate = sortedStudents.map(student => {
             const fullStructure = { ...student.fullGradesStructure };
@@ -576,6 +590,8 @@ const SectionGrades = () => {
              const studentToUpdate = studentsToUpdate.find(u => u.id === s.id);
              return studentToUpdate ? { ...s, fullGradesStructure: studentToUpdate.grades } : s;
         });
+        
+        // هذا السطر هو الذي يحدث الواجهة، وبما أننا عدلنا الترتيب في الأعلى، ستظهر الأسماء مرتبة صحيحاً الآن
         setStudents(studentsWithUpdatedFullGrades);
 
         const { error } = await supabase
@@ -1769,12 +1785,18 @@ const handleExportQRCodes = async () => {
         <FaArrowUp />
       </button>
 
-      {showNotesModal && (
+{showNotesModal && (
         <NotesModal
           students={students}
-          onClose={() => setShowNotesModal(false)}
+          // عندما نغلق النافذة، نقوم بتصفير إعدادات الكونفج أيضاً
+          onClose={() => {
+            setShowNotesModal(false);
+            setNotesModalConfig(null); 
+          }}
           onSave={updateNotesData}
-          onConfirmNotesClear={(action) => handleDialog("تأكيد الحذف", "هل أنت متأكد من حذف الملاحظات الأسبوعية للطلاب المحددين؟", "confirm", action)}
+          // تمرير القيم الأولية من الحالة
+          initialTab={notesModalConfig?.activeTab}
+          initialSelectedIds={notesModalConfig?.selectedIds}
         />
       )}
 
@@ -1991,6 +2013,33 @@ const handleExportQRCodes = async () => {
     teacherId={teacherId}
   />
 )}
+
+{/* *************************************************************** */}
+      {/* نافذة تعديل الدرجات المنبثقة (استبدال القسم السفلي القديم) */}
+      {/* *************************************************************** */}
+{selectedStudent && !showGradeSheet && !showBriefSheet && !showQrList && (
+        <StudentGradesPopup 
+            student={selectedStudent}
+            onClose={() => setSelectedStudent(null)}
+            onSave={handleSaveChanges}
+            curriculum={curriculum}
+            homeworkCurriculum={homeworkCurriculum}
+            
+            // بيانات الترويسة
+            gradeLabel={gradeName}
+            classLabel={sectionName}
+            semesterLabel={currentSemesterName}
+            periodLabel={currentPeriod === 'period1' ? 'الأولى' : 'الثانية'}
+
+            currentPeriod={currentPeriod}
+            checkCurriculumExists={checkCurriculumExists}
+            getInputStyle={getInputStyle}
+
+            // === التعديل هنا: تمرير الدالة الجديدة ===
+            onOpenNotes={handleOpenNotes}
+            // ========================================
+        />
+      )}
 
     </div>
   );

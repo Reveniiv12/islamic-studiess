@@ -20,6 +20,12 @@ const BriefSheet = ({
     // تم إضافة حالة جديدة للتحكم في عرض الجدول
     const [activeView, setActiveView] = useState('full'); // 'full', 'sub_totals'
 
+    // دالة مساعدة لتحويل الأرقام الإنجليزية إلى عربية
+    const toArabicNumerals = (str) => {
+        if (str === null || str === undefined) return "";
+        return str.toString().replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[d]);
+    };
+
     // دوال الحساب الفرعية
     const calculateMajorAssessments = (grades) => {
         const testsScore = parseFloat(calculateCategoryScore(grades, 'tests', 'sum'));
@@ -53,10 +59,10 @@ const BriefSheet = ({
                 // ملاحظة: الترتيب في المصفوفة هنا: العنصر الأول سيكون في اليسار، والأخير في اليمين
                 headers = [ "النجوم", "المجموع الكلي (100)", "أعمال السنة (40)", "التقييمات الرئيسية (60)", "اسم الطالب" ];
                 dataFields = (student) => [
-                    (student.stars || 0).toString(),
-                    calculateTotalScore(student.grades).toString(),
-                    calculateCoursework(student.grades),
-                    calculateMajorAssessments(student.grades),
+                    toArabicNumerals((student.stars || 0)),
+                    toArabicNumerals(calculateTotalScore(student.grades)),
+                    toArabicNumerals(calculateCoursework(student.grades)),
+                    toArabicNumerals(calculateMajorAssessments(student.grades)),
                     student.name
                 ];
             } else {
@@ -65,19 +71,19 @@ const BriefSheet = ({
                     "المشاركات (10)", "الواجبات (10)", "التفاعل الصفي (10)", "الاختبارات (40)", "اسم الطالب" 
                  ];
                  dataFields = (student) => [
-                    (student.stars || 0).toString(),
-                    calculateTotalScore(student.grades).toString(),
-                    (parseFloat(calculateCategoryScore(student.grades, 'quranRecitation', 'average')) + parseFloat(calculateCategoryScore(student.grades, 'quranMemorization', 'average'))).toFixed(2),
-                    calculateCategoryScore(student.grades, 'performanceTasks', 'best').toString(),
-                    calculateCategoryScore(student.grades, 'participation', 'sum').toString(),
-                    calculateCategoryScore(student.grades, 'homework', 'sum').toString(),
-                    calculateCategoryScore(student.grades, 'classInteraction', 'best').toString(),
-                    calculateCategoryScore(student.grades, 'tests', 'sum').toString(),
+                    toArabicNumerals((student.stars || 0)),
+                    toArabicNumerals(calculateTotalScore(student.grades)),
+                    toArabicNumerals((parseFloat(calculateCategoryScore(student.grades, 'quranRecitation', 'average')) + parseFloat(calculateCategoryScore(student.grades, 'quranMemorization', 'average'))).toFixed(2)),
+                    toArabicNumerals(calculateCategoryScore(student.grades, 'performanceTasks', 'best')),
+                    toArabicNumerals(calculateCategoryScore(student.grades, 'participation', 'sum')),
+                    toArabicNumerals(calculateCategoryScore(student.grades, 'homework', 'sum')),
+                    toArabicNumerals(calculateCategoryScore(student.grades, 'classInteraction', 'best')),
+                    toArabicNumerals(calculateCategoryScore(student.grades, 'tests', 'sum')),
                     student.name
                  ];
             }
 
-            // إضافة صف العناوين (تم إزالة .reverse() ليظهر الاسم يمين والنجوم يسار)
+            // إضافة صف العناوين
             tableRows.push(new TableRow({
                 children: headers.map(header => new TableCell({ 
                     children: [new Paragraph({ children: [new TextRun({ text: header.replace(/\s\(.*\)/, ''), bold: true })], alignment: "center" })] 
@@ -86,7 +92,6 @@ const BriefSheet = ({
 
             // إضافة صفوف بيانات الطلاب
             studentsChunk.forEach(student => {
-                // تم إزالة .reverse() هنا أيضاً ليتطابق مع العناوين
                 const rowData = dataFields(student);
                 tableRows.push(new TableRow({
                     children: rowData.map(data => new TableCell({ 
@@ -95,48 +100,47 @@ const BriefSheet = ({
                 }));
             });
 
-docSections.push({
-    children: [
-        // العنوان الرئيسي
-        new Paragraph({
-            text: `كشف مختصر – ${viewType === 'sub_totals' ? 'المجاميع الفرعية' : 'الدرجات المفصلة'} – صفحة ${Math.floor(i / studentsPerPage) + 1}`,
-            heading: "Heading1",
-            alignment: AlignmentType.RIGHT, // محاذاة لليمين
-            bidirectional: true, // تفعيل اتجاه النص العربي
-            spacing: { after: 300 },
-        }),
+            docSections.push({
+                children: [
+                    // العنوان الرئيسي - تم تغيير المحاذاة للمنتصف (CENTER)
+                    new Paragraph({
+                        text: `كشف مختصر – ${viewType === 'sub_totals' ? 'المجاميع الفرعية' : 'الدرجات المفصلة'} – صفحة ${toArabicNumerals(Math.floor(i / studentsPerPage) + 1)}`,
+                        heading: "Heading1",
+                        alignment: AlignmentType.CENTER, // تغيير من RIGHT إلى CENTER
+                        bidirectional: true, 
+                        spacing: { after: 300 },
+                    }),
 
-        // معلومات المدرسة والمعلم والفصل
-        new Paragraph({
-            text: `المدرسة: ${schoolName}   |   المعلم: ${teacherName}   |   ${currentSemester}`,
-            alignment: AlignmentType.RIGHT, // محاذاة لليمين
-            bidirectional: true,
-            spacing: { after: 200 },
-        }),
+                    // معلومات المدرسة والمعلم والفصل - تم تغيير المحاذاة للمنتصف (CENTER)
+                    new Paragraph({
+                        text: `المدرسة: ${schoolName}   |   المعلم: ${teacherName}   |   ${currentSemester}`,
+                        alignment: AlignmentType.CENTER, // تغيير من RIGHT إلى CENTER
+                        bidirectional: true,
+                        spacing: { after: 200 },
+                    }),
 
-        // الصف والفصل
-        new Paragraph({
-            text: `${gradeName}   |   الفصل: ${sectionName}`,
-            alignment: AlignmentType.RIGHT, // محاذاة لليمين
-            bidirectional: true,
-            spacing: { after: 300 },
-        }),
+                    // الصف والفصل - تم تغيير المحاذاة للمنتصف (CENTER)
+                    new Paragraph({
+                        text: `${gradeName}   |   الفصل: ${sectionName}`,
+                        alignment: AlignmentType.CENTER, // تغيير من RIGHT إلى CENTER
+                        bidirectional: true,
+                        spacing: { after: 300 },
+                    }),
 
-        // فراغ قبل الجدول
-        new Paragraph({
-            text: "",
-            spacing: { after: 200 },
-        }),
+                    // فراغ قبل الجدول
+                    new Paragraph({
+                        text: "",
+                        spacing: { after: 200 },
+                    }),
 
-        // الجدول
-        new Table({
-            rows: tableRows,
-            width: { size: 100, type: "pct" },
-            alignment: AlignmentType.RIGHT, // هذا يجعل الجدول نفسه يبدأ من اليمين (مهم للعربي)
-        }),
-    ],
-});
-
+                    // الجدول
+                    new Table({
+                        rows: tableRows,
+                        width: { size: 100, type: "pct" },
+                        alignment: AlignmentType.CENTER, // جعل الجدول نفسه في المنتصف
+                    }),
+                ],
+            });
         }
 
         const doc = new Document({

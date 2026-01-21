@@ -1,8 +1,10 @@
 // src/pages/StudentView.jsx
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
+import { QRCodeSVG } from 'qrcode.react'; // تأكد من تثبيت هذه المكتبة
+import * as htmlToImage from 'html-to-image'; // npm install html-to-image
 
 import {
   FaQuran,
@@ -24,7 +26,11 @@ import {
   FaTimes,
   FaLock,
   FaLayerGroup,
-  FaHistory
+  FaHistory,
+  FaUserSlash,
+  FaFileImage,
+  FaDownload,
+  FaQrcode
 } from "react-icons/fa";
 
 import {
@@ -63,6 +69,7 @@ const createEmptyGradesStructure = () => ({
 function StudentView() {
   const { studentId } = useParams();
   const navigate = useNavigate();
+  const qrCardRef = useRef(null); // مرجع لبطاقة QR لتحويلها لصورة
   
   // --- States for Control Panel & View Config ---
   const [viewConfig, setViewConfig] = useState(null); 
@@ -121,6 +128,25 @@ function StudentView() {
     setShowDialog(false);
   };
 
+  // دالة تنزيل بطاقة QR كصورة
+  const downloadQrCard = useCallback(() => {
+    if (qrCardRef.current === null) {
+      return;
+    }
+
+    htmlToImage.toPng(qrCardRef.current, { cacheBust: true, })
+      .then((dataUrl) => {
+        const link = document.createElement('a');
+        link.download = `بطاقة-${studentBaseData?.name || 'الطالب'}.png`;
+        link.href = dataUrl;
+        link.click();
+      })
+      .catch((err) => {
+        console.error('فشل في تحميل الصورة', err);
+        handleDialog("خطأ", "حدث خطأ أثناء حفظ الصورة.", "error");
+      });
+  }, [qrCardRef, studentBaseData]);
+
 
   // ----------------------------------------------------------------------
   // 1. Initial Data Fetch (Base/Shared Data)
@@ -137,9 +163,10 @@ function StudentView() {
       try {
         setLoadingInitial(true);
 
+        // تم التعديل هنا: جلب علاقات الغياب وكتب الغياب
         const { data: student, error: studentError } = await supabase
           .from('students')
-          .select('*, teacher_id')
+          .select('*, teacher_id, absences(*), book_absences(*)')
           .eq('id', studentId)
           .single();
 
@@ -257,7 +284,10 @@ function StudentView() {
           stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
           nationalId: student.national_id,
           parentPhone: student.parent_phone,
-          rawGrades: student.grades || {}
+          rawGrades: student.grades || {},
+          // تخزين مصفوفات الغياب الخام
+          absencesList: (student.absences || []).map(a => a.absence_date),
+          bookAbsencesList: (student.book_absences || []).map(b => b.absence_date),
         };
 
         setStudentBaseData(baseData);
@@ -277,9 +307,10 @@ function StudentView() {
   const refreshStudentData = async () => {
       setIsFetching(true);
       try {
+          // تم التحديث هنا أيضاً لجلب العلاقات
           const { data: student, error: studentError } = await supabase
               .from('students')
-              .select('*, teacher_id')
+              .select('*, teacher_id, absences(*), book_absences(*)')
               .eq('id', studentId)
               .single();
 
@@ -307,7 +338,9 @@ function StudentView() {
               stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
               nationalId: student.national_id,
               parentPhone: student.parent_phone,
-              rawGrades: student.grades || {}
+              rawGrades: student.grades || {},
+              absencesList: (student.absences || []).map(a => a.absence_date),
+              bookAbsencesList: (student.book_absences || []).map(b => b.absence_date),
           };
           
           setStudentBaseData(newBaseData);
@@ -519,6 +552,23 @@ function StudentView() {
           displayConsumed = semesterGrades.stars.consumed || 0;
           displayStars = displayAcquired - displayConsumed;
       }
+      
+      // --- فلترة الغياب حسب الفصل الحالي ---
+      const filterSemesterData = (dates) => {
+          if (!dates) return [];
+          const semesterPrefix = semester === 'semester1' ? 'semester1_' : 'semester2_';
+          return dates.filter(dateStr => {
+              if (dateStr.includes('_W')) {
+                  return dateStr.startsWith(semesterPrefix);
+              }
+              // التوافق القديم (الفصل الأول)
+              return semester === 'semester1';
+          });
+      };
+      
+      const currentSemesterAbsences = filterSemesterData(student.absencesList);
+      const currentSemesterBooks = filterSemesterData(student.bookAbsencesList);
+
 
       const processedStudentData = {
         ...student,
@@ -539,6 +589,10 @@ function StudentView() {
         stars: displayStars,
         grade_level: student.grade_level,
         section: student.section,
+        
+        // البيانات المفلترة
+        currentAbsences: currentSemesterAbsences,
+        currentBooks: currentSemesterBooks,
       };
 
       setStudentDisplayedData(processedStudentData);
@@ -912,6 +966,29 @@ function StudentView() {
   const lastRequest = rewardRequests[0];
   const showClearButton = lastRequest && (lastRequest.status === 'approved' || lastRequest.status === 'rejected');
   
+  // تنسيق التاريخ للعرض
+  const getDayName = (dateStr) => {
+    // Expected format Wx-Dy
+    const match = dateStr.match(/W(\d+)-D(\d+)/);
+    if (match) {
+        const d = parseInt(match[2]);
+        const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+        return days[d] || '';
+    }
+    return '';
+  };
+
+  const formatLogDate = (logStr) => {
+    const match = logStr.match(/W(\d+)-D(\d+)/);
+    if (match) {
+      const w = match[1];
+      const d = match[2];
+      const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+      return `أسبوع ${w} (${days[parseInt(d)]})`;
+    }
+    return logStr; 
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100 flex justify-center items-start" dir="rtl">
       
@@ -991,6 +1068,82 @@ function StudentView() {
                   )}
               </div>
             )}
+            
+{/* 2.5 بطاقة QR الرقمية */}
+            <div className="bg-gray-700/40 p-4 md:p-5 rounded-xl border border-gray-600 flex flex-col gap-6 items-center justify-center">
+                <div className="text-center w-full">
+                   <h4 className="font-bold text-xl flex items-center justify-center gap-2 text-white mb-2">
+                      <FaQrcode className="text-blue-400" /> بطاقتك الرقمية
+                   </h4>
+                   <p className="text-gray-400 text-sm mb-4">
+                     احفظ هذه البطاقة في جوالك للدخول السريع.
+                   </p>
+                </div>
+                
+                {/* === 1. نسخة العرض (Visible) - متجاوبة ومصغرة للجوال === */}
+                {/* تم استخدام w-full لضمان عدم الخروج عن الإطار، مع تقليل الـ padding وحجم الخط */}
+                <div className="overflow-hidden rounded-lg shadow-xl w-full max-w-md mx-auto">
+                   <div 
+                      className="bg-white p-3 md:p-4 flex flex-row items-center justify-between gap-3 border border-gray-300 w-full"
+                      style={{ direction: 'rtl' }} 
+                   >
+                      {/* تفاصيل النص (يمين) */}
+                      {/* flex-grow يسمح للنص بأخذ المساحة المتبقية */}
+                      <div className="flex flex-col items-start flex-grow text-right overflow-hidden">
+                          <h2 className="text-lg md:text-xl font-bold text-black mb-0.5 truncate w-full">{studentData.name}</h2>
+                          <p className="text-xs md:text-sm font-bold text-gray-800 mb-1.5">السجل: {studentData.nationalId}</p>
+                          <p className="text-[10px] md:text-xs text-gray-600 font-semibold truncate w-full">{gradeName} - {sectionName}</p>
+                          <p className="text-[10px] md:text-xs text-gray-600 mt-0.5 truncate w-full">المادة: القرآن الكريم والدراسات الإسلامية</p>
+                          <p className="text-[10px] md:text-xs text-gray-600 truncate w-full">المعلم: {teacherName}</p>
+                      </div>
+
+                      {/* QR Code (يسار) */}
+                      {/* border-r يضع خط فاصل يمين الباركود (بين الباركود والنص) */}
+                      <div className="flex-shrink-0 border-r pr-3 border-gray-200">
+                         <QRCodeSVG 
+                            value={`${window.location.origin}${studentData.viewKey || `/student-view/${studentId}`}`}
+                            size={85} // حجم أصغر قليلاً لضمان التوافق مع الجوال
+                            level="M"
+                            className="w-20 h-20 md:w-24 md:h-24" // تحكم إضافي عبر كلاسات Tailwind
+                         />
+                      </div>
+                   </div>
+                </div>
+
+                <button 
+                    onClick={downloadQrCard}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg flex items-center gap-2 text-sm transition-transform hover:scale-105"
+                >
+                    <FaDownload /> تحميل البطاقة كصورة
+                </button>
+
+                {/* === 2. نسخة التصدير (Export) - مخفية، عالية الجودة، ترتيب معكوس === */}
+                <div style={{ position: 'fixed', top: '-10000px', left: '-10000px' }}>
+                    <div 
+                        ref={qrCardRef}
+                        className="bg-white p-4 flex flex-row items-center justify-between gap-4 border border-gray-300"
+                        style={{ width: '450px', direction: 'rtl' }}
+                    >
+                        {/* تفاصيل النص (يمين) */}
+                        <div className="flex flex-col items-start flex-grow text-right pr-2">
+                            <h2 className="text-xl font-bold text-black mb-1">{studentData.name}</h2>
+                            <p className="text-sm font-bold text-gray-800 mb-2">السجل: {studentData.nationalId}</p>
+                            <p className="text-xs text-gray-600 font-semibold">{gradeName} - {sectionName}</p>
+                            <p className="text-xs text-gray-600 mt-1">المادة: القرآن الكريم والدراسات الإسلامية</p>
+                            <p className="text-xs text-gray-600">المعلم: {teacherName}</p>
+                        </div>
+
+                        {/* QR Code (يسار) */}
+                        <div className="flex-shrink-0 border-r pr-4 border-gray-200">
+                            <QRCodeSVG 
+                                value={`${window.location.origin}${studentData.viewKey || `/student-view/${studentId}`}`}
+                                size={100}
+                                level="M"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {/* 3. بطاقات الملخص (نفس تصميم Popup) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1026,6 +1179,55 @@ function StudentView() {
                     </div>
                     <FaBookOpen className="text-4xl text-blue-500/20" />
                 </div>
+            </div>
+            
+            {/* === قسم الغياب والكتب الجديد === */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               {/* بطاقة الغياب */}
+               <div className="bg-gray-700/40 p-5 rounded-xl border border-gray-600 hover:border-red-500/30 transition-colors">
+                  <div className="flex justify-between items-center border-b border-gray-600 pb-2 mb-4">
+                      <h4 className="flex items-center gap-2 font-bold text-red-400 text-lg">
+                        <FaUserSlash /> سجل الغياب
+                      </h4>
+                      <span className="bg-gray-800 px-3 py-1 rounded-lg text-sm text-red-300 border border-gray-600 font-bold">
+                         العدد: {studentData.currentAbsences?.length || 0}
+                      </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                     {(studentData.currentAbsences && studentData.currentAbsences.length > 0) ? (
+                        studentData.currentAbsences.map((dateStr, idx) => (
+                           <span key={idx} className="bg-gray-800 text-gray-300 px-3 py-1 rounded text-sm border border-gray-600">
+                              {formatLogDate(dateStr)}
+                           </span>
+                        ))
+                     ) : (
+                        <p className="text-gray-500 text-sm italic w-full text-center">لا يوجد غياب مسجل في هذا الفصل 👍</p>
+                     )}
+                  </div>
+               </div>
+               
+               {/* بطاقة الكتب */}
+               <div className="bg-gray-700/40 p-5 rounded-xl border border-gray-600 hover:border-yellow-500/30 transition-colors">
+                  <div className="flex justify-between items-center border-b border-gray-600 pb-2 mb-4">
+                      <h4 className="flex items-center gap-2 font-bold text-yellow-400 text-lg">
+                        <FaBookOpen /> إحضار الكتاب
+                      </h4>
+                      <span className="bg-gray-800 px-3 py-1 rounded-lg text-sm text-yellow-300 border border-gray-600 font-bold">
+                         مرات النسيان: {studentData.currentBooks?.length || 0}
+                      </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                     {(studentData.currentBooks && studentData.currentBooks.length > 0) ? (
+                        studentData.currentBooks.map((dateStr, idx) => (
+                           <span key={idx} className="bg-gray-800 text-gray-300 px-3 py-1 rounded text-sm border border-gray-600">
+                              {formatLogDate(dateStr)}
+                           </span>
+                        ))
+                     ) : (
+                        <p className="text-gray-500 text-sm italic w-full text-center">ممتاز! الكتاب موجود دائماً 👍</p>
+                     )}
+                  </div>
+               </div>
             </div>
 
             {/* 4. قسم النجوم (نفس تصميم Popup) */}
@@ -1111,7 +1313,7 @@ function StudentView() {
                 </div>
             </div>
 
-            {/* 6. شبكة الدرجات التفصيلية (تصميم Popup) */}
+{/* 6. شبكة الدرجات التفصيلية (تصميم Popup) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* الاختبارات */}
@@ -1135,6 +1337,59 @@ function StudentView() {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* القرآن الكريم (تم نقله هنا) */}
+                <div className="bg-gray-700/40 p-5 rounded-xl border border-gray-600 lg:col-span-1 hover:border-blue-500/30 transition-colors">
+                    <h4 className="flex items-center gap-2 font-bold text-blue-400 mb-4 text-lg border-b border-gray-600 pb-2">
+                        <FaQuran /> القرآن الكريم
+                    </h4>
+                    
+                    {/* التلاوة */}
+                    <div className="mb-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <div className="flex items-center gap-2">
+                                 <h5 className="text-gray-300 text-sm">التلاوة</h5>
+                                 <span className="text-xs text-gray-400">
+                                    {getStatusInfo(studentData, 'recitation', curriculum).icon} 
+                                    ({getStatusInfo(studentData, 'recitation', curriculum).text})
+                                 </span>
+                            </div>
+                            <span className="text-blue-300 font-bold text-sm bg-gray-800 px-2 py-0.5 rounded border border-gray-600">
+                                {calculateCategoryScore(studentData.grades, 'quranRecitation', 'average')} / 10
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            {studentData.grades.quranRecitation.slice(0, 5).map((grade, i) => (
+                                <div key={i} className="w-full p-2 bg-gray-800 rounded-lg text-center font-bold border border-gray-600 shadow-inner text-gray-300">
+                                    {grade !== null ? grade : '--'}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* الحفظ */}
+                    <div>
+                        <div className="flex justify-between items-center mb-2">
+                             <div className="flex items-center gap-2">
+                                 <h5 className="text-gray-300 text-sm">الحفظ</h5>
+                                 <span className="text-xs text-gray-400">
+                                    {getStatusInfo(studentData, 'memorization', curriculum).icon} 
+                                    ({getStatusInfo(studentData, 'memorization', curriculum).text})
+                                 </span>
+                            </div>
+                            <span className="text-blue-300 font-bold text-sm bg-gray-800 px-2 py-0.5 rounded border border-gray-600">
+                                 {calculateCategoryScore(studentData.grades, 'quranMemorization', 'average')} / 10
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            {studentData.grades.quranMemorization.slice(0, 5).map((grade, i) => (
+                                <div key={i} className="w-full p-2 bg-gray-800 rounded-lg text-center font-bold border border-gray-600 shadow-inner text-gray-300">
+                                    {grade !== null ? grade : '--'}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 {/* التفاعل الصفي */}
@@ -1221,58 +1476,6 @@ function StudentView() {
                   </div>
                 </div>
 
-                {/* القرآن الكريم */}
-                <div className="bg-gray-700/40 p-5 rounded-xl border border-gray-600 lg:col-span-1 hover:border-blue-500/30 transition-colors">
-                    <h4 className="flex items-center gap-2 font-bold text-blue-400 mb-4 text-lg border-b border-gray-600 pb-2">
-                        <FaQuran /> القرآن الكريم
-                    </h4>
-                    
-                    {/* التلاوة */}
-                    <div className="mb-4">
-                        <div className="flex justify-between items-center mb-2">
-                            <div className="flex items-center gap-2">
-                                 <h5 className="text-gray-300 text-sm">التلاوة</h5>
-                                 <span className="text-xs text-gray-400">
-                                    {getStatusInfo(studentData, 'recitation', curriculum).icon} 
-                                    ({getStatusInfo(studentData, 'recitation', curriculum).text})
-                                 </span>
-                            </div>
-                            <span className="text-blue-300 font-bold text-sm bg-gray-800 px-2 py-0.5 rounded border border-gray-600">
-                                {calculateCategoryScore(studentData.grades, 'quranRecitation', 'average')} / 10
-                            </span>
-                        </div>
-                        <div className="flex gap-2">
-                            {studentData.grades.quranRecitation.slice(0, 5).map((grade, i) => (
-                                <div key={i} className="w-full p-2 bg-gray-800 rounded-lg text-center font-bold border border-gray-600 shadow-inner text-gray-300">
-                                    {grade !== null ? grade : '--'}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* الحفظ */}
-                    <div>
-                        <div className="flex justify-between items-center mb-2">
-                             <div className="flex items-center gap-2">
-                                 <h5 className="text-gray-300 text-sm">الحفظ</h5>
-                                 <span className="text-xs text-gray-400">
-                                    {getStatusInfo(studentData, 'memorization', curriculum).icon} 
-                                    ({getStatusInfo(studentData, 'memorization', curriculum).text})
-                                 </span>
-                            </div>
-                            <span className="text-blue-300 font-bold text-sm bg-gray-800 px-2 py-0.5 rounded border border-gray-600">
-                                 {calculateCategoryScore(studentData.grades, 'quranMemorization', 'average')} / 10
-                            </span>
-                        </div>
-                        <div className="flex gap-2">
-                            {studentData.grades.quranMemorization.slice(0, 5).map((grade, i) => (
-                                <div key={i} className="w-full p-2 bg-gray-800 rounded-lg text-center font-bold border border-gray-600 shadow-inner text-gray-300">
-                                    {grade !== null ? grade : '--'}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
             </div>
 
             {/* 7. سجل الملاحظات الأسبوعية الكامل */}
@@ -1352,5 +1555,3 @@ function StudentView() {
 }
 
 export default StudentView;
-
-
