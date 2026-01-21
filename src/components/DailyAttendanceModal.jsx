@@ -1,7 +1,7 @@
 // src/components/DailyAttendanceModal.jsx
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from "../supabaseClient"; // تأكد من استيراد Supabase
+import { supabase } from "../supabaseClient";
 import {
   FaSave,
   FaTimes,
@@ -17,10 +17,8 @@ import {
 const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => {
   // --- إعدادات الوقت والتاريخ ---
   const initialDay = new Date().getDay();
-  // اليوم الافتراضي (تلقائي حسب جهازك)
   const [selectedDay, setSelectedDay] = useState(initialDay > 4 ? 0 : initialDay);
   
-  // الأسبوع الافتراضي (سنجلبه من قاعدة البيانات)
   const [selectedWeek, setSelectedWeek] = useState(1);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
@@ -34,13 +32,10 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
   // --- حالة التحضير اليومي ---
   const [dailyStatus, setDailyStatus] = useState({});
 
-  // مفتاح اليوم الحالي (الصيغة الجديدة القياسية)
   const currentDayKey = `${activeSemester}_W${selectedWeek}-D${selectedDay}`;
-  
-  // مفتاح اليوم القديم (للتوافق)
   const legacyDayKey = `W${selectedWeek}-D${selectedDay}`;
 
-  // --- 1. جلب الأسبوع المحفوظ عند فتح النافذة ---
+  // --- 1. جلب الأسبوع المحفوظ ---
   useEffect(() => {
     const fetchSavedSettings = async () => {
       try {
@@ -68,7 +63,6 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
     const weekNum = Number(newWeek);
     setSelectedWeek(weekNum);
     
-    // حفظ التغيير في قاعدة البيانات ليبقى ثابتاً للمرات القادمة
     try {
       await supabase
         .from('settings')
@@ -78,7 +72,6 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
     }
   };
 
-  // --- دالة مساعدة لفلترة بيانات الفصل الحالي (العداد الصحيح) ---
   const isDateInCurrentSemester = (dateStr) => {
     if (!dateStr) return false;
     const semesterPrefix = `${activeSemester}_`;
@@ -192,6 +185,7 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
       return {
         id: student.id,
         name: student.name,
+        photo: student.photo, // Add photo to summary data
         absences: semesterAbsences,
         books: semesterBooks,
         absencesCount: semesterAbsences.length,
@@ -206,7 +200,6 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
 
   const getStudentSemesterAbsencesCount = (student) => (student.absences || []).filter(isDateInCurrentSemester).length;
   const getStudentSemesterBooksCount = (student) => (student.bookAbsences || []).filter(isDateInCurrentSemester).length;
-
 
   // --- واجهة الملخص ---
   const renderSummaryModal = () => (
@@ -252,14 +245,22 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
               .map(student => (
                 <div key={student.id} className="bg-gray-700 rounded-lg p-3 border border-gray-600">
                   <div className="flex justify-between items-center mb-2">
-                    <h4 className="font-bold text-white text-lg">{student.name}</h4>
+                    <div className="flex items-center gap-2">
+                       {/* صورة الطالب في الملخص */}
+                       <img 
+                         src={student.photo || '/images/1.webp'} 
+                         alt={student.name}
+                         className="w-10 h-10 rounded-full object-cover border border-gray-500"
+                       />
+                       <h4 className="font-bold text-white text-lg">{student.name}</h4>
+                    </div>
                     <span className={`px-3 py-1 rounded-full text-sm font-bold ${
                       summaryTab === 'absences' ? 'bg-red-500/20 text-red-300' : 'bg-blue-500/20 text-blue-300'
                     }`}>
                       العدد: {summaryTab === 'absences' ? student.absencesCount : student.booksCount}
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 mr-12">
                     {(summaryTab === 'absences' ? student.absences : student.books).map((log, idx) => (
                       <span key={idx} className="text-xs bg-gray-800 text-gray-300 px-2 py-1 rounded border border-gray-600">
                         {formatLogDate(log)}
@@ -283,10 +284,10 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
   // --- الواجهة الرئيسية ---
   return (
     <div className="fixed inset-0 bg-gray-900 bg-opacity-90 z-50 flex justify-center items-start pt-10 overflow-y-auto">
-      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl mx-4 mb-10 border border-gray-700 flex flex-col max-h-[90vh]">
+      <div className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl mx-4 mb-10 border border-gray-700 flex flex-col">
         
         {/* Header */}
-        <div className="p-5 border-b border-gray-700 bg-gray-750 rounded-t-xl sticky top-0 z-10 bg-gray-800">
+        <div className="p-5 border-b border-gray-700 bg-gray-750 rounded-t-xl bg-gray-800">
           <div className="flex justify-between items-start mb-4">
             <div>
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -318,7 +319,6 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
               </label>
               <select
                 value={selectedWeek}
-                // هنا نستخدم دالة التغيير الجديدة التي تحفظ في قاعدة البيانات
                 onChange={(e) => handleWeekChange(e.target.value)}
                 disabled={loadingSettings}
                 className="w-full bg-gray-700 text-white p-2.5 rounded-lg border border-gray-600 focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
@@ -367,7 +367,7 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
         </div>
 
         {/* القائمة */}
-        <div className="flex-grow overflow-y-auto p-4 space-y-2">
+        <div className="p-4 space-y-2">
           {filteredStudents.length > 0 ? (
             filteredStudents.map(student => {
               const status = dailyStatus[student.id] || { isAbsent: false, noBook: false };
@@ -389,10 +389,18 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
                     <div className={`w-2 h-10 rounded-full ${
                       status.isAbsent ? 'bg-red-500' : status.noBook ? 'bg-yellow-500' : 'bg-green-500'
                     }`}></div>
+
+                    {/* >>>>>>>>>>>> إضافة صورة الطالب هنا <<<<<<<<<<<< */}
+                    <img 
+                      src={student.photo || '/images/1.webp'} 
+                      alt={student.name}
+                      className="w-12 h-12 rounded-full object-cover border-2 border-gray-600"
+                    />
+                    {/* >>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<< */}
+
                     <div className="flex flex-col">
                       <span className="text-white font-medium text-lg">{student.name}</span>
                       
-                      {/* عرض الإحصائيات (مفلترة للفصل الحالي فقط) */}
                       {(absCount > 0 || bkCount > 0) && (
                          <span className="text-xs text-gray-400 flex gap-2">
                            {absCount > 0 && <span className="text-red-400">غياب سابق: {absCount}</span>}
@@ -438,7 +446,7 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-gray-700 bg-gray-800 rounded-b-xl sticky bottom-0 z-10 flex gap-3">
+        <div className="p-4 border-t border-gray-700 bg-gray-800 rounded-b-xl flex gap-3">
           <button
             onClick={handleSave}
             disabled={isSaving}
