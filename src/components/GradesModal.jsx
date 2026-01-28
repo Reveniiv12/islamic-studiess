@@ -258,7 +258,6 @@ const GradesModal = ({
         const handleScroll = () => {
             if (tableContainerRef.current) {
                 const scrollTop = tableContainerRef.current.scrollTop;
-                // تحديث حالة النزول فقط، لا نجبر الإخفاء اليدوي على التغير هنا
                 setIsScrolledDown(scrollTop > 50);
             }
         };
@@ -270,22 +269,28 @@ const GradesModal = ({
         }
     }, []);
 
+    // 1. تعديل دالة تغيير التبويب لضمان تصفير الحالات
     const handleTabChange = (tab) => {
+        // تصفير حالات الإخفاء فوراً
         setIsScrolledDown(false);
         setIsManuallyHidden(false); 
+        
         setSearchQueries(prev => ({ ...prev, [activeTab]: '' }));
         setBatchGrade('');
         setSelectedStudentsPerTab(prev => ({ ...prev, [activeTab]: [] }));
         setFilteredStudents(modalStudents);
 
-        if (tab === 'tests') { setTestIndex(0); } 
-        else if (tab === 'homework') { setHomeworkIndex(0); } 
-        else if (tab === 'performanceTasks') { setPerformanceTaskIndex(0); } 
-        else if (tab === 'quranRecitation') { setRecitationIndex(0); } 
-        else if (tab === 'quranMemorization') { setMemorizationIndex(0); } 
-        else if (tab === 'classInteraction') { setClassInteractionIndex(0); }
+        // تصفير مؤشرات الإدخال حسب التبويب
+        if (tab === 'tests') setTestIndex(0);
+        else if (tab === 'homework') setHomeworkIndex(0);
+        else if (tab === 'performanceTasks') setPerformanceTaskIndex(0);
+        else if (tab === 'quranRecitation') setRecitationIndex(0);
+        else if (tab === 'quranMemorization') setMemorizationIndex(0);
+        else if (tab === 'classInteraction') setClassInteractionIndex(0);
 
         setActiveTab(tab);
+
+        // التمرير للأعلى عند تغيير القسم
         if (tableContainerRef.current) {
             tableContainerRef.current.scrollTop = 0;
         }
@@ -501,59 +506,60 @@ const GradesModal = ({
         </button>
     );
 
-    // التحقق من حالة الإخفاء الكلي لعناصر التحكم
     const isHeaderHidden = isScrolledDown || isManuallyHidden;
 
     const renderTests = () => (
         <div className="space-y-4 h-full flex flex-col">
-            <div className={`transition-all duration-300 ${isHeaderHidden ? 'opacity-0 max-h-0 overflow-hidden mb-0' : 'opacity-100 max-h-40 mb-0'}`}>
-                <div className="mb-2 flex gap-2">
-                    <input
-                        type="text"
-                        inputMode="text"
-                        placeholder="ابحث عن طالب..."
-                        value={searchQueries.tests}
-                        onChange={handleSearchChange}
-                        className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <CollapseButton />
-                </div>
-                <div className="flex flex-col md:flex-row items-center gap-4">
-                    <div className="flex items-center gap-4 w-full">
-                        <div className="flex-1 flex items-center gap-2">
-                            <label htmlFor="batch-test-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
-                                اختبار رقم:
-                            </label>
-                            <select
-                                id="batch-test-index"
-                                value={testIndex}
-                                onChange={(e) => setTestIndex(Number(e.target.value))}
-                                className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                                <option value="0">1</option>
-                                <option value="1">2</option>
-                            </select>
-                        </div>
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                value={batchGrade}
-                                onChange={handleBatchGradeChange}
-                                placeholder="الدرجة"
-                                className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                        </div>
+            {!isHeaderHidden && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            inputMode="text"
+                            placeholder="ابحث عن طالب..."
+                            value={searchQueries.tests}
+                            onChange={handleSearchChange}
+                            className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <CollapseButton />
                     </div>
-                    <button
-                        onClick={applyBatchGrade}
-                        disabled={selectedStudentsPerTab.tests.length === 0}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
-                    >
-                        تطبيق الدرجة
-                    </button>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                        <div className="flex items-center gap-4 w-full">
+                            <div className="flex-1 flex items-center gap-2">
+                                <label htmlFor="batch-test-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
+                                    اختبار رقم:
+                                </label>
+                                <select
+                                    id="batch-test-index"
+                                    value={testIndex}
+                                    onChange={(e) => setTestIndex(Number(e.target.value))}
+                                    className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="0">1</option>
+                                    <option value="1">2</option>
+                                </select>
+                            </div>
+                            <div className="flex-1">
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={batchGrade}
+                                    onChange={handleBatchGradeChange}
+                                    placeholder="الدرجة"
+                                    className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+                        </div>
+                        <button
+                            onClick={applyBatchGrade}
+                            disabled={selectedStudentsPerTab.tests.length === 0}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
+                        >
+                            تطبيق الدرجة
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
             
             <div 
                 ref={tableContainerRef}
@@ -573,55 +579,57 @@ const GradesModal = ({
     
     const renderClassInteraction = () => (
         <div className="space-y-4 h-full flex flex-col">
-            <div className={`transition-all duration-300 ${isHeaderHidden ? 'opacity-0 max-h-0 overflow-hidden mb-0' : 'opacity-100 max-h-40 mb-0'}`}>
-                <div className="mb-2 flex gap-2">
-                    <input
-                        type="text"
-                        inputMode="text"
-                        placeholder="ابحث عن طالب..."
-                        value={searchQueries.classInteraction}
-                        onChange={handleSearchChange}
-                        className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                    />
-                    <CollapseButton />
-                </div>
-                <div className="flex flex-col md:flex-row items-center gap-4">
-                    <div className="flex items-center gap-4 w-full">
-                        <div className="flex-1 flex items-center gap-2">
-                            <label htmlFor="batch-classInteraction-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
-                                تفاعل رقم:
-                            </label>
-                            <select
-                                id="batch-classInteraction-index"
-                                value={classInteractionIndex}
-                                onChange={(e) => setClassInteractionIndex(Number(e.target.value))}
-                                className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                            >
-                                {[...Array(4)].map((_, i) => (
-                                    <option key={i} value={i}>{i + 1}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                value={batchGrade}
-                                onChange={handleBatchGradeChange}
-                                placeholder="الدرجة"
-                                className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                            />
-                        </div>
+            {!isHeaderHidden && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            inputMode="text"
+                            placeholder="ابحث عن طالب..."
+                            value={searchQueries.classInteraction}
+                            onChange={handleSearchChange}
+                            className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                        />
+                        <CollapseButton />
                     </div>
-                    <button
-                        onClick={applyBatchGrade}
-                        disabled={selectedStudentsPerTab.classInteraction.length === 0}
-                        className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
-                    >
-                        تطبيق الدرجة
-                    </button>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                        <div className="flex items-center gap-4 w-full">
+                            <div className="flex-1 flex items-center gap-2">
+                                <label htmlFor="batch-classInteraction-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
+                                    تفاعل رقم:
+                                </label>
+                                <select
+                                    id="batch-classInteraction-index"
+                                    value={classInteractionIndex}
+                                    onChange={(e) => setClassInteractionIndex(Number(e.target.value))}
+                                    className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                >
+                                    {[...Array(4)].map((_, i) => (
+                                        <option key={i} value={i}>{i + 1}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex-1">
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={batchGrade}
+                                    onChange={handleBatchGradeChange}
+                                    placeholder="الدرجة"
+                                    className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                />
+                            </div>
+                        </div>
+                        <button
+                            onClick={applyBatchGrade}
+                            disabled={selectedStudentsPerTab.classInteraction.length === 0}
+                            className="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
+                        >
+                            تطبيق الدرجة
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
             
             <div 
                 ref={tableContainerRef}
@@ -642,55 +650,57 @@ const GradesModal = ({
 
     const renderHomework = () => (
         <div className="space-y-4 h-full flex flex-col">
-            <div className={`transition-all duration-300 ${isHeaderHidden ? 'opacity-0 max-h-0 overflow-hidden mb-0' : 'opacity-100 max-h-40 mb-0'}`}>
-                <div className="mb-2 flex gap-2">
-                    <input
-                        type="text"
-                        inputMode="text"
-                        placeholder="ابحث عن طالب..."
-                        value={searchQueries.homework}
-                        onChange={handleSearchChange}
-                        className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                    <CollapseButton />
-                </div>
-                <div className="flex flex-col md:flex-row items-center gap-4">
-                    <div className="flex items-center gap-4 w-full">
-                        <div className="flex-1 flex items-center gap-2">
-                            <label htmlFor="batch-homework-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
-                                واجب رقم:
-                            </label>
-                            <select
-                                id="batch-homework-index"
-                                value={homeworkIndex}
-                                onChange={(e) => setHomeworkIndex(Number(e.target.value))}
-                                className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-                            >
-                                {[...Array(10)].map((_, i) => (
-                                    <option key={i} value={i}>{i + 1}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                value={batchGrade}
-                                onChange={handleBatchGradeChange}
-                                placeholder="الدرجة"
-                                className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
-                            />
-                        </div>
+            {!isHeaderHidden && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            inputMode="text"
+                            placeholder="ابحث عن طالب..."
+                            value={searchQueries.homework}
+                            onChange={handleSearchChange}
+                            className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        <CollapseButton />
                     </div>
-                    <button
-                        onClick={applyBatchGrade}
-                        disabled={selectedStudentsPerTab.homework.length === 0}
-                        className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
-                    >
-                        تطبيق الدرجة
-                    </button>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                        <div className="flex items-center gap-4 w-full">
+                            <div className="flex-1 flex items-center gap-2">
+                                <label htmlFor="batch-homework-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
+                                    واجب رقم:
+                                </label>
+                                <select
+                                    id="batch-homework-index"
+                                    value={homeworkIndex}
+                                    onChange={(e) => setHomeworkIndex(Number(e.target.value))}
+                                    className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                >
+                                    {[...Array(10)].map((_, i) => (
+                                        <option key={i} value={i}>{i + 1}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex-1">
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={batchGrade}
+                                    onChange={handleBatchGradeChange}
+                                    placeholder="الدرجة"
+                                    className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                />
+                            </div>
+                        </div>
+                        <button
+                            onClick={applyBatchGrade}
+                            disabled={selectedStudentsPerTab.homework.length === 0}
+                            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
+                        >
+                            تطبيق الدرجة
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
             
             <div 
                 ref={tableContainerRef}
@@ -711,55 +721,57 @@ const GradesModal = ({
 
     const renderPerformanceTasks = () => (
         <div className="space-y-4 h-full flex flex-col">
-            <div className={`transition-all duration-300 ${isHeaderHidden ? 'opacity-0 max-h-0 overflow-hidden mb-0' : 'opacity-100 max-h-40 mb-0'}`}>
-                <div className="mb-2 flex gap-2">
-                    <input
-                        type="text"
-                        inputMode="text"
-                        placeholder="ابحث عن طالب..."
-                        value={searchQueries.performanceTasks}
-                        onChange={handleSearchChange}
-                        className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    />
-                    <CollapseButton />
-                </div>
-                <div className="flex flex-col md:flex-row items-center gap-4">
-                    <div className="flex items-center gap-4 w-full">
-                        <div className="flex-1 flex items-center gap-2">
-                            <label htmlFor="batch-pt-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
-                                مهمة رقم:
-                            </label>
-                            <select
-                                id="batch-pt-index"
-                                value={performanceTaskIndex}
-                                onChange={(e) => setPerformanceTaskIndex(Number(e.target.value))}
-                                className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
-                            >
-                                {[...Array(4)].map((_, i) => (
-                                    <option key={i} value={i}>{i + 1}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                value={batchGrade}
-                                onChange={handleBatchGradeChange}
-                                placeholder="الدرجة"
-                                className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
-                            />
-                        </div>
+            {!isHeaderHidden && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            inputMode="text"
+                            placeholder="ابحث عن طالب..."
+                            value={searchQueries.performanceTasks}
+                            onChange={handleSearchChange}
+                            className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                        <CollapseButton />
                     </div>
-                    <button
-                        onClick={applyBatchGrade}
-                        disabled={selectedStudentsPerTab.performanceTasks.length === 0}
-                        className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
-                    >
-                        تطبيق الدرجة
-                    </button>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                        <div className="flex items-center gap-4 w-full">
+                            <div className="flex-1 flex items-center gap-2">
+                                <label htmlFor="batch-pt-index" className="text-sm font-medium text-gray-400 whitespace-nowrap">
+                                    مهمة رقم:
+                                </label>
+                                <select
+                                    id="batch-pt-index"
+                                    value={performanceTaskIndex}
+                                    onChange={(e) => setPerformanceTaskIndex(Number(e.target.value))}
+                                    className="w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                >
+                                    {[...Array(4)].map((_, i) => (
+                                        <option key={i} value={i}>{i + 1}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex-1">
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={batchGrade}
+                                    onChange={handleBatchGradeChange}
+                                    placeholder="الدرجة"
+                                    className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                            </div>
+                        </div>
+                        <button
+                            onClick={applyBatchGrade}
+                            disabled={selectedStudentsPerTab.performanceTasks.length === 0}
+                            className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
+                        >
+                            تطبيق الدرجة
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
             
             <div 
                 ref={tableContainerRef}
@@ -780,45 +792,47 @@ const GradesModal = ({
 
     const renderParticipation = () => (
         <div className="space-y-4 h-full flex flex-col">
-            <div className={`transition-all duration-300 ${isHeaderHidden ? 'opacity-0 max-h-0 overflow-hidden mb-0' : 'opacity-100 max-h-40 mb-0'}`}>
-                <div className="mb-2 flex gap-2">
-                    <input
-                        type="text"
-                        inputMode="text"
-                        placeholder="ابحث عن طالب..."
-                        value={searchQueries.participation}
-                        onChange={handleSearchChange}
-                        className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
-                    <CollapseButton />
-                </div>
-                <div className="flex flex-col md:flex-row items-center gap-4">
-                    <div className="flex items-center gap-4 w-full">
-                        <div className="flex-1 flex items-center gap-2">
-                            <span className="text-sm font-medium text-gray-400 whitespace-nowrap">
-                                سيتم تعبئة أول خانة فارغة
-                            </span>
-                        </div>
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                value={batchGrade}
-                                onChange={handleBatchGradeChange}
-                                placeholder="الدرجة"
-                                className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                            />
-                        </div>
+            {!isHeaderHidden && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            inputMode="text"
+                            placeholder="ابحث عن طالب..."
+                            value={searchQueries.participation}
+                            onChange={handleSearchChange}
+                            className="flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+                        <CollapseButton />
                     </div>
-                    <button
-                        onClick={applyBatchGrade}
-                        disabled={selectedStudentsPerTab.participation.length === 0}
-                        className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
-                    >
-                        تطبيق الدرجة
-                    </button>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                        <div className="flex items-center gap-4 w-full">
+                            <div className="flex-1 flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-400 whitespace-nowrap">
+                                    سيتم تعبئة أول خانة فارغة
+                                </span>
+                            </div>
+                            <div className="flex-1">
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={batchGrade}
+                                    onChange={handleBatchGradeChange}
+                                    placeholder="الدرجة"
+                                    className="w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                />
+                            </div>
+                        </div>
+                        <button
+                            onClick={applyBatchGrade}
+                            disabled={selectedStudentsPerTab.participation.length === 0}
+                            className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full"
+                        >
+                            تطبيق الدرجة
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
             
             <div 
                 ref={tableContainerRef}
@@ -839,55 +853,57 @@ const GradesModal = ({
 
     const renderQuran = (category, count, label, color, state, setState) => (
         <div className="space-y-4 h-full flex flex-col">
-            <div className={`transition-all duration-300 ${isHeaderHidden ? 'opacity-0 max-h-0 overflow-hidden mb-0' : 'opacity-100 max-h-40 mb-0'}`}>
-                <div className="mb-2 flex gap-2">
-                    <input
-                        type="text"
-                        inputMode="text"
-                        placeholder="ابحث عن طالب..."
-                        value={searchQueries[category]}
-                        onChange={handleSearchChange}
-                        className={`flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-${color}-500`}
-                    />
-                    <CollapseButton />
-                </div>
-                <div className="flex flex-col md:flex-row items-center gap-4">
-                    <div className="flex items-center gap-4 w-full">
-                        <div className="flex-1 flex items-center gap-2">
-                            <label htmlFor={`batch-${category}-index`} className="text-sm font-medium text-gray-400 whitespace-nowrap">
-                                {label} رقم:
-                            </label>
-                            <select
-                                id={`batch-${category}-index`}
-                                value={state}
-                                onChange={(e) => setState(Number(e.target.value))}
-                                className={`w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
-                            >
-                                {[...Array(count)].map((_, i) => (
-                                    <option key={i} value={i}>{i + 1}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="flex-1">
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                value={batchGrade}
-                                onChange={handleBatchGradeChange}
-                                placeholder="الدرجة"
-                                className={`w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
-                            />
-                        </div>
+            {!isHeaderHidden && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            inputMode="text"
+                            placeholder="ابحث عن طالب..."
+                            value={searchQueries[category]}
+                            onChange={handleSearchChange}
+                            className={`flex-1 p-2 border border-gray-600 rounded-lg text-sm bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-${color}-500`}
+                        />
+                        <CollapseButton />
                     </div>
-                    <button
-                        onClick={applyBatchGrade}
-                        disabled={selectedStudentsPerTab[category].length === 0}
-                        className={`bg-${color}-600 text-white px-4 py-2 rounded-lg hover:bg-${color}-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full`}
-                    >
-                        تطبيق الدرجة
-                    </button>
+                    <div className="flex flex-col md:flex-row items-center gap-4">
+                        <div className="flex items-center gap-4 w-full">
+                            <div className="flex-1 flex items-center gap-2">
+                                <label htmlFor={`batch-${category}-index`} className="text-sm font-medium text-gray-400 whitespace-nowrap">
+                                    {label} رقم:
+                                </label>
+                                <select
+                                    id={`batch-${category}-index`}
+                                    value={state}
+                                    onChange={(e) => setState(Number(e.target.value))}
+                                    className={`w-16 p-1 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
+                                >
+                                    {[...Array(count)].map((_, i) => (
+                                        <option key={i} value={i}>{i + 1}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="flex-1">
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={batchGrade}
+                                    onChange={handleBatchGradeChange}
+                                    placeholder="الدرجة"
+                                    className={`w-full p-2 bg-gray-700 text-white text-center rounded focus:outline-none focus:ring-2 focus:ring-${color}-500`}
+                                />
+                            </div>
+                        </div>
+                        <button
+                            onClick={applyBatchGrade}
+                            disabled={selectedStudentsPerTab[category].length === 0}
+                            className={`bg-${color}-600 text-white px-4 py-2 rounded-lg hover:bg-${color}-500 transition-colors font-bold disabled:bg-gray-500 disabled:cursor-not-allowed w-full`}
+                        >
+                            تطبيق الدرجة
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
             
             <div 
                 ref={tableContainerRef}
@@ -942,14 +958,11 @@ const GradesModal = ({
                     <div className="flex items-center gap-3">
                         <h2 className="text-xl md:text-2xl font-extrabold text-white">إدارة الدرجات</h2>
                         
-                        {/* زر إظهار لوحة التحكم (بدون تحريك الـ scroll) */}
                         {isHeaderHidden && (
                             <button
                                 onClick={() => {
-                                    // نلغي فقط الحالات التي تخفي الهيدر
                                     setIsScrolledDown(false);
                                     setIsManuallyHidden(false); 
-                                    // تم حذف سطر تصفير الـ scrollTop للحفاظ على موضع المستخدم
                                 }}
                                 className="flex items-center gap-1 px-2 py-1 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/50 rounded text-xs transition-all animate-pulse"
                             >
@@ -971,48 +984,35 @@ const GradesModal = ({
                 </div>
                 
                 <div className="flex flex-nowrap overflow-x-auto justify-start md:justify-center p-2 border-b border-gray-700 bg-gray-800 flex-shrink-0 scrollbar-hide">
-                    <button
-                        onClick={() => handleTabChange('tests')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'tests' ? "bg-blue-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
-                    >
-                        الاختبارات 
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('classInteraction')} 
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'classInteraction' ? "bg-yellow-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
-                    >
-                        التفاعل الصفي 
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('homework')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'homework' ? "bg-purple-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
-                    >
-                        الواجبات 
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('performanceTasks')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'performanceTasks' ? "bg-orange-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
-                    >
-                        المهام الأدائية 
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('participation')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'participation' ? "bg-cyan-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
-                    >
-                        المشاركة 
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('quranRecitation')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'quranRecitation' ? "bg-indigo-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
-                    >
-                        تلاوة القرآن 
-                    </button>
-                    <button
-                        onClick={() => handleTabChange('quranMemorization')}
-                        className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === 'quranMemorization' ? "bg-emerald-600 text-white rounded-lg" : "text-gray-400 hover:text-gray-200"}`}
-                    >
-                        حفظ القرآن 
-                    </button>
+                    {['tests', 'classInteraction', 'homework', 'performanceTasks', 'participation', 'quranRecitation', 'quranMemorization'].map((tab) => {
+                        const labels = {
+                            tests: 'الاختبارات',
+                            classInteraction: 'التفاعل الصفي',
+                            homework: 'الواجبات',
+                            performanceTasks: 'المهام الأدائية',
+                            participation: 'المشاركة',
+                            quranRecitation: 'تلاوة القرآن',
+                            quranMemorization: 'حفظ القرآن'
+                        };
+                        const colors = {
+                            tests: 'bg-blue-600',
+                            classInteraction: 'bg-yellow-600',
+                            homework: 'bg-purple-600',
+                            performanceTasks: 'bg-orange-600',
+                            participation: 'bg-cyan-600',
+                            quranRecitation: 'bg-indigo-600',
+                            quranMemorization: 'bg-emerald-600'
+                        };
+                        return (
+                            <button
+                                key={tab}
+                                onClick={() => handleTabChange(tab)}
+                                className={`px-4 py-2 text-sm font-medium transition-colors duration-200 whitespace-nowrap flex-shrink-0 ${activeTab === tab ? `${colors[tab]} text-white rounded-lg` : "text-gray-400 hover:text-gray-200"}`}
+                            >
+                                {labels[tab]}
+                            </button>
+                        );
+                    })}
                 </div>
                 
                 <div className="flex-1 overflow-hidden p-4 relative flex flex-col">
