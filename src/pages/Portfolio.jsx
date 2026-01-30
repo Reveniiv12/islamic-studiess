@@ -4,27 +4,29 @@ import { supabase } from '../supabaseClient';
 import { 
   FaUpload, 
   FaTrash, 
-  FaEdit, // أيقونة التعديل
+  FaEdit, 
   FaExternalLinkAlt, 
   FaFilePdf, 
   FaGripVertical, 
   FaExclamationTriangle,
   FaHome,
-  FaFileExport, // أيقونة التصدير
+  FaFileExport, 
   FaDownload
 } from 'react-icons/fa';
 import { QRCodeSVG } from 'qrcode.react';
 import FileViewer from '../components/FileViewer';
 import { v4 as uuidv4 } from 'uuid';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
 
-// مكتبات PDF الجديدة
+// --- التعديل 1: استبدال HTML5Backend بـ TouchBackend ---
+import { TouchBackend } from 'react-dnd-touch-backend'; 
+
 import { PDFDocument } from 'pdf-lib';
 import { Document, Page, pdfjs } from 'react-pdf';
 
-// إعداد Worker الخاص بـ react-pdf (ضروري لعمل المكتبة)
+// إعداد Worker الخاص بـ react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
 const ItemTypes = { FILE: 'file' };
 
 // --- مكون فرعي لعرض مصغر للـ PDF ---
@@ -34,12 +36,11 @@ const PdfThumbnail = ({ url }) => {
       <Document file={url} loading={<FaFilePdf size={40} className="text-red-500 animate-pulse" />}>
         <Page 
           pageNumber={1} 
-          width={200} // عرض تقريبي للكارت
+          width={200} 
           renderTextLayer={false} 
           renderAnnotationLayer={false} 
         />
       </Document>
-      {/* طبقة شفافة لمنع التفاعل المباشر مع الـ PDF لتمكين السحب والضغط */}
       <div className="absolute inset-0 z-10 bg-transparent"></div>
     </div>
   );
@@ -71,7 +72,7 @@ const DraggableFile = ({ file, index, moveFile, onDeleteClick, onEditClick, onCl
     <div 
       ref={ref}
       style={{ opacity: isDragging ? 0.5 : 1 }}
-      className="group bg-slate-800/40 border border-slate-700 rounded-2xl p-4 hover:border-blue-500/50 transition-all shadow-sm relative"
+      className="group bg-slate-800/40 border border-slate-700 rounded-2xl p-4 hover:border-blue-500/50 transition-all shadow-sm relative touch-none" // touch-none تحسن السحب في الجوال
     >
       <div className="absolute top-2 left-2 text-slate-600 hover:text-white cursor-move p-2 z-20">
         <FaGripVertical />
@@ -82,7 +83,6 @@ const DraggableFile = ({ file, index, moveFile, onDeleteClick, onEditClick, onCl
         onClick={() => onClick(index)}
       >
         {file.type.includes('pdf') ? (
-          // التعديل 2: استخدام مكون عرض الصورة المصغرة للـ PDF
           <PdfThumbnail url={file.url} />
         ) : (
           <img src={file.url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="" />
@@ -93,7 +93,6 @@ const DraggableFile = ({ file, index, moveFile, onDeleteClick, onEditClick, onCl
         <p className="text-xs font-bold truncate text-slate-300 flex-1">{file.name}</p>
         
         <div className="flex gap-1">
-            {/* التعديل 1: زر تعديل الاسم */}
             <button 
               onClick={(e) => {
                 e.stopPropagation();
@@ -129,17 +128,14 @@ const Portfolio = () => {
   });
   const [loading, setLoading] = useState(true);
   
-  // حالات الحذف
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState(null);
   
-  // حالات التعديل (جديد)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [fileToEdit, setFileToEdit] = useState(null);
   const [newFileName, setNewFileName] = useState('');
   const [updatingName, setUpdatingName] = useState(false);
 
-  // حالات التصدير (جديد)
   const [isExporting, setIsExporting] = useState(false);
 
   const [currentFileIndex, setCurrentFileIndex] = useState(null);
@@ -210,7 +206,6 @@ const Portfolio = () => {
     setUploading(false);
   };
 
-  // --- دالة تعديل الاسم ---
   const openEditModal = (file) => {
     setFileToEdit(file);
     setNewFileName(file.name);
@@ -227,7 +222,6 @@ const Portfolio = () => {
         .eq('id', fileToEdit.id);
 
     if (!error) {
-        // تحديث الحالة محلياً لتفادي إعادة التحميل
         setFiles(files.map(f => f.id === fileToEdit.id ? { ...f, name: newFileName } : f));
         setIsEditModalOpen(false);
         setFileToEdit(null);
@@ -235,7 +229,6 @@ const Portfolio = () => {
     setUpdatingName(false);
   };
 
-  // --- دالة التصدير (Merge PDF) ---
   const handleExportPDF = async () => {
     if (files.length === 0) return;
     setIsExporting(true);
@@ -244,25 +237,21 @@ const Portfolio = () => {
       const mergedPdf = await PDFDocument.create();
 
       for (const file of files) {
-        // جلب الملف كـ ArrayBuffer
         const fileBytes = await fetch(file.url).then(res => res.arrayBuffer());
 
         if (file.type.includes('pdf')) {
-          // إذا كان PDF، نقوم بدمج صفحاته
           const srcPdf = await PDFDocument.load(fileBytes);
           const indices = srcPdf.getPageIndices();
           const copiedPages = await mergedPdf.copyPages(srcPdf, indices);
           copiedPages.forEach((page) => mergedPdf.addPage(page));
         } else {
-          // إذا كان صورة، نقوم بتضمينها في صفحة جديدة
           let image;
           if (file.type.includes('png')) {
             image = await mergedPdf.embedPng(fileBytes);
           } else {
-            image = await mergedPdf.embedJpg(fileBytes); // يشمل jpeg و jpg
+            image = await mergedPdf.embedJpg(fileBytes);
           }
           
-          // جعل حجم الصفحة يناسب الصورة
           const page = mergedPdf.addPage([image.width, image.height]);
           page.drawImage(image, {
             x: 0,
@@ -275,7 +264,6 @@ const Portfolio = () => {
 
       const pdfBytes = await mergedPdf.save();
       
-      // إنشاء رابط تحميل
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
@@ -308,7 +296,8 @@ const Portfolio = () => {
   if (loading) return <div className="h-screen bg-[#0f172a] flex items-center justify-center text-blue-400 font-bold tracking-widest">جاري تحميل لوحة التحكم...</div>;
 
   return (
-    <DndProvider backend={HTML5Backend}>
+    // --- التعديل 2: تفعيل TouchBackend مع خيار الماوس ---
+    <DndProvider backend={TouchBackend} options={{ enableMouseEvents: true }}>
       <div className="min-h-screen bg-[#0f172a] text-slate-200 font-['Noto_Sans_Arabic'] flex flex-col lg:flex-row" dir="rtl">
         
         {/* Sidebar */}
@@ -364,7 +353,6 @@ const Portfolio = () => {
             </div>
             
             <div className="flex gap-3">
-                {/* زر التصدير الجديد */}
                 {files.length > 0 && (
                     <button 
                         onClick={handleExportPDF} 
@@ -398,7 +386,7 @@ const Portfolio = () => {
                     setFileToDelete(f);
                     setIsDeleteModalOpen(true);
                 }}
-                onEditClick={openEditModal} // تمرير دالة التعديل
+                onEditClick={openEditModal}
                 onClick={(idx) => setCurrentFileIndex(idx)}
               />
             ))}
@@ -431,7 +419,7 @@ const Portfolio = () => {
           </div>
         )}
 
-        {/* Edit Modal (جديد) */}
+        {/* Edit Modal */}
         {isEditModalOpen && (
           <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setIsEditModalOpen(false)}></div>
