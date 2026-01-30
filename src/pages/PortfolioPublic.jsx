@@ -1,165 +1,180 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '../supabaseClient'; // تأكد من وجود هذا الملف
-import { FaFilePdf } from 'react-icons/fa';
+import { supabase } from '../supabaseClient';
+import { FaFilePdf, FaImage, FaGraduationCap, FaSchool, FaCalendarAlt } from 'react-icons/fa';
 import FileViewer from '../components/FileViewer';
 
 const PortfolioPublic = () => {
   const { userId } = useParams();
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [teacherInfo, setTeacherInfo] = useState({
+    name: '',
+    school: '',
+    photo: '',
+    semester: '',
+    academicYear: ''
+  });
   const [currentFileIndex, setCurrentFileIndex] = useState(null);
-  const [teacherInfo, setTeacherInfo] = useState({});
-  
+
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      setError('');
       try {
-        // جلب الملفات
-        const { data: filesData, error: filesError } = await supabase
+        // 1. جلب الملفات
+        const { data: fData } = await supabase
           .from('files')
           .select('*')
           .eq('user_id', userId)
           .order('created_at', { ascending: true });
-          
-        if (filesError) throw filesError;
-        setFiles(filesData);
-        
-        if (filesData.length === 0) {
-          setError("لا توجد ملفات في ملف الإنجاز هذا.");
-        }
-        
-        // جلب بيانات المعلم
-        const { data: teacherInfoData, error: teacherInfoError } = await supabase
-          .from('teacher_info')
+
+        // 2. جلب البيانات من جدول settings (المصدر الموحد للداشبورد)
+        const { data: sData } = await supabase
+          .from('settings')
           .select('*')
-          .eq('user_id', userId)
+          .eq('id', 'general')
           .single();
-          
-        if (teacherInfoError && teacherInfoError.code !== 'PGRST116') { // ignore 'no rows found' error
-          throw teacherInfoError;
-        }
-        setTeacherInfo(teacherInfoData || {});
+
+        setFiles(fData || []);
         
-      } catch (e) {
-        setError("حدث خطأ أثناء تحميل الملفات.");
-        console.error("Error loading data from Supabase:", e);
+        if (sData) {
+          setTeacherInfo({
+            name: sData.teacher_name || 'اسم المعلم',
+            school: sData.school_name || 'المدرسة',
+            photo: sData.teacher_photo || '/images/default_teacher.png',
+            semester: sData.current_semester || 'الفصل الأول',
+            academicYear: sData.academic_year || '1447 هـ'
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching data:", err);
       } finally {
         setLoading(false);
       }
     };
-
-    if (userId) {
-      fetchData();
-    } else {
-      setLoading(false);
-      setError("معرف المستخدم غير متوفر.");
-    }
+    fetchData();
   }, [userId]);
-  
-  const openViewer = (index) => {
-    setCurrentFileIndex(index);
-    setIsViewerOpen(true);
-  };
 
-  const closeViewer = () => {
-    setIsViewerOpen(false);
-    setCurrentFileIndex(null);
-  };
+  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-blue-400 font-bold">جاري تحميل الملف الرقمي...</div>;
 
-  const showNext = () => {
-    if (currentFileIndex < files.length - 1) {
-      setCurrentFileIndex(currentFileIndex + 1);
-    }
-  };
-
-  const showPrev = () => {
-    if (currentFileIndex > 0) {
-      setCurrentFileIndex(currentFileIndex - 1);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white" dir="rtl">
-        <p>جاري تحميل ملف الإنجاز...</p>
-      </div>
-    );
-  }
-  
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900 text-red-400 text-center p-4" dir="rtl">
-        <p>{error}</p>
-      </div>
-    );
-  }
-  
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-8 font-['Noto_Sans_Arabic',sans-serif]" dir="rtl">
-      <h1 className="text-3xl sm:text-4xl font-bold mb-6 text-center text-blue-400">ملف الإنجاز</h1>
+    <div className="min-h-screen bg-[#0f172a] text-slate-200 font-['Noto_Sans_Arabic'] pb-20" dir="rtl">
       
-      {Object.keys(teacherInfo).length > 0 && (
-        <div className="bg-gray-800 p-6 rounded-lg shadow-md mb-8 max-w-xl mx-auto text-center">
-          <p className="text-gray-300 font-semibold mb-4">بيانات المعلم</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {teacherInfo.name && (
-              <p className="text-lg"><span className="text-gray-400">المدرس: </span><span className="text-white font-bold">{teacherInfo.name}</span></p>
-            )}
-            {teacherInfo.school && (
-              <p className="text-lg"><span className="text-gray-400">المدرسة: </span><span className="text-white font-bold">{teacherInfo.school}</span></p>
-            )}
-            {teacherInfo.course && (
-              <p className="text-md"><span className="text-gray-400">المقرر: </span><span className="text-white">{teacherInfo.course}</span></p>
-            )}
-            {teacherInfo.semester && (
-              <p className="text-md"><span className="text-gray-400">الفصل الدراسي: </span><span className="text-white">{teacherInfo.semester}</span></p>
-            )}
-            {teacherInfo.year && (
-              <p className="text-md"><span className="text-gray-400">السنة الدراسية: </span><span className="text-white">{teacherInfo.year}</span></p>
-            )}
+      {/* Header Section - التصميم الذي تفضله مع إضافة صورة المعلم */}
+      <div className="relative h-80 bg-gradient-to-l from-blue-900 to-indigo-900 flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 opacity-20 pattern-grid-lg"></div>
+        <div className="relative text-center z-10 flex flex-col items-center">
+          {/* صورة المعلم المضافة للتصميم */}
+          <div className="mb-4 relative">
+            <div className="absolute inset-0 bg-blue-500 blur-2xl opacity-30 animate-pulse"></div>
+            <img 
+              src={teacherInfo.photo} 
+              alt={teacherInfo.name}
+              className="w-28 h-28 rounded-full object-cover border-4 border-white/10 relative z-10 shadow-2xl"
+            />
+          </div>
+          <h1 className="text-4xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">ملف الإنجاز الرقمي</h1>
+        </div>
+      </div>
+
+      {/* Teacher Info Card - Floating - البيانات المحدثة */}
+      <div className="max-w-5xl mx-auto -mt-16 px-4 relative z-20">
+        <div className="bg-slate-800/90 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="flex items-center gap-4">
+              <div className="bg-blue-500/20 p-4 rounded-2xl text-blue-400 shadow-inner"><FaGraduationCap size={28}/></div>
+              <div>
+                <p className="text-xs text-slate-400 font-bold mb-1 uppercase tracking-wider">المعلم</p>
+                <p className="text-lg font-bold text-white">{teacherInfo.name}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className="bg-purple-500/20 p-4 rounded-2xl text-purple-400 shadow-inner"><FaSchool size={28}/></div>
+              <div>
+                <p className="text-xs text-slate-400 font-bold mb-1 uppercase tracking-wider">المدرسة</p>
+                <p className="text-lg font-bold text-white">{teacherInfo.school}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="bg-emerald-500/20 p-4 rounded-2xl text-emerald-400 shadow-inner"><FaCalendarAlt size={28}/></div>
+              <div>
+                <p className="text-xs text-slate-400 font-bold mb-1 uppercase tracking-wider">الفصل / السنة</p>
+                <p className="text-lg font-bold text-white">{teacherInfo.semester} | {teacherInfo.academicYear}</p>
+              </div>
+            </div>
           </div>
         </div>
-      )}
-      
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-        {files.map((file, index) => (
-          <div
-            key={file.id}
-            className="relative flex flex-col items-center p-4 bg-gray-800 rounded-lg shadow-md overflow-hidden cursor-pointer transform transition-transform hover:scale-105 hover:shadow-xl"
-            onClick={() => openViewer(index)}
-          >
-            <div className="flex items-center justify-center w-full h-48 mb-4">
-              {file.type === 'application/pdf' ? (
-                <div className="flex flex-col items-center justify-center w-full h-full text-center">
-                  <FaFilePdf size={64} className="text-red-500 mb-2" />
-                  <p className="text-sm text-gray-400">ملف PDF</p>
-                </div>
-              ) : (
-                <img src={file.url} alt={file.name} className="w-full h-full object-contain rounded-md" />
-              )}
-            </div>
-            <div className="absolute bottom-0 w-full p-2 bg-gray-900 bg-opacity-70 text-center text-white text-sm truncate">
-              {file.name}
-            </div>
-          </div>
-        ))}
       </div>
-      
-      {files.length === 0 && (
-        <p className="text-center text-gray-400 mt-10">لا توجد ملفات مرفوعة حتى الآن.</p>
-      )}
 
-      {isViewerOpen && (
-        <FileViewer
-          files={files}
-          currentIndex={currentFileIndex}
-          onClose={closeViewer}
-          onPrev={showPrev}
-          onNext={showNext}
+      {/* Files Grid - المعرض الرقمي */}
+      <div className="max-w-6xl mx-auto mt-16 px-4">
+        <div className="flex items-center justify-between mb-10 border-b border-slate-800 pb-6">
+          <div className="flex items-center gap-4">
+            <div className="h-8 w-1.5 bg-blue-500 rounded-full"></div>
+            <h2 className="text-2xl font-bold text-white">المعرض الرقمي</h2>
+          </div>
+          <span className="bg-slate-800 px-4 py-1.5 rounded-full text-slate-400 text-xs font-bold border border-slate-700">
+            {files.length} ملفات موثقة
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+          {files.map((file, index) => (
+            <div 
+              key={file.id}
+              onClick={() => setCurrentFileIndex(index)}
+              className="group relative bg-slate-800/50 border border-white/5 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer hover:-translate-y-2 shadow-xl hover:shadow-blue-500/10"
+            >
+              <div className="aspect-video bg-slate-900 flex items-center justify-center overflow-hidden relative">
+                {file.type.includes('pdf') ? (
+                  <FaFilePdf size={56} className="text-red-500 group-hover:scale-110 transition-transform duration-500" />
+                ) : (
+                  <img src={file.url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                )}
+                
+                {/* Overlay عند التمرير */}
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-6">
+                  <span className="bg-blue-600 text-white px-6 py-2 rounded-full font-bold text-xs shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                    استعراض الآن
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-5">
+                <div className="flex items-center gap-2 mb-2">
+                   <div className={`w-2 h-2 rounded-full ${file.type.includes('pdf') ? 'bg-red-500' : 'bg-blue-500'}`}></div>
+                   <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{file.type.split('/')[1]}</span>
+                </div>
+                <p className="text-sm font-bold truncate text-slate-100 group-hover:text-blue-400 transition-colors">{file.name}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {files.length === 0 && (
+          <div className="text-center py-20 bg-slate-800/30 rounded-3xl border border-dashed border-slate-700">
+             <p className="text-slate-500 font-medium tracking-wide">لا توجد ملفات متوفرة حالياً في هذا الملف.</p>
+          </div>
+        )}
+      </div>
+
+      {/* File Viewer Modal */}
+      {currentFileIndex !== null && (
+        <FileViewer 
+          files={files} 
+          currentIndex={currentFileIndex} 
+          onClose={() => setCurrentFileIndex(null)}
+          onNext={() => {
+            if (currentFileIndex < files.length - 1) {
+              setCurrentFileIndex(currentFileIndex + 1);
+            }
+          }}
+          onPrev={() => {
+            if (currentFileIndex > 0) {
+              setCurrentFileIndex(currentFileIndex - 1);
+            }
+          }}
         />
       )}
     </div>
