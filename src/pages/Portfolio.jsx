@@ -4,13 +4,14 @@ import { supabase } from '../supabaseClient';
 import { 
   FaUpload, 
   FaTrash, 
-  FaUserEdit, 
+  FaEdit, // أيقونة التعديل
   FaExternalLinkAlt, 
   FaFilePdf, 
-  FaTimes, 
   FaGripVertical, 
   FaExclamationTriangle,
-  FaHome
+  FaHome,
+  FaFileExport, // أيقونة التصدير
+  FaDownload
 } from 'react-icons/fa';
 import { QRCodeSVG } from 'qrcode.react';
 import FileViewer from '../components/FileViewer';
@@ -18,9 +19,33 @@ import { v4 as uuidv4 } from 'uuid';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
+// مكتبات PDF الجديدة
+import { PDFDocument } from 'pdf-lib';
+import { Document, Page, pdfjs } from 'react-pdf';
+
+// إعداد Worker الخاص بـ react-pdf (ضروري لعمل المكتبة)
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 const ItemTypes = { FILE: 'file' };
 
-const DraggableFile = ({ file, index, moveFile, onDeleteClick, onClick }) => {
+// --- مكون فرعي لعرض مصغر للـ PDF ---
+const PdfThumbnail = ({ url }) => {
+  return (
+    <div className="w-full h-full overflow-hidden flex items-center justify-center bg-white relative">
+      <Document file={url} loading={<FaFilePdf size={40} className="text-red-500 animate-pulse" />}>
+        <Page 
+          pageNumber={1} 
+          width={200} // عرض تقريبي للكارت
+          renderTextLayer={false} 
+          renderAnnotationLayer={false} 
+        />
+      </Document>
+      {/* طبقة شفافة لمنع التفاعل المباشر مع الـ PDF لتمكين السحب والضغط */}
+      <div className="absolute inset-0 z-10 bg-transparent"></div>
+    </div>
+  );
+};
+
+const DraggableFile = ({ file, index, moveFile, onDeleteClick, onEditClick, onClick }) => {
   const ref = useRef(null);
   const [{ isDragging }, drag] = useDrag({
     type: ItemTypes.FILE,
@@ -53,27 +78,44 @@ const DraggableFile = ({ file, index, moveFile, onDeleteClick, onClick }) => {
       </div>
 
       <div 
-        className="aspect-video bg-slate-950 rounded-xl mb-4 flex items-center justify-center cursor-pointer overflow-hidden border border-slate-800" 
+        className="aspect-video bg-slate-950 rounded-xl mb-4 flex items-center justify-center cursor-pointer overflow-hidden border border-slate-800 relative" 
         onClick={() => onClick(index)}
       >
         {file.type.includes('pdf') ? (
-          <FaFilePdf size={40} className="text-red-500" />
+          // التعديل 2: استخدام مكون عرض الصورة المصغرة للـ PDF
+          <PdfThumbnail url={file.url} />
         ) : (
           <img src={file.url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="" />
         )}
       </div>
 
-      <div className="flex justify-between items-center">
-        <p className="text-xs font-bold truncate text-slate-300 w-40">{file.name}</p>
-        <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            onDeleteClick(file);
-          }} 
-          className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all z-20"
-        >
-          <FaTrash size={14}/>
-        </button>
+      <div className="flex justify-between items-center gap-2">
+        <p className="text-xs font-bold truncate text-slate-300 flex-1">{file.name}</p>
+        
+        <div className="flex gap-1">
+            {/* التعديل 1: زر تعديل الاسم */}
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditClick(file);
+              }} 
+              className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all z-20"
+              title="تعديل الاسم"
+            >
+              <FaEdit size={14}/>
+            </button>
+
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteClick(file);
+              }} 
+              className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all z-20"
+              title="حذف الملف"
+            >
+              <FaTrash size={14}/>
+            </button>
+        </div>
       </div>
     </div>
   );
@@ -83,33 +125,38 @@ const Portfolio = () => {
   const navigate = useNavigate();
   const [files, setFiles] = useState([]);
   const [teacherInfo, setTeacherInfo] = useState({ 
-    name: '', 
-    school: '', 
-    photo: '', 
-    semester: '',
-    userId: '' // تخزين المعرف لاستخدامه في الـ QR
+    name: '', school: '', photo: '', semester: '', userId: '' 
   });
   const [loading, setLoading] = useState(true);
+  
+  // حالات الحذف
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState(null);
+  
+  // حالات التعديل (جديد)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [fileToEdit, setFileToEdit] = useState(null);
+  const [newFileName, setNewFileName] = useState('');
+  const [updatingName, setUpdatingName] = useState(false);
+
+  // حالات التصدير (جديد)
+  const [isExporting, setIsExporting] = useState(false);
+
   const [currentFileIndex, setCurrentFileIndex] = useState(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
-    // جلب بيانات المستخدم الحالي من نظام المصادقة
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { navigate('/login'); return; }
     
-    // جلب ملفات الإنجاز
     const { data: fData } = await supabase
       .from('files')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: true });
     
-    // جلب البيانات من جدول settings الموحد
     const { data: sData } = await supabase
       .from('settings')
       .select('*')
@@ -124,7 +171,7 @@ const Portfolio = () => {
         school: sData.school_name || 'اسم المدرسة',
         photo: sData.teacher_photo || '/images/default_teacher.png',
         semester: sData.current_semester || 'غير محدد',
-        userId: user.id // حفظ الـ ID الفعلي للمستخدم هنا
+        userId: user.id
       });
     }
     setLoading(false);
@@ -161,6 +208,88 @@ const Portfolio = () => {
     }
     fetchData();
     setUploading(false);
+  };
+
+  // --- دالة تعديل الاسم ---
+  const openEditModal = (file) => {
+    setFileToEdit(file);
+    setNewFileName(file.name);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateName = async () => {
+    if (!newFileName.trim() || !fileToEdit) return;
+    setUpdatingName(true);
+
+    const { error } = await supabase
+        .from('files')
+        .update({ name: newFileName })
+        .eq('id', fileToEdit.id);
+
+    if (!error) {
+        // تحديث الحالة محلياً لتفادي إعادة التحميل
+        setFiles(files.map(f => f.id === fileToEdit.id ? { ...f, name: newFileName } : f));
+        setIsEditModalOpen(false);
+        setFileToEdit(null);
+    }
+    setUpdatingName(false);
+  };
+
+  // --- دالة التصدير (Merge PDF) ---
+  const handleExportPDF = async () => {
+    if (files.length === 0) return;
+    setIsExporting(true);
+
+    try {
+      const mergedPdf = await PDFDocument.create();
+
+      for (const file of files) {
+        // جلب الملف كـ ArrayBuffer
+        const fileBytes = await fetch(file.url).then(res => res.arrayBuffer());
+
+        if (file.type.includes('pdf')) {
+          // إذا كان PDF، نقوم بدمج صفحاته
+          const srcPdf = await PDFDocument.load(fileBytes);
+          const indices = srcPdf.getPageIndices();
+          const copiedPages = await mergedPdf.copyPages(srcPdf, indices);
+          copiedPages.forEach((page) => mergedPdf.addPage(page));
+        } else {
+          // إذا كان صورة، نقوم بتضمينها في صفحة جديدة
+          let image;
+          if (file.type.includes('png')) {
+            image = await mergedPdf.embedPng(fileBytes);
+          } else {
+            image = await mergedPdf.embedJpg(fileBytes); // يشمل jpeg و jpg
+          }
+          
+          // جعل حجم الصفحة يناسب الصورة
+          const page = mergedPdf.addPage([image.width, image.height]);
+          page.drawImage(image, {
+            x: 0,
+            y: 0,
+            width: image.width,
+            height: image.height,
+          });
+        }
+      }
+
+      const pdfBytes = await mergedPdf.save();
+      
+      // إنشاء رابط تحميل
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${teacherInfo.name || 'portfolio'}_merged.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      alert('حدث خطأ أثناء تصدير الملفات. تأكد من صحة الملفات.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const confirmDelete = async () => {
@@ -206,7 +335,6 @@ const Portfolio = () => {
             <FaHome /> العودة للرئيسية
           </button>
 
-          {/* إصلاح الـ QR Code ليوجه للمسار العام المعرف في App.jsx */}
           <div className="bg-white p-4 rounded-2xl shadow-inner flex flex-col items-center">
             {teacherInfo.userId && (
               <QRCodeSVG 
@@ -234,10 +362,29 @@ const Portfolio = () => {
                 <h1 className="text-3xl font-black text-white">إدارة ملف الإنجاز</h1>
                 <p className="text-slate-500 text-sm mt-1">قم بترتيب ملفاتك الرقمية وتوثيق إنجازاتك</p>
             </div>
-            <label className={`cursor-pointer px-8 py-3 rounded-full font-bold transition-all shadow-lg ${uploading ? 'bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}>
-              {uploading ? 'جاري الرفع...' : 'رفع ملفات جديدة'}
-              <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={uploading} />
-            </label>
+            
+            <div className="flex gap-3">
+                {/* زر التصدير الجديد */}
+                {files.length > 0 && (
+                    <button 
+                        onClick={handleExportPDF} 
+                        disabled={isExporting}
+                        className="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-full font-bold transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
+                    >
+                        {isExporting ? (
+                            <>جاري التصدير...</>
+                        ) : (
+                            <><FaFileExport /> تصدير PDF</>
+                        )}
+                    </button>
+                )}
+
+                <label className={`cursor-pointer px-8 py-3 rounded-full font-bold transition-all shadow-lg flex items-center gap-2 ${uploading ? 'bg-slate-700' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}>
+                    <FaUpload />
+                    {uploading ? 'جاري الرفع...' : 'رفع ملفات'}
+                    <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                </label>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -251,6 +398,7 @@ const Portfolio = () => {
                     setFileToDelete(f);
                     setIsDeleteModalOpen(true);
                 }}
+                onEditClick={openEditModal} // تمرير دالة التعديل
                 onClick={(idx) => setCurrentFileIndex(idx)}
               />
             ))}
@@ -278,6 +426,38 @@ const Portfolio = () => {
               <div className="flex gap-3">
                 <button onClick={() => setIsDeleteModalOpen(false)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all">إلغاء</button>
                 <button onClick={confirmDelete} className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold shadow-lg shadow-red-600/20 transition-all">حذف</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Modal (جديد) */}
+        {isEditModalOpen && (
+          <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setIsEditModalOpen(false)}></div>
+            <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in duration-200">
+              <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-500">
+                <FaEdit size={30} />
+              </div>
+              <h3 className="text-xl font-bold text-white text-center mb-6">تعديل اسم الملف</h3>
+              
+              <input 
+                type="text" 
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-white focus:outline-none focus:border-blue-500 mb-6 text-center"
+                placeholder="أدخل الاسم الجديد..."
+              />
+
+              <div className="flex gap-3">
+                <button onClick={() => setIsEditModalOpen(false)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all">إلغاء</button>
+                <button 
+                    onClick={handleUpdateName} 
+                    disabled={updatingName}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50"
+                >
+                    {updatingName ? 'جاري الحفظ...' : 'حفظ'}
+                </button>
               </div>
             </div>
           </div>
