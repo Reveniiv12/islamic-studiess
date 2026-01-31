@@ -11,7 +11,10 @@ import {
   FaSquare, 
   FaLayerGroup, 
   FaStar, 
-  FaRegStar 
+  FaRegStar,
+  FaToggleOn, // أيقونة جديدة
+  FaToggleOff, // أيقونة جديدة
+  FaGamepad // أيقونة للقسم الجديد
 } from 'react-icons/fa';
 
 const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
@@ -20,7 +23,10 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
     is_locked: false,
     lock_message: "عذراً، الصفحة مغلقة حالياً للتحديث ورصد الدرجات.",
     allowed_views: [],
-    default_view: null
+    default_view: null,
+    // إعدادات الأزرار الجديدة (الافتراضي true للظهور)
+    show_rewards_button: true, 
+    show_solutions_button: true 
   });
 
   // جلب الإعدادات عند فتح النافذة
@@ -45,7 +51,10 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
             allowed_views: Array.isArray(data.student_view_config.allowed_views) 
                 ? data.student_view_config.allowed_views 
                 : [],
-            default_view: data.student_view_config.default_view || null
+            default_view: data.student_view_config.default_view || null,
+            // ضمان وجود القيم الجديدة حتى لو كانت الإعدادات قديمة
+            show_rewards_button: data.student_view_config.show_rewards_button !== false,
+            show_solutions_button: data.student_view_config.show_solutions_button !== false
         };
         setConfig(loadedConfig);
       }
@@ -156,12 +165,6 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
 
   return (
     <CustomModal title="لوحة تحكم صفحة الطالب" onClose={onClose}>
-      {/* 🔥🔥 التعديلات هنا 🔥🔥
-          1. max-h-[80vh]: تحديد أقصى ارتفاع ليناسب شاشات الجوال
-          2. overflow-y-auto: السماح بالتمرير العمودي
-          3. p-1: إضافة هوامش داخلية صغيرة لمنع قص الظلال
-          4. gap-4 md:gap-6: تقليل المسافات بين العناصر على الجوال
-      */}
       <div 
         className="flex flex-col gap-4 md:gap-6 text-right font-['Noto_Sans_Arabic',sans-serif] max-h-[80vh] overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent" 
         dir="rtl"
@@ -213,7 +216,38 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
           </div>
         </div>
 
-        {/* 3. أزرار التحكم السفلية */}
+        {/* 3. قسم الأزرار (الجديد) */}
+        <div className="bg-gray-700/30 p-4 rounded-xl border border-gray-600/50">
+           <h3 className="font-bold text-lg text-white flex items-center gap-2 mb-4 border-b border-gray-600 pb-2">
+              <FaGamepad className="text-purple-400"/> إعدادات الأزرار
+           </h3>
+           
+           <div className="flex flex-col gap-3">
+              {/* زر المكافآت */}
+              <div className="flex items-center justify-between bg-gray-800 p-3 rounded-lg border border-gray-700">
+                  <span className="text-gray-200 font-medium">إظهار زر المكافآت</span>
+                  <button 
+                    onClick={() => setConfig({...config, show_rewards_button: !config.show_rewards_button})}
+                    className={`text-3xl transition-colors ${config.show_rewards_button ? 'text-green-500' : 'text-gray-500'}`}
+                  >
+                    {config.show_rewards_button ? <FaToggleOn /> : <FaToggleOff />}
+                  </button>
+              </div>
+
+              {/* زر حل أسئلة الكتاب */}
+              <div className="flex items-center justify-between bg-gray-800 p-3 rounded-lg border border-gray-700">
+                  <span className="text-gray-200 font-medium">إظهار زر "حل أسئلة الكتاب"</span>
+                  <button 
+                    onClick={() => setConfig({...config, show_solutions_button: !config.show_solutions_button})}
+                    className={`text-3xl transition-colors ${config.show_solutions_button ? 'text-green-500' : 'text-gray-500'}`}
+                  >
+                    {config.show_solutions_button ? <FaToggleOn /> : <FaToggleOff />}
+                  </button>
+              </div>
+           </div>
+        </div>
+
+        {/* 4. أزرار التحكم السفلية */}
         <div className="flex flex-col-reverse sm:flex-row gap-3 mt-2 border-t border-gray-700 pt-4 pb-2">
           <button 
             onClick={onClose} 
