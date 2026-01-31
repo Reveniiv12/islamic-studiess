@@ -1,12 +1,14 @@
 // src/components/StudentVisitsModal.jsx
 import React, { useState, useEffect } from "react";
 import CustomModal from "./CustomModal";
-import { FaCalendarAlt, FaHourglassHalf, FaFilePdf } from "react-icons/fa"; // إضافة أيقونة PDF للتمثيل
-import { supabase } from "../supabaseClient";
+import { FaCalendarAlt, FaHourglassHalf } from "react-icons/fa";
+import { supabase } from "../supabaseClient"; // استيراد Supabase
 
 const StudentVisitsModal = ({ show, onClose, student, calculateDuration }) => {
+    // حالة محلية لتخزين وعرض السجلات (لكي نستطيع تحديثها)
     const [logs, setLogs] = useState([]);
 
+    // 1. تحديث الحالة عند فتح المودال أو تغيير الطالب
     useEffect(() => {
         if (student && student.logs) {
             setLogs(student.logs);
@@ -15,24 +17,28 @@ const StudentVisitsModal = ({ show, onClose, student, calculateDuration }) => {
         }
     }, [student]);
 
+    // 2. الاشتراك في التحديثات المباشرة (Real-time)
     useEffect(() => {
         if (!show || !student) return;
 
+        // الاشتراك في جدول page_visits لهذا الطالب فقط
         const channel = supabase
             .channel(`visits-${student.id}`)
             .on(
                 'postgres_changes',
                 {
-                    event: '*',
+                    event: '*', // الاستماع لكل التغييرات (إضافة أو تعديل)
                     schema: 'public',
                     table: 'page_visits',
                     filter: `student_id=eq.${student.id}`
                 },
                 (payload) => {
                     if (payload.eventType === 'INSERT') {
+                        // عند دخول جديد، نضيف السجل في بداية القائمة
                         setLogs(prevLogs => [payload.new, ...prevLogs]);
                     } 
                     else if (payload.eventType === 'UPDATE') {
+                        // عند تحديث وقت الخروج، نحدث السجل الموجود
                         setLogs(prevLogs => prevLogs.map(log => 
                             log.id === payload.new.id ? payload.new : log
                         ));
@@ -41,6 +47,7 @@ const StudentVisitsModal = ({ show, onClose, student, calculateDuration }) => {
             )
             .subscribe();
 
+        // تنظيف الاشتراك عند الإغلاق
         return () => {
             supabase.removeChannel(channel);
         };
@@ -50,58 +57,42 @@ const StudentVisitsModal = ({ show, onClose, student, calculateDuration }) => {
 
     return (
         <CustomModal title={`سجل زيارات الطالب: ${student.student_name}`} onClose={onClose}>
-            <div className="space-y-6">
-                {/* الرأس المحسن */}
-                <div className="bg-[#1a1c23] p-4 rounded-xl border border-gray-700 flex justify-between items-center">
-                    <div>
-                        <h4 className="text-xl font-bold text-white">{student.student_name}</h4>
-                        <p className="text-sm text-gray-400">السجل المدني: {student.student_national_id}</p>
-                    </div>
-                    <div className="bg-yellow-500/10 text-yellow-500 px-4 py-2 rounded-lg border border-yellow-500/20 font-bold">
-                        {logs.length} زيارة
-                    </div>
+            <div className="space-y-4">
+                <div className="bg-gray-800 p-4 rounded-lg border border-gray-600">
+                    <h4 className="text-lg font-bold text-gray-100">{student.student_name}</h4>
+                    <p className="text-sm text-gray-400">السجل المدني: {student.student_national_id}</p>
+                    <p className="text-sm font-semibold text-gray-300 mt-2">
+                        {/* استخدام logs.length بدلاً من student.logs.length */}
+                        عدد الزيارات الكلي: {logs.length}
+                    </p>
                 </div>
                 
-                {/* شبكة البطاقات - Grid Layout */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto p-2 custom-scrollbar">
+                <div className="max-h-80 overflow-y-auto space-y-3 custom-scrollbar">
+                    {/* عرض السجلات من الحالة logs */}
                     {logs.map((log, index) => (
-                        <div 
-                            key={log.id || index} 
-                            className="bg-[#1a1c23] rounded-2xl border border-gray-700 overflow-hidden hover:border-blue-500 transition-colors group"
-                        >
-                            {/* منطقة المعاينة (تشبه صورة الملف) */}
-                            <div className="h-32 bg-gray-800 flex items-center justify-center border-b border-gray-700 relative overflow-hidden">
-                                <div className="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity">
-                                    {/* خلفية رمزية تشبه الملفات */}
-                                    <div className="w-full h-full bg-gradient-to-br from-blue-600 to-purple-700"></div>
-                                </div>
-                                <FaCalendarAlt className="text-4xl text-white/50 relative z-10" />
+                        <div key={log.id || index} className="bg-gray-700 p-3 rounded-lg border border-gray-600 animate-fadeIn">
+                            <div className="flex items-center gap-2">
+                                <FaCalendarAlt className="text-green-400" />
+                                <span className="text-gray-300 text-sm">
+                                    وقت الدخول: {new Date(log.visit_start_time).toLocaleString('ar-SA', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    })}
+                                </span>
                             </div>
-
-                            {/* تفاصيل البطاقة */}
-                            <div className="p-3">
-                                <div className="flex flex-col gap-1">
-                                    <span className="text-white font-medium text-sm truncate">
-                                        زيارة يوم: {new Date(log.visit_start_time).toLocaleDateString('ar-SA')}
-                                    </span>
-                                    <div className="flex justify-between items-center mt-2">
-                                        <div className="flex items-center gap-1 text-[10px] text-gray-500 uppercase">
-                                            <FaFilePdf /> PDF LOG
-                                        </div>
-                                        <div className="flex items-center gap-1 text-xs text-blue-400 font-semibold bg-blue-500/10 px-2 py-1 rounded">
-                                            <FaHourglassHalf className="text-[10px]" />
-                                            {calculateDuration(log.visit_start_time, log.visit_end_time)}
-                                        </div>
-                                    </div>
-                                </div>
+                            <div className="flex items-center gap-2 mt-1">
+                                <FaHourglassHalf className="text-red-400" />
+                                <span className="text-gray-300 text-sm">
+                                    المدة: {calculateDuration(log.visit_start_time, log.visit_end_time)}
+                                </span>
                             </div>
                         </div>
                     ))}
-                    
                     {logs.length === 0 && (
-                        <div className="col-span-full py-10 text-center text-gray-500">
-                            لا توجد زيارات مسجلة لهذا الطالب حالياً.
-                        </div>
+                        <p className="text-center text-gray-500 py-4">لا توجد زيارات مسجلة.</p>
                     )}
                 </div>
             </div>
