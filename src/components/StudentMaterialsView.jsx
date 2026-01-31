@@ -1,8 +1,44 @@
 // src/components/StudentMaterialsView.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
-import { FaFolder, FaFilePdf, FaImage, FaArrowRight, FaBoxOpen, FaSpinner, FaEye } from 'react-icons/fa';
+import { FaFolder, FaFilePdf, FaArrowRight, FaBoxOpen, FaSpinner } from 'react-icons/fa';
 import FileViewer from './FileViewer'; 
+
+// --- 1. استيراد مكتبة react-pdf ---
+import { Document, Page, pdfjs } from 'react-pdf';
+
+// --- 2. إعداد الـ Worker الخاص بالمكتبة ---
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+// --- 3. إضافة مكون معاينة الـ PDF ---
+const PdfThumbnail = ({ url }) => {
+  return (
+    <div className="w-full h-full overflow-hidden flex items-center justify-center bg-white relative">
+      <Document 
+        file={url} 
+        loading={
+          <div className="flex items-center justify-center w-full h-full bg-gray-800">
+            <FaFilePdf size={40} className="text-red-500 animate-pulse" />
+          </div>
+        }
+        error={
+            <div className="flex items-center justify-center w-full h-full bg-gray-800">
+              <FaFilePdf size={40} className="text-red-500" />
+            </div>
+        }
+      >
+        <Page 
+          pageNumber={1} 
+          width={280} // عرض تقريبي ليناسب البطاقة
+          renderTextLayer={false} 
+          renderAnnotationLayer={false} 
+        />
+      </Document>
+      {/* طبقة شفافة لمنع التفاعل المباشر مع ملف الـ PDF داخل البطاقة */}
+      <div className="absolute inset-0 z-10 bg-transparent"></div>
+    </div>
+  );
+};
 
 const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, activeSemester, title }) => {
   const [materials, setMaterials] = useState([]);
@@ -11,14 +47,10 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // 1. تعريف دالة الجلب باستخدام useCallback لتجنب مشاكل التكرار
+  // تعريف دالة الجلب
   const fetchMaterials = useCallback(async () => {
-    // إذا لم تكن هناك بيانات كافية، لا تقم بالجلب
     if (!gradeId || !sectionId) return;
 
-    // لا نعرض Loading في كل تحديث تلقائي للحفاظ على تجربة المستخدم، فقط في البداية إذا كانت القائمة فارغة
-    // setLoading(true); 
-    
     try {
       const { data: assignments, error } = await supabase
         .from('folder_assignments')
@@ -55,7 +87,6 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
             title: folder.title,
             created_at: folder.created_at,
             order_index: folder.order_index,
-            // ترتيب الملفات
             files: folder.folder_contents
               .filter(content => content.is_visible && content.library_files)
               .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
@@ -66,61 +97,33 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
               }))
           }));
 
-        // ترتيب المجلدات
         formattedMaterials.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
-        
         setMaterials(formattedMaterials);
       }
     } catch (err) {
       console.error("Unexpected error:", err);
     }
-    // setLoading(false);
   }, [gradeId, sectionId]);
 
-  // 2. الجلب الأولي عند فتح النافذة
+  // الجلب الأولي
   useEffect(() => {
     if (show) {
-      setLoading(true); // تفعيل التحميل فقط عند الفتح الأول
+      setLoading(true);
       fetchMaterials().then(() => setLoading(false));
       setSelectedTopic(null);
     }
   }, [show, fetchMaterials]);
 
-  // 3. الاشتراك في التحديثات المباشرة (Real-time)
+  // الاشتراك في التحديثات المباشرة
   useEffect(() => {
     if (!show) return;
 
     const channel = supabase
       .channel('materials-realtime')
-      // الاستماع لتغييرات تعيين المجلدات لهذا الصف والقسم
-      .on(
-        'postgres_changes',
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'folder_assignments',
-          filter: `grade_id=eq.${gradeId}` // فلترة مبدئية حسب الصف لتقليل البيانات
-        },
-        () => fetchMaterials()
-      )
-      // الاستماع لتغييرات المجلدات نفسها (مثل تغيير الاسم أو الإخفاء)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'course_folders' },
-        () => fetchMaterials()
-      )
-      // الاستماع لتغييرات محتويات المجلد (إضافة/حذف ملفات)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'folder_contents' },
-        () => fetchMaterials()
-      )
-      // الاستماع لتغييرات الملفات (مثل تغيير الاسم)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'library_files' },
-        () => fetchMaterials()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'folder_assignments', filter: `grade_id=eq.${gradeId}` }, () => fetchMaterials())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'course_folders' }, () => fetchMaterials())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'folder_contents' }, () => fetchMaterials())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'library_files' }, () => fetchMaterials())
       .subscribe();
 
     return () => {
@@ -151,7 +154,7 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
         </div>
       </div>
 
-      <div className="p-4 md:p-8 max-w-5xl mx-auto w-full flex-1">
+      <div className="p-4 md:p-8 max-w-6xl mx-auto w-full flex-1">
         
         {/* زر العودة */}
         {selectedTopic && (
@@ -201,51 +204,48 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
         ) : (
           /* ================= عرض الملفات ================= */
           <div className="animate-slideUp">
-            <div className="flex items-center gap-3 mb-6 border-b border-gray-700 pb-4">
+            <div className="flex items-center gap-3 mb-8 border-b border-gray-700 pb-4">
                <FaFolder className="text-3xl text-yellow-500" />
                <h3 className="text-2xl font-bold text-white">{selectedTopic.title}</h3>
             </div>
             
-            {/* القائمة الرأسية */}
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {selectedTopic.files?.map((file, idx) => (
                 <div 
                   key={idx}
                   onClick={() => openFileViewer(idx)}
-                  className="bg-gray-800 p-3 rounded-lg border border-gray-700 hover:border-blue-500 cursor-pointer transition-all hover:bg-gray-750 flex items-center justify-between group shadow-sm hover:shadow-md"
+                  className="group relative bg-gray-800/50 border border-gray-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer hover:-translate-y-2 shadow-xl"
                 >
-                  {/* الجانب الأيمن */}
-                  <div className="flex items-center gap-4 overflow-hidden">
-                    <div className="flex-shrink-0 w-12 h-12 bg-gray-900 rounded-lg flex items-center justify-center border border-gray-600 overflow-hidden">
-                        {file.type?.includes('pdf') ? (
-                          <FaFilePdf className="text-2xl text-red-500" />
-                        ) : (
-                          <img src={file.url} alt="thumbnail" className="w-full h-full object-cover" />
-                        )}
-                    </div>
-
-                    <div className="flex flex-col min-w-0">
-                        <p className="text-white font-bold text-sm sm:text-base truncate max-w-[200px] sm:max-w-md dir-ltr text-right">
-                            {file.name}
-                        </p>
-                        <span className="text-xs text-gray-500 uppercase mt-0.5">
-                            {file.type?.split('/')[1] || 'FILE'}
-                        </span>
+                  {/* --- 4. تحديث منطقة المعاينة لاستخدام PdfThumbnail --- */}
+                  <div className="aspect-video bg-gray-900 flex items-center justify-center relative">
+                    {file.type?.includes('pdf') ? (
+                       <PdfThumbnail url={file.url} />
+                    ) : (
+                      <img src={file.url} alt="thumbnail" className="w-full h-full object-cover" />
+                    )}
+                    
+                    {/* تأثير التحويم */}
+                    <div className="absolute inset-0 bg-blue-600/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[2px] z-20">
+                       <span className="bg-white text-blue-600 px-4 py-2 rounded-full font-bold text-xs shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
+                         عرض
+                       </span>
                     </div>
                   </div>
 
-                  {/* الجانب الأيسر */}
-                  <div className="flex-shrink-0 mr-2">
-                      <button className="bg-gray-700 group-hover:bg-blue-600 text-gray-300 group-hover:text-white p-2 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold px-3">
-                          <span className="hidden sm:inline">عرض الملف</span>
-                          <FaEye />
-                      </button>
+                  {/* معلومات الملف */}
+                  <div className="p-4 bg-gray-800/80">
+                    <p className="text-sm font-bold truncate text-gray-200 text-right" dir="auto">
+                        {file.name}
+                    </p>
+                    <span className="text-[10px] text-gray-500 uppercase mt-1 block text-left tracking-wider">
+                        {file.type?.split('/')[1] || 'FILE'}
+                    </span>
                   </div>
                 </div>
               ))}
               
               {(!selectedTopic.files || selectedTopic.files.length === 0) && (
-                 <div className="py-10 text-center border-2 border-dashed border-gray-700 rounded-xl">
+                 <div className="col-span-full py-16 text-center border-2 border-dashed border-gray-700 rounded-xl bg-gray-800/30">
                     <p className="text-gray-500 text-lg">هذا المجلد فارغ حالياً.</p>
                  </div>
               )}
