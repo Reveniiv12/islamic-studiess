@@ -24,7 +24,9 @@ import RewardRequestsButton from '../components/RewardRequestsButton';
 import StudentControlPanel from '../components/StudentControlPanel'; 
 import FilterGradesModal from "../components/FilterGradesModal";
 import StudentGradesPopup from "../components/StudentGradesPopup"; // <--- استيراد المكون الجديد
+import ClassMaterialsManager from '../components/ClassMaterialsManager'; // تأكد من المسار
 
+import { FaFolderPlus } from "react-icons/fa"; // أيقونة للزر
 import { QRCodeSVG } from 'qrcode.react';
 import { getHijriToday } from '../utils/recitationUtils';
 import { FaCogs } from "react-icons/fa"; 
@@ -217,6 +219,7 @@ const SectionGrades = () => {
   const [showControlPanel, setShowControlPanel] = useState(false); 
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [showMaterialsManager, setShowMaterialsManager] = useState(false);
 // === إضـــافـــة جـــديـــدة ===
 // حالة لتخزين الإعدادات الأولية لنافذة الملاحظات (الطالب المحدد والتبويب)
 const [notesModalConfig, setNotesModalConfig] = useState(null);
@@ -1469,6 +1472,12 @@ const handleExportQRCodes = async () => {
 >
   <FaFilter /> احصائيات الطلاب
 </button>
+<button
+  onClick={() => setShowMaterialsManager(true)}
+  className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-indigo-700 text-white rounded-lg hover:bg-indigo-600 transition-colors shadow-md text-xs md:text-sm font-bold"
+>
+  <FaFolderPlus /> المصادر والحلول
+</button>
         </div>
       </div>
 
@@ -2011,6 +2020,18 @@ const handleExportQRCodes = async () => {
     onClose={() => setShowControlPanel(false)}
     handleDialog={handleDialog}
     teacherId={teacherId}
+  />
+)}
+
+{showMaterialsManager && (
+  <ClassMaterialsManager
+    show={showMaterialsManager}
+    onClose={() => setShowMaterialsManager(false)}
+    gradeId={gradeId}
+    sectionId={sectionId}
+    teacherId={teacherId}
+    activeSemester={activeSemesterKey}
+    handleDialog={handleDialog}
   />
 )}
 

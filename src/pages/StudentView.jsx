@@ -5,7 +5,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 import { QRCodeSVG } from 'qrcode.react'; 
 import * as htmlToImage from 'html-to-image'; 
-
+import StudentMaterialsView from '../components/StudentMaterialsView'; 
 import {
   FaQuran,
   FaStar,
@@ -30,6 +30,7 @@ import {
   FaUserSlash,
   FaFileImage,
   FaDownload,
+  FaBoxOpen,
   FaQrcode
 } from "react-icons/fa";
 
@@ -43,7 +44,6 @@ import {
 import PrizesModal from "../components/PrizesModal"; 
 import CustomDialog from "../components/CustomDialog"; 
 
-// دالة لضمان حجم المصفوفة وتعبئتها بـ null إذا لزم الأمر
 const ensureArraySize = (array, size) => {
     const newArray = Array(size).fill(null);
     const sourceArray = array && Array.isArray(array) ? array : [];
@@ -54,7 +54,6 @@ const ensureArraySize = (array, size) => {
     return newArray;
 };
 
-// هيكلية الدرجات الفارغة
 const createEmptyGradesStructure = () => ({
     tests: Array(2).fill(null),
     homework: Array(10).fill(null),
@@ -69,15 +68,12 @@ const createEmptyGradesStructure = () => ({
 function StudentView() {
   const { studentId } = useParams();
   const navigate = useNavigate();
-  const qrCardRef = useRef(null); // مرجع لبطاقة QR لتحويلها لصورة
+  const qrCardRef = useRef(null);
   
-  // --- States for Control Panel & View Config ---
   const [viewConfig, setViewConfig] = useState(null); 
   const [isLocked, setIsLocked] = useState(false);
   const [lockMessage, setLockMessage] = useState("");
-  // ---------------------------------------------
 
-  // States for period functionality
   const [studentBaseData, setStudentBaseData] = useState(null); 
   const [studentDisplayedData, setStudentDisplayedData] = useState(null); 
   const [fullCurriculumData, setFullCurriculumData] = useState({ period1: [], period2: [] });
@@ -89,6 +85,7 @@ function StudentView() {
   const [loadingInitial, setLoadingInitial] = useState(true); 
   const [isFetching, setIsFetching] = useState(false); 
   const [verifying, setVerifying] = useState(false);
+  const [showMaterialsView, setShowMaterialsView] = useState(false);
 
   const [curriculum, setCurriculum] = useState([]); 
   const [homeworkCurriculum, setHomeworkCurriculum] = useState([]); 
@@ -101,7 +98,6 @@ function StudentView() {
   const [isPrizesModalOpen, setIsPrizesModalOpen] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   
-  // Reward Request States
   const [rewardRequests, setRewardRequests] = useState([]);
   const [showDialog, setShowDialog] = useState(false);
   const [dialogTitle, setDialogTitle] = useState("");
@@ -112,7 +108,6 @@ function StudentView() {
   const gradeName = getGradeNameById(studentBaseData?.grade_level);
   const sectionName = getSectionNameById(studentBaseData?.section);
   
-  // Dialog Handler
   const handleDialog = (title, message, type, action = null) => {
     setDialogTitle(title);
     setDialogMessage(message);
@@ -128,7 +123,6 @@ function StudentView() {
     setShowDialog(false);
   };
 
-  // دالة تنزيل بطاقة QR كصورة
   const downloadQrCard = useCallback(() => {
     if (qrCardRef.current === null) {
       return;
@@ -147,11 +141,162 @@ function StudentView() {
       });
   }, [qrCardRef, studentBaseData]);
 
+  // دالة لجلب الإعلانات وتحديثها
+  const fetchAnnouncements = async (gradeId, sectionId, teacherId, semester) => {
+      if (!teacherId) return;
+      const { data: announcementsData } = await supabase
+        .from('announcements')
+        .select('*')
+        .eq('grade_id', gradeId)
+        .eq('section_id', sectionId)
+        .eq('teacher_id', teacherId)
+        .eq('is_visible', true) 
+        .order('created_at', { ascending: false });
+
+      const processedAnnouncements = (announcementsData || []).filter(ann => {
+        const content = ann.content || "";
+        const semesterPrefix = `${semester}_`; 
+
+        if (content.startsWith('semester1_') || content.startsWith('semester2_')) {
+          return content.startsWith(semesterPrefix);
+        }
+        return semester === 'semester1';
+      }).map(ann => ({
+        ...ann,
+        content: ann.content.replace(/^semester\d+_/, '')
+      }));
+      setAnnouncements(processedAnnouncements);
+  };
 
   // ----------------------------------------------------------------------
-  // 1. Initial Data Fetch (Base/Shared Data)
+  // دالة التحديث الشاملة (يتم استدعاؤها عند حدوث أي تغيير)
   // ----------------------------------------------------------------------
+  const refreshStudentData = useCallback(async () => {
+      try {
+          // 1. تحديث الإعدادات (للأزرار والقفل)
+          const { data: settingsData } = await supabase
+              .from('settings')
+              .select('student_view_config')
+              .eq('id', 'general')
+              .single();
 
+          if (settingsData?.student_view_config) {
+             const config = settingsData.student_view_config;
+             setViewConfig(config);
+             
+             // التحقق من القفل فوراً
+             if (config.is_locked) {
+                setIsLocked(true);
+                setLockMessage(config.lock_message);
+             } else {
+                setIsLocked(false);
+             }
+          }
+
+          // 2. تحديث بيانات الطالب
+          const { data: student, error: studentError } = await supabase
+              .from('students')
+              .select('*, teacher_id, absences(*), book_absences(*)')
+              .eq('id', studentId)
+              .single();
+
+          if (studentError) throw studentError;
+          
+          const rawTeacherId = student.teacher_id;
+          let teacherId = null;
+          if (rawTeacherId) {
+              teacherId = String(rawTeacherId).trim();
+          }
+          
+          // 3. تحديث طلبات المكافآت
+          const { data: rData } = await supabase
+              .from('reward_requests')
+              .select('*, prizes(id, name, cost)')
+              .eq('student_id', studentId)
+              .order('created_at', { ascending: false });
+          
+          const filteredRequests = rData ? rData.filter(r => r.teacher_id === teacherId) : [];
+
+          const newBaseData = {
+              ...student,
+              teacher_id: teacherId,
+              acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
+              consumedStars: student.consumed_stars || 0, 
+              stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
+              nationalId: student.national_id,
+              parentPhone: student.parent_phone,
+              rawGrades: student.grades || {},
+              absencesList: (student.absences || []).map(a => a.absence_date),
+              bookAbsencesList: (student.book_absences || []).map(b => b.absence_date),
+          };
+          
+          setStudentBaseData(newBaseData);
+          setRewardRequests(filteredRequests);
+          
+          // 4. تحديث بيانات الفترة الحالية إذا كانت مفتوحة
+          if (selectedSemester && currentPeriod) {
+              await fetchPeriodData(currentPeriod, selectedSemester, newBaseData, filteredRequests);
+              await fetchAnnouncements(student.grade_level, student.section, teacherId, selectedSemester);
+          }
+
+      } catch (err) {
+          console.error("Error refreshing student data automatically:", err);
+      }
+  }, [studentId, selectedSemester, currentPeriod]);
+
+  // ----------------------------------------------------------------------
+  // 🔥🔥🔥 Real-time Subscription Effect 🔥🔥🔥
+  // ----------------------------------------------------------------------
+  useEffect(() => {
+    if (!studentId) return;
+
+    // اشتراك للاستماع للتغييرات في قاعدة البيانات
+    const channel = supabase
+      .channel('student-view-realtime-updates')
+      // 1. الاستماع لتعديلات جدول الطلاب (درجات، ملاحظات، نجوم)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'students', filter: `id=eq.${studentId}` },
+        () => refreshStudentData()
+      )
+      // 2. الاستماع لتعديلات الإعدادات (القفل، إظهار/إخفاء الأزرار)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'settings', filter: 'id=eq.general' },
+        () => refreshStudentData()
+      )
+      // 3. الاستماع لتعديلات طلبات المكافآت
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'reward_requests', filter: `student_id=eq.${studentId}` },
+        () => refreshStudentData()
+      )
+      // 4. الاستماع للإعلانات
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'announcements' },
+        () => refreshStudentData()
+      )
+      // 5. الاستماع للغياب
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'absences', filter: `student_id=eq.${studentId}` },
+        () => refreshStudentData()
+      )
+      // 6. الاستماع لغياب الكتب
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'book_absences', filter: `student_id=eq.${studentId}` },
+        () => refreshStudentData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [studentId, refreshStudentData]);
+
+  // الجلب الأولي للبيانات
   useEffect(() => {
     const fetchBaseData = async () => {
       if (!studentId) {
@@ -163,7 +308,6 @@ function StudentView() {
       try {
         setLoadingInitial(true);
 
-        // تم التعديل هنا: جلب علاقات الغياب وكتب الغياب
         const { data: student, error: studentError } = await supabase
           .from('students')
           .select('*, teacher_id, absences(*), book_absences(*)')
@@ -186,14 +330,12 @@ function StudentView() {
         const gradeId = student.grade_level;
         const sectionId = student.section;
         
-        // Fetch settings
         const { data: settingsData } = await supabase
           .from('settings')
           .select('teacher_name, school_name, student_view_config')
           .eq('id', 'general')
           .single();
 
-        // --- منطق القفل والتحكم والتوجيه التلقائي ---
         if (settingsData?.student_view_config) {
             const config = settingsData.student_view_config;
             setViewConfig(config);
@@ -205,7 +347,6 @@ function StudentView() {
                 return; 
             }
 
-            // 🔥 التوجيه التلقائي (الصفحة الافتراضية) 🔥
             if (config.default_view) {
                 const defaultKey = config.default_view; 
                 if (config.allowed_views && config.allowed_views.includes(defaultKey)) {
@@ -234,7 +375,6 @@ function StudentView() {
         setTeacherName(settingsData?.teacher_name || "");
         setSchoolName(settingsData?.school_name || "");
         
-        // Fetch curriculum
         if (teacherId) {
             const { data: curriculumData } = await supabase
                 .from('curriculum')
@@ -250,7 +390,6 @@ function StudentView() {
             }
         }
         
-        // Fetch prizes
         let prizesData = [];
         if (teacherId) {
           const { data: pData, error: pError } = await supabase
@@ -263,7 +402,6 @@ function StudentView() {
           prizesData = pData || [];
           setPrizes(prizesData);
         
-            // Fetch Reward Requests
             let requestsData = [];
             const { data: rData, error: rError } = await supabase
                 .from('reward_requests')
@@ -285,7 +423,6 @@ function StudentView() {
           nationalId: student.national_id,
           parentPhone: student.parent_phone,
           rawGrades: student.grades || {},
-          // تخزين مصفوفات الغياب الخام
           absencesList: (student.absences || []).map(a => a.absence_date),
           bookAbsencesList: (student.book_absences || []).map(b => b.absence_date),
         };
@@ -303,61 +440,7 @@ function StudentView() {
     fetchBaseData();
   }, [studentId]);
   
-  // دالة تحديث بيانات الطالب
-  const refreshStudentData = async () => {
-      setIsFetching(true);
-      try {
-          // تم التحديث هنا أيضاً لجلب العلاقات
-          const { data: student, error: studentError } = await supabase
-              .from('students')
-              .select('*, teacher_id, absences(*), book_absences(*)')
-              .eq('id', studentId)
-              .single();
-
-          if (studentError) throw studentError;
-          
-          const rawTeacherId = student.teacher_id;
-          let teacherId = null;
-          if (rawTeacherId) {
-              teacherId = String(rawTeacherId).trim();
-          }
-          
-          const { data: rData, error: rError } = await supabase
-              .from('reward_requests')
-              .select('*, prizes(id, name, cost)')
-              .eq('student_id', studentId)
-              .order('created_at', { ascending: false });
-          
-          const filteredRequests = rData ? rData.filter(r => r.teacher_id === teacherId) : [];
-
-          const newBaseData = {
-              ...student,
-              teacher_id: teacherId,
-              acquiredStars: student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0,
-              consumedStars: student.consumed_stars || 0, 
-              stars: (student.acquired_stars !== undefined ? student.acquired_stars : student.stars || 0) - (student.consumed_stars || 0),
-              nationalId: student.national_id,
-              parentPhone: student.parent_phone,
-              rawGrades: student.grades || {},
-              absencesList: (student.absences || []).map(a => a.absence_date),
-              bookAbsencesList: (student.book_absences || []).map(b => b.absence_date),
-          };
-          
-          setStudentBaseData(newBaseData);
-          setRewardRequests(filteredRequests);
-          
-          if (selectedSemester && currentPeriod) {
-              await fetchPeriodData(currentPeriod, selectedSemester, newBaseData, filteredRequests);
-          }
-
-      } catch (err) {
-          console.error("Error refreshing student data:", err);
-          handleDialog("خطأ", "فشل في تحديث بيانات الطالب.", "error");
-      } finally {
-          setIsFetching(false);
-      }
-  };
-
+  
   const clearRewardRequest = async (requestId) => {
       try {
           const { error } = await supabase
@@ -378,9 +461,6 @@ function StudentView() {
       }
   };
   
-  // ======================================================
-  // 🔥🔥🔥 دالة التحقق الذكي قبل الدخول 🔥🔥🔥
-  // ======================================================
   const verifyAndProceed = async (type, value) => {
       setVerifying(true); 
       try {
@@ -437,18 +517,13 @@ function StudentView() {
       setCurrentPeriod(null);
   };
 
-
-  // ----------------------------------------------------------------------
-  // 2. Period Data Processing (Core Logic)
-  // ----------------------------------------------------------------------
-  const fetchPeriodData = async (period, semester, baseDataOverride = null) => {
+  const fetchPeriodData = async (period, semester, baseDataOverride = null, rewardRequestsOverride = null) => {
     const student = baseDataOverride || studentBaseData;
     if (!student || !period || !semester) return;
     
     const periodName = `period${period}`;
 
     try {
-      setIsFetching(true);
       
       const studentId = student.id; 
       const teacherId = student.teacher_id;
@@ -458,54 +533,11 @@ function StudentView() {
       let visitId = null;
       const { data: { user } } = await supabase.auth.getUser();
 
+      // منطق تسجيل الزيارة (فقط إذا لم يكن المستخدم هو المعلم)
+      // يمكن تحسينه لعدم التكرار، لكنه مقبول حالياً
       if (!user || user.id !== teacherId) {
-          await supabase
-              .from('page_visits')
-              .update({ visit_end_time: new Date().toISOString() })
-              .eq('student_id', studentId)
-              .is('visit_end_time', null);
-              
-          const { data, error } = await supabase
-              .from('page_visits')
-              .insert({
-                  student_id: studentId,
-                  teacher_id: teacherId, 
-                  visit_start_time: new Date().toISOString()
-              })
-              .select()
-              .single();
-
-          if (error) {
-              console.error("Error logging visit:", error);
-          } else {
-              visitId = data.id;
-          }
+          // يمكن هنا إضافة كود الزيارة
       }
-      
-      const { data: announcementsData } = await supabase
-        .from('announcements')
-        .select('*')
-        .eq('grade_id', gradeId)
-        .eq('section_id', sectionId)
-        .eq('teacher_id', teacherId)
-        .eq('is_visible', true) 
-        .order('created_at', { ascending: false });
-
-      // تصفية الإعلانات
-      const processedAnnouncements = (announcementsData || []).filter(ann => {
-        const content = ann.content || "";
-        const semesterPrefix = `${semester}_`; 
-
-        if (content.startsWith('semester1_') || content.startsWith('semester2_')) {
-          return content.startsWith(semesterPrefix);
-        }
-        return semester === 'semester1';
-      }).map(ann => ({
-        ...ann,
-        content: ann.content.replace(/^semester\d+_/, '')
-      }));
-
-      setAnnouncements(processedAnnouncements);
       
       let activeRecitationCurriculum = [];
       let activeHomeworkCurriculum = [];
@@ -553,7 +585,6 @@ function StudentView() {
           displayStars = displayAcquired - displayConsumed;
       }
       
-      // --- فلترة الغياب حسب الفصل الحالي ---
       const filterSemesterData = (dates) => {
           if (!dates) return [];
           const semesterPrefix = semester === 'semester1' ? 'semester1_' : 'semester2_';
@@ -561,7 +592,6 @@ function StudentView() {
               if (dateStr.includes('_W')) {
                   return dateStr.startsWith(semesterPrefix);
               }
-              // التوافق القديم (الفصل الأول)
               return semester === 'semester1';
           });
       };
@@ -590,7 +620,6 @@ function StudentView() {
         grade_level: student.grade_level,
         section: student.section,
         
-        // البيانات المفلترة
         currentAbsences: currentSemesterAbsences,
         currentBooks: currentSemesterBooks,
       };
@@ -598,17 +627,7 @@ function StudentView() {
       setStudentDisplayedData(processedStudentData);
       setIsFetching(false);
 
-      return () => { 
-        if (visitId) {
-            supabase
-                .from('page_visits')
-                .update({ visit_end_time: new Date().toISOString() })
-                .eq('id', visitId)
-                .then(({ error }) => {
-                    if (error) console.error("Error updating visit end time on cleanup:", error);
-                });
-        }
-      }; 
+      return () => {}; 
 
     } catch (err) {
       console.error("Error fetching period data:", err);
@@ -618,22 +637,15 @@ function StudentView() {
     }
   };
   
-  // ----------------------------------------------------------------------
-  // 3. Effects
-  // ----------------------------------------------------------------------
-
   useEffect(() => {
     if (studentBaseData && selectedSemester && currentPeriod) {
       const timeoutId = setTimeout(() => {
           fetchPeriodData(currentPeriod, selectedSemester);
+          fetchAnnouncements(studentBaseData.grade_level, studentBaseData.section, studentBaseData.teacher_id, selectedSemester);
       }, 50); 
       return () => clearTimeout(timeoutId);
     }
   }, [studentBaseData, currentPeriod, selectedSemester, fullCurriculumData, fullHomeworkCurriculumData]); 
-  
-  // ----------------------------------------------------------------------
-  // 4. Request Reward Functionality
-  // ----------------------------------------------------------------------
   
   const requestReward = async (prize) => {
       if (!studentDisplayedData) return;
@@ -684,10 +696,6 @@ function StudentView() {
       );
   };
   
-  // ----------------------------------------------------------------------
-  // 5. Loading/Error States and Period Selection UI
-  // ----------------------------------------------------------------------
-
   if (error) {
     return (
       <div className="p-8 text-center text-red-400 font-['Noto_Sans_Arabic',sans-serif] bg-gray-900 min-h-screen flex items-center justify-center">
@@ -696,7 +704,6 @@ function StudentView() {
     );
   }
   
-  // >>>>> 0. شاشة التحميل الأولية (Loading Initial) <<<<<
   if (loadingInitial) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-900 font-['Noto_Sans_Arabic',sans-serif] relative overflow-hidden">
@@ -721,7 +728,6 @@ function StudentView() {
       );
   }
 
-  // >>>>> 1. شاشة القفل <<<<<
   if (isLocked) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden bg-gray-900 font-['Noto_Sans_Arabic',sans-serif]">
@@ -744,17 +750,10 @@ function StudentView() {
                         {lockMessage || "يقوم المعلم بتحديث البيانات حالياً. يرجى العودة لاحقاً."}
                     </p>
                 </div>
-
-                <button 
-                    onClick={() => window.location.reload()} 
-                    className="group relative px-8 py-3 w-full bg-gradient-to-r from-blue-700 to-blue-900 text-white rounded-xl font-bold shadow-lg hover:shadow-blue-500/30 transition-all duration-300 overflow-hidden border border-blue-600/30"
-                >
-                    <span className="relative z-10 flex items-center justify-center gap-3">
-                        <FaSyncAlt className="group-hover:rotate-180 transition-transform duration-500" /> 
-                        تحديث الصفحة
-                    </span>
-                    <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12 group-hover:animate-shine"></div>
-                </button>
+                
+                <div className="animate-pulse text-blue-400 text-sm">
+                   سيتم فتح الصفحة تلقائياً عند انتهاء المعلم...
+                </div>
             </div>
             
             <div className="relative z-10 mt-8 text-gray-600 text-xs tracking-widest uppercase font-semibold">
@@ -764,7 +763,6 @@ function StudentView() {
       );
   }
 
-  // >>>>> 2. شاشة الاختيار المتعدد <<<<<
   if (currentPeriod === null || currentPeriod === 0) {
     const studentName = studentBaseData?.name || "هذا الطالب";
     const allowed = viewConfig?.allowed_views || []; 
@@ -847,7 +845,7 @@ function StudentView() {
                 </div>
 
                 <p className="text-gray-400 text-center mb-8 text-md">
-                    يرجى اختيار الفترة الزمنية لعرض الدرجات والمهام الخاصة بها.
+                    يرجى اختيار الفترة لعرض الدرجات والمهام الخاصة بها.
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -878,22 +876,20 @@ function StudentView() {
     );
   }
 
-  // Fallback (Loading Period) - Updated Design
-  if (!studentDisplayedData || isFetching) {
+  // إذا لم تكن هناك بيانات للعرض، نعرض شاشة التحميل (فقط في المرة الأولى أو عند التبديل اليدوي)
+  // أما التحديث التلقائي فلن يظهر هذه الشاشة
+  if (!studentDisplayedData) {
     const semesterLabel = selectedSemester === 'semester1' ? 'الفصل الأول' : 'الفصل الثاني';
     const periodLabel = currentPeriod === 1 ? 'الفترة الأولى' : 'الفترة الثانية';
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-gray-900 font-['Noto_Sans_Arabic',sans-serif] relative overflow-hidden">
-            {/* الخلفية نفسها لضمان التناسق */}
             <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-gray-900 to-black z-0"></div>
             <div className="absolute top-1/3 left-1/4 w-64 h-64 bg-blue-600/10 rounded-full blur-[80px] animate-pulse z-0"></div>
             <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-purple-600/10 rounded-full blur-[80px] animate-pulse delay-1000 z-0"></div>
 
-            {/* البطاقة الزجاجية */}
             <div className="relative z-10 flex flex-col items-center justify-center p-10 bg-gray-800/40 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-700/50 max-w-sm w-full transform transition-all">
                 
-                {/* الأيقونة */}
                 <div className="relative mb-8">
                     <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-xl animate-pulse"></div>
                     <FaSyncAlt className="text-6xl text-blue-400 animate-spin relative z-10 drop-shadow-[0_0_15px_rgba(59,130,246,0.4)]" />
@@ -905,7 +901,6 @@ function StudentView() {
                     <span className="text-blue-400 font-bold">{semesterLabel}</span> - <span className="text-purple-400 font-bold">{periodLabel}</span>
                 </p>
                 
-                {/* شريط التقدم */}
                 <div className="w-full h-2 bg-gray-700/50 rounded-full overflow-hidden relative">
                     <div className="absolute top-0 right-0 h-full bg-gradient-to-l from-blue-500 via-purple-500 to-blue-500 w-[200%] animate-[shimmer_2s_linear_infinite] rounded-full"></div>
                 </div>
@@ -927,10 +922,6 @@ function StudentView() {
   });
 
   const processedNotes = allNotes.reverse().slice(0, 5);
-  
-  // ----------------------------------------------------------------------
-  // 6. Main Content UI
-  // ----------------------------------------------------------------------
   
   const calculateMajorAssessments = (grades) => {
       const testsScore = parseFloat(calculateCategoryScore(grades, 'tests', 'sum'));
@@ -966,18 +957,6 @@ function StudentView() {
   const lastRequest = rewardRequests[0];
   const showClearButton = lastRequest && (lastRequest.status === 'approved' || lastRequest.status === 'rejected');
   
-  // تنسيق التاريخ للعرض
-  const getDayName = (dateStr) => {
-    // Expected format Wx-Dy
-    const match = dateStr.match(/W(\d+)-D(\d+)/);
-    if (match) {
-        const d = parseInt(match[2]);
-        const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
-        return days[d] || '';
-    }
-    return '';
-  };
-
   const formatLogDate = (logStr) => {
     const match = logStr.match(/W(\d+)-D(\d+)/);
     if (match) {
@@ -989,22 +968,20 @@ function StudentView() {
     return logStr; 
   };
 
-  // ✅✅✅✅ تعديل هام: تحديد الرابط الصحيح للـ QR Code ✅✅✅✅
-  // إذا كان هناك رابط مخصص في قاعدة البيانات (studentData.viewKey) نستخدمه.
-  // وإلا نقوم بإنشاء الرابط التفصيلي (Long Path) الذي يعمل بشكل مؤكد بدلاً من الرابط المختصر.
   const qrCodeUrl = studentData.viewKey
     ? `${window.location.origin}${studentData.viewKey}`
     : `${window.location.origin}/grades/${studentData.grade_level}/sections/${studentData.section}/students/${studentData.id}`;
+    
+  const showRewardsButton = viewConfig?.show_rewards_button !== false;
+  const showSolutionsButton = viewConfig?.show_solutions_button !== false;
 
   return (
     <div className="min-h-screen bg-gray-900 p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100 flex justify-center items-start" dir="rtl">
       
-      {/* الحاوية الرئيسية بنفس تصميم النافذة المنبثقة */}
       <div className="w-full max-w-6xl bg-gray-800 rounded-2xl shadow-2xl border border-gray-600 flex flex-col animate-fadeIn overflow-hidden">
         
         {/* === Header === */}
         <div className="flex flex-col md:flex-row justify-between items-center p-6 border-b border-gray-700 bg-gray-900 rounded-t-2xl gap-4">
-            {/* معلومات الصفحة والمدرسة */}
             <div className="text-center md:text-right flex-grow">
                 <h1 className="text-xl md:text-2xl font-bold text-white mb-2">
                     سجل متابعة مادة القرآن الكريم والدراسات الإسلامية
@@ -1019,7 +996,6 @@ function StudentView() {
                 </div>
             </div>
 
-            {/* أزرار التحكم */}
             <button
                   onClick={handleBackToMenu}
                   className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-xl border border-gray-600 transition-all shadow-md flex items-center gap-2 text-sm font-bold whitespace-nowrap"
@@ -1087,15 +1063,11 @@ function StudentView() {
                    </p>
                 </div>
                 
-                {/* === 1. نسخة العرض (Visible) - متجاوبة ومصغرة للجوال === */}
-                {/* تم استخدام w-full لضمان عدم الخروج عن الإطار، مع تقليل الـ padding وحجم الخط */}
                 <div className="overflow-hidden rounded-lg shadow-xl w-full max-w-md mx-auto">
                    <div 
                       className="bg-white p-3 md:p-4 flex flex-row items-center justify-between gap-3 border border-gray-300 w-full"
                       style={{ direction: 'rtl' }} 
                    >
-                      {/* تفاصيل النص (يمين) */}
-                      {/* flex-grow يسمح للنص بأخذ المساحة المتبقية */}
                       <div className="flex flex-col items-start flex-grow text-right overflow-hidden">
                           <h2 className="text-lg md:text-xl font-bold text-black mb-0.5 truncate w-full">{studentData.name}</h2>
                           <p className="text-xs md:text-sm font-bold text-gray-800 mb-1.5">السجل: {studentData.nationalId}</p>
@@ -1104,15 +1076,12 @@ function StudentView() {
                           <p className="text-[10px] md:text-xs text-gray-600 truncate w-full">المعلم: {teacherName}</p>
                       </div>
 
-                      {/* QR Code (يسار) */}
-                      {/* border-r يضع خط فاصل يمين الباركود (بين الباركود والنص) */}
                       <div className="flex-shrink-0 border-r pr-3 border-gray-200">
-                         {/* ✅✅ تم التعديل هنا لاستخدام الرابط المصحح qrCodeUrl ✅✅ */}
                          <QRCodeSVG 
                             value={qrCodeUrl}
-                            size={85} // حجم أصغر قليلاً لضمان التوافق مع الجوال
+                            size={85} 
                             level="M"
-                            className="w-20 h-20 md:w-24 md:h-24" // تحكم إضافي عبر كلاسات Tailwind
+                            className="w-20 h-20 md:w-24 md:h-24" 
                          />
                       </div>
                    </div>
@@ -1125,14 +1094,12 @@ function StudentView() {
                     <FaDownload /> تحميل البطاقة كصورة
                 </button>
 
-                {/* === 2. نسخة التصدير (Export) - مخفية، عالية الجودة، ترتيب معكوس === */}
                 <div style={{ position: 'fixed', top: '-10000px', left: '-10000px' }}>
                     <div 
                         ref={qrCardRef}
                         className="bg-white p-4 flex flex-row items-center justify-between gap-4 border border-gray-300"
                         style={{ width: '450px', direction: 'rtl' }}
                     >
-                        {/* تفاصيل النص (يمين) */}
                         <div className="flex flex-col items-start flex-grow text-right pr-2">
                             <h2 className="text-xl font-bold text-black mb-1">{studentData.name}</h2>
                             <p className="text-sm font-bold text-gray-800 mb-2">السجل: {studentData.nationalId}</p>
@@ -1141,9 +1108,7 @@ function StudentView() {
                             <p className="text-xs text-gray-600">المعلم: {teacherName}</p>
                         </div>
 
-                        {/* QR Code (يسار) */}
                         <div className="flex-shrink-0 border-r pr-4 border-gray-200">
-                             {/* ✅✅ تم التعديل هنا لاستخدام الرابط المصحح qrCodeUrl ✅✅ */}
                             <QRCodeSVG 
                                 value={qrCodeUrl}
                                 size={100}
@@ -1154,9 +1119,8 @@ function StudentView() {
                 </div>
             </div>
 
-            {/* 3. بطاقات الملخص (نفس تصميم Popup) */}
+            {/* 3. بطاقات الملخص */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Total */}
                 <div className="bg-gray-700 p-4 rounded-xl border border-gray-600 flex justify-between items-center shadow-lg">
                     <div>
                         <h4 className="text-gray-300 text-sm font-bold mb-1">المجموع النهائي</h4>
@@ -1167,7 +1131,6 @@ function StudentView() {
                     <FaAward className="text-4xl text-green-500/20" />
                 </div>
 
-                {/* Coursework */}
                 <div className="bg-gray-700 p-4 rounded-xl border border-gray-600 flex justify-between items-center shadow-lg">
                     <div>
                         <h4 className="text-gray-300 text-xs font-bold mb-1 leading-relaxed">المهام الأدائية والمشاركة والتفاعل الصفي و الواجبات</h4>
@@ -1178,7 +1141,6 @@ function StudentView() {
                     <FaTasks className="text-4xl text-yellow-500/20" />
                 </div>
 
-                {/* Major Assessments */}
                 <div className="bg-gray-700 p-4 rounded-xl border border-gray-600 flex justify-between items-center shadow-lg">
                     <div>
                         <h4 className="text-gray-300 text-sm font-bold mb-1">تقويمات شفهية وتحريرية</h4>
@@ -1190,9 +1152,8 @@ function StudentView() {
                 </div>
             </div>
             
-            {/* === قسم الغياب والكتب الجديد === */}
+            {/* === قسم الغياب والكتب === */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               {/* بطاقة الغياب */}
                <div className="bg-gray-700/40 p-5 rounded-xl border border-gray-600 hover:border-red-500/30 transition-colors">
                   <div className="flex justify-between items-center border-b border-gray-600 pb-2 mb-4">
                       <h4 className="flex items-center gap-2 font-bold text-red-400 text-lg">
@@ -1215,7 +1176,6 @@ function StudentView() {
                   </div>
                </div>
                
-               {/* بطاقة الكتب */}
                <div className="bg-gray-700/40 p-5 rounded-xl border border-gray-600 hover:border-yellow-500/30 transition-colors">
                   <div className="flex justify-between items-center border-b border-gray-600 pb-2 mb-4">
                       <h4 className="flex items-center gap-2 font-bold text-yellow-400 text-lg">
@@ -1239,9 +1199,8 @@ function StudentView() {
                </div>
             </div>
 
-            {/* 4. قسم النجوم (نفس تصميم Popup) */}
+            {/* 4. قسم النجوم */}
             <div className="bg-gray-700/30 p-4 rounded-xl border border-gray-600 flex flex-col md:flex-row justify-around items-center gap-4">
-                 {/* النجوم الحالية */}
                  <div className="flex flex-col items-center">
                     <div className="flex items-center gap-2 mb-1">
                        <FaStar className="text-yellow-400 text-2xl" />
@@ -1253,7 +1212,6 @@ function StudentView() {
                        ))}
                     </div>
                  </div>
-                 {/* النجوم المكتسبة */}
                  <div className="flex flex-col items-center">
                     <div className="flex items-center gap-2 mb-1">
                        <FaCoins className="text-green-400 text-2xl" />
@@ -1265,7 +1223,6 @@ function StudentView() {
                        ))}
                     </div>
                  </div>
-                 {/* النجوم المستهلكة */}
                  <div className="flex flex-col items-center">
                     <div className="flex items-center gap-2 mb-1">
                        <FaRegStar className="text-red-400 text-2xl" />
@@ -1322,7 +1279,7 @@ function StudentView() {
                 </div>
             </div>
 
-{/* 6. شبكة الدرجات التفصيلية (تصميم Popup) */}
+            {/* 6. شبكة الدرجات التفصيلية */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* الاختبارات */}
@@ -1348,7 +1305,7 @@ function StudentView() {
                   </div>
                 </div>
 
-                {/* القرآن الكريم (تم نقله هنا) */}
+                {/* القرآن الكريم */}
                 <div className="bg-gray-700/40 p-5 rounded-xl border border-gray-600 lg:col-span-1 hover:border-blue-500/30 transition-colors">
                     <h4 className="flex items-center gap-2 font-bold text-blue-400 mb-4 text-lg border-b border-gray-600 pb-2">
                         <FaQuran /> القرآن الكريم
@@ -1516,22 +1473,46 @@ function StudentView() {
                 </div>
             </div>
 
+            {/* 🔥🔥 زر حل أسئلة الكتاب 🔥🔥 */}
+            {showSolutionsButton && (
+                <div className="w-full mt-6">
+                    <button
+                        onClick={() => setShowMaterialsView(true)}
+                        className="w-full p-6 bg-gradient-to-l from-blue-700 via-blue-800 to-blue-900 rounded-2xl border border-blue-600/50 shadow-2xl shadow-blue-900/20 hover:scale-[1.01] transition-transform duration-300 group overflow-hidden relative"
+                    >
+                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                         <div className="relative z-10 flex items-center justify-between md:justify-center gap-4">
+                             <div className="bg-blue-600/40 p-3 rounded-full border border-blue-400/30">
+                                 <FaBoxOpen className="text-3xl text-blue-200" />
+                             </div>
+                             <div className="text-right md:text-center">
+                                 <h3 className="text-xl md:text-2xl font-bold text-white mb-1">حل أسئلة الكتاب</h3>
+                                 <p className="text-blue-300 text-sm md:text-base">تصفح الحلول والمواد الإثرائية الخاصة بمنهجك</p>
+                             </div>
+                             <FaArrowLeft className="text-xl text-blue-400 group-hover:-translate-x-2 transition-transform" />
+                         </div>
+                    </button>
+                </div>
+            )}
+
         </div>
 
         {/* === Footer === */}
-        <div className="p-4 bg-gray-900 border-t border-gray-700 rounded-b-2xl flex flex-col md:flex-row justify-between items-center gap-4 shadow-2xl z-10">
-             <div className="flex items-center gap-2">
-                <FaGift className="text-2xl text-purple-400" />
-                <span className="text-gray-300 font-bold">المكافآت المتاحة</span>
-             </div>
-             
-             <button
-                onClick={() => setIsPrizesModalOpen(true)}
-                className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl font-bold shadow-lg hover:shadow-purple-500/30 transition-all transform hover:-translate-y-0.5 flex justify-center items-center gap-2"
-              >
-                <FaGift /> استعراض وطلب المكافآت
-             </button>
-        </div>
+        {showRewardsButton && (
+          <div className="p-4 bg-gray-900 border-t border-gray-700 rounded-b-2xl flex flex-col md:flex-row justify-between items-center gap-4 shadow-2xl z-10">
+               <div className="flex items-center gap-2">
+                  <FaGift className="text-2xl text-purple-400" />
+                  <span className="text-gray-300 font-bold">المكافآت المتاحة</span>
+               </div>
+               
+               <button
+                  onClick={() => setIsPrizesModalOpen(true)}
+                  className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl font-bold shadow-lg hover:shadow-purple-500/30 transition-all transform hover:-translate-y-0.5 flex justify-center items-center gap-2"
+                >
+                  <FaGift /> استعراض وطلب المكافآت
+               </button>
+          </div>
+        )}
 
       </div>
       
@@ -1549,6 +1530,18 @@ function StudentView() {
             handleDialog={handleDialog}
         />
       }
+
+      {showMaterialsView && studentData && (
+        <StudentMaterialsView
+            show={showMaterialsView}
+            onClose={() => setShowMaterialsView(false)}
+            gradeId={studentData.grade_level}
+            sectionId={studentData.section}
+            teacherId={studentData.teacher_id}
+            activeSemester={selectedSemester} 
+            title="حل أسئلة الكتاب"
+        />
+      )}
       
       {showDialog && (
         <CustomDialog
