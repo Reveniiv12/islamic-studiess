@@ -20,7 +20,7 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
   const [newTitle, setNewTitle] = useState('');
   const [selectedTargetSections, setSelectedTargetSections] = useState([]); 
   
-  // --- حالة نافذة إعادة التسمية (الجديدة) ---
+  // --- حالة نافذة إعادة التسمية ---
   const [renameModal, setRenameModal] = useState({
       isOpen: false,
       type: null, // 'folder' or 'file'
@@ -445,7 +445,7 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
     });
   };
 
-  // 1. فتح نافذة التعديل (سواء للمجلد أو الملف)
+  // 1. فتح نافذة التعديل
   const openRenameModal = (type, id, currentName) => {
       setRenameModal({
           isOpen: true,
@@ -455,26 +455,30 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
       });
   };
 
-  // 2. تنفيذ الحفظ بناءً على النوع
+  // 2. تنفيذ الحفظ (تم التصحيح)
   const handleRenameSubmit = async () => {
-      if (!renameModal.currentName.trim()) return;
+      // FIX 2: استخراج القيم في متغيرات ثابتة قبل البدء
+      const { type, id, currentName } = renameModal;
 
-      setRenameModal(prev => ({ ...prev, isOpen: false })); // إغلاق المودال
+      if (!currentName.trim()) return;
+
+      setRenameModal(prev => ({ ...prev, isOpen: false })); 
       setStatusState({ type: 'loading', title: 'جاري التحديث', message: 'يتم حفظ الاسم الجديد...' });
 
       let error = null;
 
-      if (renameModal.type === 'folder') {
+      // استخدام المتغيرات المحلية type و id بدلاً من الحالة المباشرة
+      if (type === 'folder') {
           const { error: err } = await supabase
               .from('course_folders')
-              .update({ title: renameModal.currentName })
-              .eq('id', renameModal.id);
+              .update({ title: currentName })
+              .eq('id', id);
           error = err;
-      } else if (renameModal.type === 'file') {
+      } else if (type === 'file') {
           const { error: err } = await supabase
               .from('library_files')
-              .update({ file_name: renameModal.currentName })
-              .eq('id', renameModal.id);
+              .update({ file_name: currentName })
+              .eq('id', id);
           error = err;
       }
 
@@ -502,9 +506,10 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
   return (
     <>
     <CustomModal title="المكتبة الذكية (Smart Library)" onClose={onClose}>
-      <div className="relative min-h-[500px] flex flex-col">
+      {/* FIX 1: تعديل ارتفاع الحاوية ليكون مناسبًا للجوال ويسمح بالتمرير الداخلي */}
+      <div className="relative flex flex-col h-[80vh] md:h-auto md:min-h-[500px] md:max-h-[85vh]">
         
-        {/* --- Rename Modal (New) --- */}
+        {/* --- Rename Modal --- */}
         {renameModal.isOpen && (
             <div className="absolute inset-0 z-[80] flex flex-col items-center justify-center rounded-xl animate-fadeIn p-6 backdrop-blur-sm bg-gray-900/80">
                 <div className="bg-gray-800 p-6 rounded-2xl border border-blue-500/50 w-full max-w-sm shadow-2xl transform scale-100 transition-all">
@@ -514,6 +519,8 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
                     </h3>
                     
                     <input 
+                        // FIX 2: إضافة Key لضمان تحديث الحقل عند تغيير العنصر
+                        key={renameModal.id || 'rename-input'}
                         type="text" 
                         value={renameModal.currentName} 
                         onChange={(e) => setRenameModal({ ...renameModal, currentName: e.target.value })}
@@ -626,7 +633,7 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
         )}
 
         {/* --- Header Controls --- */}
-        <div className="flex flex-col md:flex-row gap-3 items-center justify-between mb-6 bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+        <div className="flex flex-col md:flex-row gap-3 items-center justify-between mb-6 bg-gray-800/50 p-4 rounded-xl border border-gray-700 flex-shrink-0">
             <div className="flex gap-2 w-full md:w-auto">
                 <button 
                     onClick={() => setIsAddingMode(!isAddingMode)} 
@@ -646,7 +653,7 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
 
         {/* --- Add New Folder --- */}
         {isAddingMode && (
-            <div className="mb-6 bg-gray-800 p-5 rounded-xl border border-blue-500/30 shadow-2xl animate-fadeIn">
+            <div className="mb-6 bg-gray-800 p-5 rounded-xl border border-blue-500/30 shadow-2xl animate-fadeIn flex-shrink-0">
                 <h4 className="text-white font-bold mb-4 flex items-center gap-2"><FaLayerGroup className="text-blue-400" /> إضافة مجلد مشترك</h4>
                 <div className="flex flex-col gap-4">
                     <input type="text" placeholder="عنوان المجلد..." value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500" />
@@ -675,7 +682,7 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
             ) : folders.length === 0 ? (
                 <div className="text-center py-10 border-2 border-dashed border-gray-700 rounded-xl"><FaFolderOpen className="text-6xl text-gray-700 mx-auto mb-4" /><p className="text-gray-500">لا توجد مجلدات.</p></div>
             ) : (
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 gap-4 pb-10"> 
                     {folders.map((folder, fIndex) => (
                         <div key={folder.id} className={`group bg-gray-800 rounded-xl border transition-all ${folder.is_hidden ? 'border-red-900/50 opacity-75' : 'border-gray-700 hover:border-blue-500/50'}`}>
                             
@@ -700,7 +707,6 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
                                 <div className="flex gap-2 items-center" onClick={(e)=>e.stopPropagation()}>
                                     <button onClick={()=>openShareModal(folder)} className="p-2 text-purple-400 hover:text-white" title="تعديل الفصول (مشاركة)"><FaShareAlt /></button>
                                     <button onClick={()=>toggleFolderVisibility(folder.id, folder.is_hidden)} className="p-2 text-gray-400 hover:text-white">{folder.is_hidden ? <FaEyeSlash /> : <FaEye />}</button>
-                                    {/* زر تعديل المجلد: يفتح المودال */}
                                     <button onClick={()=>openRenameModal('folder', folder.id, folder.title)} className="p-2 text-blue-400 hover:text-white"><FaEdit /></button>
                                     <button onClick={()=>handleDeleteFolder(folder.id)} className="p-2 text-red-400 hover:text-white"><FaTrash /></button>
                                 </div>
@@ -731,7 +737,6 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
                                                 
                                                 <div className="flex-1 min-w-0 px-2 flex items-center group/title">
                                                     <p className="text-sm text-gray-200 truncate dir-ltr text-right ml-2">{file.name}</p>
-                                                    {/* زر التعديل ظاهر دائماً ويفتح المودال */}
                                                     <button 
                                                         onClick={() => openRenameModal('file', file.file_id, file.name)}
                                                         className="text-gray-500 hover:text-blue-400 transition-colors"

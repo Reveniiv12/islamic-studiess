@@ -1,16 +1,17 @@
 // src/components/StudentMaterialsView.jsx
 import React, { useState, useEffect, useCallback } from 'react';
+// 1. استيراد createPortal
+import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { FaFolder, FaFilePdf, FaArrowRight, FaBoxOpen, FaSpinner } from 'react-icons/fa';
 import FileViewer from './FileViewer'; 
 
-// --- 1. استيراد مكتبة react-pdf ---
 import { Document, Page, pdfjs } from 'react-pdf';
 
-// --- 2. إعداد الـ Worker الخاص بالمكتبة ---
+// إعداد الـ Worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
-// --- 3. إضافة مكون معاينة الـ PDF ---
+// مكون معاينة الـ PDF
 const PdfThumbnail = ({ url }) => {
   return (
     <div className="w-full h-full overflow-hidden flex items-center justify-center bg-white relative">
@@ -29,12 +30,11 @@ const PdfThumbnail = ({ url }) => {
       >
         <Page 
           pageNumber={1} 
-          width={280} // عرض تقريبي ليناسب البطاقة
+          width={280} 
           renderTextLayer={false} 
           renderAnnotationLayer={false} 
         />
       </Document>
-      {/* طبقة شفافة لمنع التفاعل المباشر مع ملف الـ PDF داخل البطاقة */}
       <div className="absolute inset-0 z-10 bg-transparent"></div>
     </div>
   );
@@ -47,7 +47,7 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // تعريف دالة الجلب
+  // دالة الجلب
   const fetchMaterials = useCallback(async () => {
     if (!gradeId || !sectionId) return;
 
@@ -105,7 +105,6 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
     }
   }, [gradeId, sectionId]);
 
-  // الجلب الأولي
   useEffect(() => {
     if (show) {
       setLoading(true);
@@ -114,7 +113,6 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
     }
   }, [show, fetchMaterials]);
 
-  // الاشتراك في التحديثات المباشرة
   useEffect(() => {
     if (!show) return;
 
@@ -216,7 +214,6 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
                   onClick={() => openFileViewer(idx)}
                   className="group relative bg-gray-800/50 border border-gray-700 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer hover:-translate-y-2 shadow-xl"
                 >
-                  {/* --- 4. تحديث منطقة المعاينة لاستخدام PdfThumbnail --- */}
                   <div className="aspect-video bg-gray-900 flex items-center justify-center relative">
                     {file.type?.includes('pdf') ? (
                        <PdfThumbnail url={file.url} />
@@ -224,7 +221,6 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
                       <img src={file.url} alt="thumbnail" className="w-full h-full object-cover" />
                     )}
                     
-                    {/* تأثير التحويم */}
                     <div className="absolute inset-0 bg-blue-600/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[2px] z-20">
                        <span className="bg-white text-blue-600 px-4 py-2 rounded-full font-bold text-xs shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
                          عرض
@@ -232,7 +228,6 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
                     </div>
                   </div>
 
-                  {/* معلومات الملف */}
                   <div className="p-4 bg-gray-800/80">
                     <p className="text-sm font-bold truncate text-gray-200 text-right" dir="auto">
                         {file.name}
@@ -254,16 +249,24 @@ const StudentMaterialsView = ({ show, onClose, gradeId, sectionId, teacherId, ac
         )}
       </div>
 
-      {/* عارض الملفات */}
-      {viewerOpen && selectedTopic && (
-        <FileViewer 
-          files={selectedTopic.files}
-          currentIndex={currentFileIndex}
-          onClose={() => setViewerOpen(false)}
-          onNext={() => setCurrentFileIndex((prev) => (prev + 1) % selectedTopic.files.length)}
-          onPrev={() => setCurrentFileIndex((prev) => (prev - 1 + selectedTopic.files.length) % selectedTopic.files.length)}
-        />
+      {/* ============= FIX: استخدام PORTAL =============
+        نستخدم createPortal لنقل النافذة خارج العنصر الحالي
+        وضعه مباشرة في body الصفحة ليظهر فوق كل شيء
+        ويحل مشكلة التمرير في الجوال.
+      */}
+      {viewerOpen && selectedTopic && createPortal(
+        <div style={{ position: 'relative', zIndex: 9999 }}>
+            <FileViewer 
+              files={selectedTopic.files}
+              currentIndex={currentFileIndex}
+              onClose={() => setViewerOpen(false)}
+              onNext={() => setCurrentFileIndex((prev) => (prev + 1) % selectedTopic.files.length)}
+              onPrev={() => setCurrentFileIndex((prev) => (prev - 1 + selectedTopic.files.length) % selectedTopic.files.length)}
+            />
+        </div>,
+        document.body
       )}
+
     </div>
   );
 };
