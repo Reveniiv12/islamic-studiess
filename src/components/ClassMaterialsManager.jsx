@@ -3,14 +3,39 @@ import { supabase } from '../supabaseClient';
 import { 
     FaPlus, FaTrash, FaFileUpload, FaFilePdf, FaImage, FaTimes, 
     FaFolderOpen, FaSpinner, FaCheckCircle, FaExclamationCircle, 
-    FaEye, FaEyeSlash, FaEdit, FaSave, FaTv, FaLayerGroup, FaCheckSquare, FaSquare,
-    FaExclamationTriangle, FaArrowUp, FaArrowDown, FaShareAlt
+    FaEye, FaEyeSlash, FaEdit, FaTv, FaLayerGroup, FaCheckSquare, FaSquare,
+    FaExclamationTriangle, FaArrowUp, FaArrowDown, FaShareAlt, FaCamera
 } from 'react-icons/fa';
 import CustomModal from './CustomModal'; 
 import StudentMaterialsView from './StudentMaterialsView'; 
 import imageCompression from 'browser-image-compression';
+import { Document, Page, pdfjs } from 'react-pdf';
 
-const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, activeSemester, handleDialog }) => {
+// إعداد Worker الخاص بملفات PDF
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+// مكون مصغر لمعاينة PDF
+const PdfThumbnail = ({ url }) => {
+    return (
+        <div className="w-10 h-10 overflow-hidden rounded-md bg-gray-200 flex items-center justify-center relative">
+             <Document
+                file={url}
+                loading={<FaSpinner className="animate-spin text-gray-500" />}
+                error={<FaFilePdf className="text-red-400 text-xl" />}
+                className="flex items-center justify-center"
+            >
+                <Page 
+                    pageNumber={1} 
+                    width={80} 
+                    renderTextLayer={false} 
+                    renderAnnotationLayer={false} 
+                />
+            </Document>
+        </div>
+    );
+};
+
+const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, activeSemester }) => {
   const [folders, setFolders] = useState([]);
   const [teacherSections, setTeacherSections] = useState([]); 
   const [loading, setLoading] = useState(false);
@@ -19,14 +44,18 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
   const [isAddingMode, setIsAddingMode] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [selectedTargetSections, setSelectedTargetSections] = useState([]); 
-  
-  // --- حالة نافذة إعادة التسمية ---
+  const [newFolderImage, setNewFolderImage] = useState(null); 
+
+  // --- حالات التعديل (نافذة التسمية والصورة) ---
   const [renameModal, setRenameModal] = useState({
       isOpen: false,
       type: null, // 'folder' or 'file'
       id: null,
-      currentName: ''
+      currentName: '',
+      currentImage: null 
   });
+  const [editFolderImagePreview, setEditFolderImagePreview] = useState(null); 
+  const [editFolderImageFile, setEditFolderImageFile] = useState(null); 
 
   // حالات المشاركة
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -38,13 +67,10 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
   const fileInputRef = useRef(null);
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   
-  // التنبيهات والتأكيد
+  // التنبيهات
   const [statusState, setStatusState] = useState(null);
   const [confirmState, setConfirmState] = useState(null); 
-  
   const [showPreview, setShowPreview] = useState(false);
-
-  // مرجع لإيقاف العملية
   const cancelOperationRef = useRef(false);
 
   useEffect(() => {
@@ -61,7 +87,7 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
         .select(`
             folder_id,
             course_folders (
-                id, title, is_hidden, created_at, order_index,
+                id, title, is_hidden, created_at, order_index, cover_image,
                 folder_contents (
                     id, is_visible, order_index,
                     library_files ( id, file_name, file_type, file_data )
@@ -80,6 +106,7 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
             is_hidden: a.course_folders.is_hidden,
             order_index: a.course_folders.order_index,
             created_at: a.course_folders.created_at,
+            cover_image: a.course_folders.cover_image,
             files: a.course_folders.folder_contents
                 .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
                 .map(content => ({
@@ -118,7 +145,6 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
             const sectionsArray = Array.from(uniqueMap.values());
             sectionsArray.sort((a, b) => a.grade_id.localeCompare(b.grade_id) || a.section_id.localeCompare(b.section_id));
             setTeacherSections(sectionsArray);
-            
             const current = sectionsArray.find(s => s.isCurrent);
             if (current) setSelectedTargetSections([current]); 
         }
@@ -128,9 +154,7 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
   const toggleSectionSelection = (section, isEditMode = false) => {
       const targetState = isEditMode ? sharedSectionsState : selectedTargetSections;
       const setTargetState = isEditMode ? setSharedSectionsState : setSelectedTargetSections;
-
       const exists = targetState.find(s => s.grade_id === section.grade_id && s.section_id === section.section_id);
-      
       if (exists) {
           setTargetState(targetState.filter(s => s !== exists));
       } else {
@@ -138,20 +162,15 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
       }
   };
 
-  // --- دوال التحريك ---
   const moveFolder = async (index, direction) => {
       const newFolders = [...folders];
       const targetIndex = index + direction;
       if (targetIndex < 0 || targetIndex >= newFolders.length) return;
-
       [newFolders[index], newFolders[targetIndex]] = [newFolders[targetIndex], newFolders[index]];
-      
       const tempOrder = newFolders[index].order_index;
       newFolders[index].order_index = newFolders[targetIndex].order_index;
       newFolders[targetIndex].order_index = tempOrder;
-
       setFolders(newFolders);
-
       try {
           await supabase.from('course_folders').upsert([
               { id: newFolders[index].id, order_index: newFolders[index].order_index },
@@ -164,17 +183,12 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
       const newFolders = [...folders];
       const files = newFolders[folderIndex].files;
       const targetIndex = fileIndex + direction;
-
       if (targetIndex < 0 || targetIndex >= files.length) return;
-
       [files[fileIndex], files[targetIndex]] = [files[targetIndex], files[fileIndex]];
-      
       const tempOrder = files[fileIndex].order_index;
       files[fileIndex].order_index = files[targetIndex].order_index;
       files[targetIndex].order_index = tempOrder;
-
       setFolders(newFolders);
-
       try {
           await supabase.from('folder_contents').upsert([
               { id: files[fileIndex].content_id, order_index: files[fileIndex].order_index },
@@ -183,11 +197,9 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
       } catch (err) { console.error(err); fetchFolders(); }
   };
 
-  // --- دوال المشاركة ---
   const openShareModal = async (folder) => {
       setFolderToShare(folder);
       setStatusState({ type: 'loading', title: 'جاري التحميل', message: 'جاري جلب الفصول المرتبطة...' });
-
       const { data: existingAssignments } = await supabase
           .from('folder_assignments')
           .select('grade_id, section_id')
@@ -206,15 +218,12 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
   const handleSaveShare = async () => {
       if (!folderToShare) return;
       setStatusState({ type: 'loading', title: 'جاري التحديث', message: 'يتم تحديث صلاحيات الوصول...' });
-
       await supabase.from('folder_assignments').delete().eq('folder_id', folderToShare.id);
-
       const newAssignments = sharedSectionsState.map(sec => ({
           folder_id: folderToShare.id,
           grade_id: sec.grade_id,
           section_id: sec.section_id
       }));
-
       if (newAssignments.length > 0) {
           const { error } = await supabase.from('folder_assignments').insert(newAssignments);
           if (error) {
@@ -222,7 +231,6 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
               return;
           }
       }
-
       setIsShareModalOpen(false);
       setFolderToShare(null);
       setStatusState({ type: 'success', title: 'تم الحفظ', message: 'تم تحديث الفصول المرتبطة بنجاح.' });
@@ -230,16 +238,40 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
       fetchFolders();
   };
 
-  // --- دوال الإضافة والرفع ---
+  // --- دوال الصور ---
+  const handleImageCompression = async (file) => {
+      const compressed = await imageCompression(file, { maxSizeMB: 0.5, maxWidthOrHeight: 800 });
+      return new Promise((r) => { const rd = new FileReader(); rd.readAsDataURL(compressed); rd.onloadend=()=>r(rd.result); });
+  };
+
+  const handleFolderImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        try {
+            const base64 = await handleImageCompression(file);
+            setNewFolderImage(base64);
+        } catch (error) { console.error("Error compressing image", error); }
+    }
+  };
+
+  const handleEditFolderImageSelect = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        try {
+            const objectUrl = URL.createObjectURL(file);
+            setEditFolderImagePreview(objectUrl);
+            setEditFolderImageFile(file); 
+        } catch (error) { console.error(error); }
+    }
+  };
+
   const handleAddTopic = async () => {
     if (!newTitle.trim()) return;
     if (selectedTargetSections.length === 0) {
         setStatusState({ type: 'error', title: 'تنبيه', message: 'يجب اختيار فصل واحد على الأقل.' });
         return;
     }
-
     setStatusState({ type: 'loading', title: 'جاري الإنشاء', message: 'جاري إنشاء المجلد المشترك...' });
-
     const maxOrder = folders.length > 0 ? Math.max(...folders.map(f => f.order_index || 0)) : 0;
 
     const { data: folderData, error: folderError } = await supabase
@@ -249,7 +281,8 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
             semester: activeSemester,
             title: newTitle,
             is_hidden: false,
-            order_index: maxOrder + 1
+            order_index: maxOrder + 1,
+            cover_image: newFolderImage 
         })
         .select()
         .single();
@@ -258,16 +291,14 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
         setStatusState({ type: 'error', title: 'خطأ', message: 'فشل إنشاء المجلد' });
         return;
     }
-
     const assignments = selectedTargetSections.map(sec => ({
         folder_id: folderData.id,
         grade_id: sec.grade_id,
         section_id: sec.section_id
     }));
-
     await supabase.from('folder_assignments').insert(assignments);
-
     setNewTitle('');
+    setNewFolderImage(null);
     setIsAddingMode(false);
     setStatusState({ type: 'success', title: 'تمت العملية', message: 'تم إنشاء المجلد المشترك بنجاح.' });
     setTimeout(() => setStatusState(null), 1500);
@@ -290,43 +321,35 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!selectedFolderId || files.length === 0) return;
-
     const MAX_SIZE_MB = 3;
     const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
-
+    
+    // فحص أولي للأحجام
     for (const file of files) {
         if (file.size > MAX_SIZE_BYTES) {
-            setStatusState({ 
-                type: 'error', 
-                title: 'حجم الملف كبير', 
-                message: `الملف "${file.name}" يتجاوز الحد المسموح (${MAX_SIZE_MB} ميجابايت).` 
-            });
+            setStatusState({ type: 'error', title: 'حجم الملف كبير', message: `الملف "${file.name}" يتجاوز الحد المسموح.` });
             if (fileInputRef.current) fileInputRef.current.value = '';
             return;
         }
     }
-
+    
     cancelOperationRef.current = false;
     setStatusState({ type: 'loading', title: 'ذكاء البيانات', message: 'جاري الفحص والرفع...' });
-
+    
     try {
         const currentFolder = folders.find(f => f.id === selectedFolderId);
-        let currentMaxOrder = currentFolder.files.length > 0 
-            ? Math.max(...currentFolder.files.map(f => f.order_index || 0)) 
-            : 0;
-
+        let currentMaxOrder = currentFolder.files.length > 0 ? Math.max(...currentFolder.files.map(f => f.order_index || 0)) : 0;
         let uploadedCount = 0;
         let reusedCount = 0;
-
+        
         for (const file of files) {
             if (cancelOperationRef.current) break;
-
             currentMaxOrder++; 
-
             const fileHash = await computeFileHash(file);
             
             if (cancelOperationRef.current) break;
-
+            
+            // معالجة البيانات
             let fileData = '';
             if (file.type.startsWith('image/')) {
                  const compressed = await imageCompression(file, { maxSizeMB: 0.8, maxWidthOrHeight: 1920 });
@@ -334,84 +357,54 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
             } else {
                  fileData = await new Promise((r) => { const rd = new FileReader(); rd.readAsDataURL(file); rd.onload=()=>r(rd.result); });
             }
-
+            
             if (cancelOperationRef.current) break;
-
-            const { data: existingFiles } = await supabase
-                .from('library_files')
-                .select('id')
-                .eq('file_hash', fileHash)
-                .limit(1);
-
+            
+            // التحقق الذكي من التكرار
+            const { data: existingFiles } = await supabase.from('library_files').select('id').eq('file_hash', fileHash).limit(1);
+            
             let libraryFileId;
-
             if (existingFiles && existingFiles.length > 0) {
+                // الملف موجود مسبقاً، نستخدم المعرف القديم
                 libraryFileId = existingFiles[0].id;
                 reusedCount++;
             } else {
-                const { data: newFile, error: uploadError } = await supabase
-                    .from('library_files')
-                    .insert({
-                        teacher_id: teacherId,
-                        file_hash: fileHash,
-                        file_name: file.name,
-                        file_type: file.type,
-                        file_data: fileData
-                    })
-                    .select()
-                    .single();
+                // ملف جديد، نرفعه
+                const { data: newFile, error: uploadError } = await supabase.from('library_files').insert({
+                        teacher_id: teacherId, file_hash: fileHash, file_name: file.name, file_type: file.type, file_data: fileData
+                    }).select().single();
                 
                 if (uploadError) throw uploadError;
                 libraryFileId = newFile.id;
                 uploadedCount++;
             }
-
-            const { data: existingLink } = await supabase
-                .from('folder_contents')
-                .select('id')
-                .eq('folder_id', selectedFolderId)
-                .eq('file_id', libraryFileId);
-
+            
+            // ربط الملف بالمجلد الحالي
+            const { data: existingLink } = await supabase.from('folder_contents').select('id').eq('folder_id', selectedFolderId).eq('file_id', libraryFileId);
             if (!existingLink || existingLink.length === 0) {
-                await supabase.from('folder_contents').insert({
-                    folder_id: selectedFolderId,
-                    file_id: libraryFileId,
-                    is_visible: true,
-                    order_index: currentMaxOrder
-                });
+                await supabase.from('folder_contents').insert({ folder_id: selectedFolderId, file_id: libraryFileId, is_visible: true, order_index: currentMaxOrder });
             }
         }
-
-        if (cancelOperationRef.current) {
-             // Handled
-        } else {
-            setStatusState({ 
-                type: 'success', 
-                title: 'تمت العملية بذكاء', 
-                message: `تم رفع ${uploadedCount} ملف، واستخدام ${reusedCount} ملف موجود.` 
-            });
+        
+        if (!cancelOperationRef.current) {
+            setStatusState({ type: 'success', title: 'تمت العملية بذكاء', message: `تم رفع ${uploadedCount} ملف، واستخدام ${reusedCount} ملف موجود.` });
             setTimeout(() => setStatusState(null), 2000);
             fetchFolders();
         }
-
     } catch (error) {
-        console.error(error);
         setStatusState({ type: 'error', title: 'خطأ', message: error.message || 'حدث خطأ أثناء الرفع' });
-    } finally {
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+    } finally { if (fileInputRef.current) fileInputRef.current.value = ''; }
   };
-
-  // --- دوال الحذف والتعديل وإدارة المودال ---
 
   const handleDeleteFolder = (folderId) => {
     setConfirmState({
         title: "تأكيد حذف المجلد",
-        message: "تنبيه هام: هذا المجلد مشترك. حذفه سيؤدي لإزالته نهائياً من جميع الفصول المرتبطة به. هل أنت متأكد تماماً؟",
+        message: "تنبيه هام: هذا المجلد مشترك. حذفه سيؤدي لإزالته نهائياً من جميع الفصول المرتبطة.",
         onConfirm: async () => {
             setConfirmState(null); 
-            setStatusState({ type: 'loading', title: 'جاري الحذف', message: 'يتم حذف المجلد...' });
+            setStatusState({ type: 'loading', title: 'جاري الحذف', message: 'يتم حذف المجلد ومحتوياته...' });
             
+            // عند حذف المجلد، ستقوم قاعدة البيانات (بفضل التريجر) بتنظيف الملفات اليتيمة إذا نتجت عن هذا الحذف
             const { error } = await supabase.from('course_folders').delete().eq('id', folderId);
             
             if (!error) {
@@ -428,11 +421,14 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
   const handleRemoveFileFromFolder = (contentId) => {
     setConfirmState({
         title: "إزالة الملف",
-        message: "سيتم إزالة الملف من هذا المجلد في جميع الفصول، لكنه سيبقى في قاعدة البيانات.",
+        message: "سيتم إزالة الملف من هذا المجلد.",
         onConfirm: async () => {
             setConfirmState(null);
             setStatusState({ type: 'loading', title: 'جاري الحذف', message: 'يتم إزالة الملف...' });
             
+            // الحذف من جدول الربط فقط
+            // ملاحظة: الـ Trigger في قاعدة البيانات سيعمل تلقائياً بعد هذا السطر 
+            // ليحذف الملف الأصلي من library_files إذا لم يعد مستخدماً في أي مكان آخر
             const { error } = await supabase.from('folder_contents').delete().eq('id', contentId);
             
             if (!error) { 
@@ -445,49 +441,51 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
     });
   };
 
-  // 1. فتح نافذة التعديل
-  const openRenameModal = (type, id, currentName) => {
+  // --- دوال التعديل (Rename / Edit) ---
+  const openRenameModal = (type, id, currentName, currentImage = null) => {
       setRenameModal({
           isOpen: true,
           type: type,
           id: id,
-          currentName: currentName
+          currentName: currentName,
+          currentImage: currentImage 
       });
+      setEditFolderImagePreview(currentImage);
+      setEditFolderImageFile(null); 
   };
 
-  // 2. تنفيذ الحفظ (تم التصحيح)
   const handleRenameSubmit = async () => {
-      // FIX 2: استخراج القيم في متغيرات ثابتة قبل البدء
       const { type, id, currentName } = renameModal;
-
       if (!currentName.trim()) return;
 
       setRenameModal(prev => ({ ...prev, isOpen: false })); 
-      setStatusState({ type: 'loading', title: 'جاري التحديث', message: 'يتم حفظ الاسم الجديد...' });
+      setStatusState({ type: 'loading', title: 'جاري التحديث', message: 'يتم حفظ التغييرات...' });
 
       let error = null;
 
-      // استخدام المتغيرات المحلية type و id بدلاً من الحالة المباشرة
       if (type === 'folder') {
-          const { error: err } = await supabase
-              .from('course_folders')
-              .update({ title: currentName })
-              .eq('id', id);
+          let updateData = { title: currentName };
+          if (editFolderImageFile) {
+              try {
+                  const base64 = await handleImageCompression(editFolderImageFile);
+                  updateData.cover_image = base64;
+              } catch (e) { console.error("Compression error", e); }
+          } else if (editFolderImagePreview === null) {
+              updateData.cover_image = null;
+          } 
+          const { error: err } = await supabase.from('course_folders').update(updateData).eq('id', id);
           error = err;
       } else if (type === 'file') {
-          const { error: err } = await supabase
-              .from('library_files')
-              .update({ file_name: currentName })
-              .eq('id', id);
+          const { error: err } = await supabase.from('library_files').update({ file_name: currentName }).eq('id', id);
           error = err;
       }
 
       if (!error) {
           await fetchFolders();
-          setStatusState({ type: 'success', title: 'تم الحفظ', message: 'تم تغيير الاسم بنجاح.' });
+          setStatusState({ type: 'success', title: 'تم الحفظ', message: 'تم التحديث بنجاح.' });
           setTimeout(() => setStatusState(null), 1500);
       } else {
-          setStatusState({ type: 'error', title: 'خطأ', message: 'فشل تحديث الاسم.' });
+          setStatusState({ type: 'error', title: 'خطأ', message: 'فشل التحديث.' });
       }
   };
 
@@ -506,28 +504,64 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
   return (
     <>
     <CustomModal title="المكتبة الذكية (Smart Library)" onClose={onClose}>
-      {/* FIX 1: تعديل ارتفاع الحاوية ليكون مناسبًا للجوال ويسمح بالتمرير الداخلي */}
       <div className="relative flex flex-col h-[80vh] md:h-auto md:min-h-[500px] md:max-h-[85vh]">
         
-        {/* --- Rename Modal --- */}
+        {/* --- Rename / Edit Modal --- */}
         {renameModal.isOpen && (
             <div className="absolute inset-0 z-[80] flex flex-col items-center justify-center rounded-xl animate-fadeIn p-6 backdrop-blur-sm bg-gray-900/80">
                 <div className="bg-gray-800 p-6 rounded-2xl border border-blue-500/50 w-full max-w-sm shadow-2xl transform scale-100 transition-all">
                     <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                         <FaEdit className="text-blue-400" /> 
-                        {renameModal.type === 'folder' ? 'تعديل اسم المجلد' : 'تعديل اسم الملف'}
+                        {renameModal.type === 'folder' ? 'تعديل المجلد' : 'تعديل اسم الملف'}
                     </h3>
                     
                     <input 
-                        // FIX 2: إضافة Key لضمان تحديث الحقل عند تغيير العنصر
                         key={renameModal.id || 'rename-input'}
                         type="text" 
                         value={renameModal.currentName} 
                         onChange={(e) => setRenameModal({ ...renameModal, currentName: e.target.value })}
-                        className="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500 mb-6 text-center"
+                        className="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500 mb-4 text-center"
                         autoFocus
-                        onKeyDown={(e) => e.key === 'Enter' && handleRenameSubmit()}
                     />
+
+                    {renameModal.type === 'folder' && (
+                        <div className="mb-6 p-3 bg-gray-900/50 rounded-lg border border-gray-700 flex flex-col items-center gap-3">
+                            <p className="text-xs text-gray-400 self-start">صورة المجلد:</p>
+                            
+                            <div className="relative group">
+                                <div className={`w-20 h-20 rounded-xl overflow-hidden border-2 ${editFolderImagePreview ? 'border-blue-500' : 'border-gray-600 border-dashed'} flex items-center justify-center bg-gray-800`}>
+                                    {editFolderImagePreview ? (
+                                        <img src={editFolderImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <FaFolderOpen className="text-3xl text-gray-600" />
+                                    )}
+                                </div>
+                                
+                                {editFolderImagePreview && (
+                                    <button 
+                                        onClick={() => {
+                                            setEditFolderImagePreview(null);
+                                            setEditFolderImageFile(null);
+                                        }}
+                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-transform hover:scale-110"
+                                        title="حذف الصورة"
+                                    >
+                                        <FaTimes size={12} />
+                                    </button>
+                                )}
+                            </div>
+
+                            <label className="cursor-pointer bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 px-4 py-2 rounded-lg text-sm flex items-center gap-2 transition-colors border border-blue-500/30">
+                                <FaCamera /> تغيير الصورة
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    className="hidden" 
+                                    onChange={handleEditFolderImageSelect}
+                                />
+                            </label>
+                        </div>
+                    )}
 
                     <div className="flex gap-3">
                         <button 
@@ -553,19 +587,12 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
                 {statusState.type === 'loading' && <FaSpinner className="text-5xl text-blue-500 animate-spin mb-4" />}
                 {statusState.type === 'success' && <FaCheckCircle className="text-6xl text-green-500 mb-4 scale-110" />}
                 {statusState.type === 'error' && <FaExclamationCircle className="text-6xl text-red-500 mb-4 animate-pulse" />}
-                
                 <h3 className="text-2xl font-bold text-white mb-2">{statusState.title}</h3>
                 <p className="text-gray-300 text-lg mb-6">{statusState.message}</p>
-                
                 {statusState.type !== 'loading' ? (
                     <button onClick={() => setStatusState(null)} className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-8 py-2 rounded-lg transition-all">موافق</button>
                 ) : (
-                    <button 
-                        onClick={cancelOperation} 
-                        className="bg-red-500/20 hover:bg-red-500/40 text-red-300 border border-red-500/50 px-8 py-2 rounded-lg transition-all flex items-center gap-2"
-                    >
-                        <FaTimes /> إلغاء العملية
-                    </button>
+                    <button onClick={cancelOperation} className="bg-red-500/20 hover:bg-red-500/40 text-red-300 border border-red-500/50 px-8 py-2 rounded-lg transition-all flex items-center gap-2"><FaTimes /> إلغاء العملية</button>
                 )}
             </div>
         )}
@@ -574,33 +601,20 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
         {isShareModalOpen && folderToShare && (
             <div className="absolute inset-0 bg-gray-900/95 z-[70] flex flex-col items-center justify-center rounded-xl animate-fadeIn p-6 backdrop-blur-sm">
                 <div className="bg-gray-800 p-6 rounded-2xl border border-gray-600 w-full max-w-lg shadow-2xl">
-                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                        <FaShareAlt className="text-blue-400" /> مشاركة المجلد: <span className="text-blue-200">{folderToShare.title}</span>
-                    </h3>
+                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><FaShareAlt className="text-blue-400" /> مشاركة المجلد: <span className="text-blue-200">{folderToShare.title}</span></h3>
                     <p className="text-gray-400 text-sm mb-4">حدد الفصول التي تريد أن يظهر فيها هذا المجلد.</p>
-                    
                     <div className="max-h-60 overflow-y-auto custom-scrollbar bg-gray-900/50 p-3 rounded-lg border border-gray-700 mb-6">
                         <div className="flex flex-wrap gap-2">
                             {teacherSections.map((sec, idx) => {
                                 const isSelected = sharedSectionsState.some(s => s.grade_id === sec.grade_id && s.section_id === sec.section_id);
                                 return (
-                                    <button
-                                        key={idx}
-                                        onClick={() => toggleSectionSelection(sec, true)}
-                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${
-                                            isSelected 
-                                            ? 'bg-blue-600 text-white border-blue-500' 
-                                            : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600'
-                                        }`}
-                                    >
-                                        {isSelected ? <FaCheckSquare /> : <FaSquare />}
-                                        {sec.label}
+                                    <button key={idx} onClick={() => toggleSectionSelection(sec, true)} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${isSelected ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-600'}`}>
+                                        {isSelected ? <FaCheckSquare /> : <FaSquare />} {sec.label}
                                     </button>
                                 );
                             })}
                         </div>
                     </div>
-
                     <div className="flex gap-3">
                         <button onClick={handleSaveShare} className="flex-1 bg-green-600 hover:bg-green-500 text-white py-2 rounded-lg font-bold">حفظ التغييرات</button>
                         <button onClick={() => setIsShareModalOpen(false)} className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded-lg">إلغاء</button>
@@ -616,18 +630,8 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
                 <h3 className="text-2xl font-bold text-white mb-2">{confirmState.title}</h3>
                 <p className="text-gray-300 text-lg mb-8 max-w-md leading-relaxed">{confirmState.message}</p>
                 <div className="flex gap-4 w-full max-w-sm justify-center">
-                    <button 
-                        onClick={confirmState.onConfirm} 
-                        className="flex-1 bg-red-600 hover:bg-red-500 text-white py-3 rounded-lg font-bold shadow-lg shadow-red-900/30 transition-all hover:scale-105"
-                    >
-                        نعم، نفذ
-                    </button>
-                    <button 
-                        onClick={() => setConfirmState(null)} 
-                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg font-bold transition-all border border-gray-600 hover:border-gray-500"
-                    >
-                        إلغاء
-                    </button>
+                    <button onClick={confirmState.onConfirm} className="flex-1 bg-red-600 hover:bg-red-500 text-white py-3 rounded-lg font-bold shadow-lg shadow-red-900/30 transition-all hover:scale-105">نعم، نفذ</button>
+                    <button onClick={() => setConfirmState(null)} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg font-bold transition-all border border-gray-600 hover:border-gray-500">إلغاء</button>
                 </div>
             </div>
         )}
@@ -635,16 +639,10 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
         {/* --- Header Controls --- */}
         <div className="flex flex-col md:flex-row gap-3 items-center justify-between mb-6 bg-gray-800/50 p-4 rounded-xl border border-gray-700 flex-shrink-0">
             <div className="flex gap-2 w-full md:w-auto">
-                <button 
-                    onClick={() => setIsAddingMode(!isAddingMode)} 
-                    className={`flex-1 md:flex-none px-4 py-2 rounded-lg flex items-center justify-center gap-2 font-bold transition-all ${isAddingMode ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg'}`}
-                >
+                <button onClick={() => setIsAddingMode(!isAddingMode)} className={`flex-1 md:flex-none px-4 py-2 rounded-lg flex items-center justify-center gap-2 font-bold transition-all ${isAddingMode ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg'}`}>
                     {isAddingMode ? <><FaTimes /> إلغاء</> : <><FaPlus /> مجلد جديد</>}
                 </button>
-                <button 
-                    onClick={() => setShowPreview(true)} 
-                    className="flex-1 md:flex-none px-4 py-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 rounded-lg flex items-center justify-center gap-2 font-bold"
-                >
+                <button onClick={() => setShowPreview(true)} className="flex-1 md:flex-none px-4 py-2 bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 rounded-lg flex items-center justify-center gap-2 font-bold">
                     <FaTv /> معاينة الطالب
                 </button>
             </div>
@@ -657,6 +655,15 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
                 <h4 className="text-white font-bold mb-4 flex items-center gap-2"><FaLayerGroup className="text-blue-400" /> إضافة مجلد مشترك</h4>
                 <div className="flex flex-col gap-4">
                     <input type="text" placeholder="عنوان المجلد..." value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg text-white outline-none focus:border-blue-500" />
+                    
+                    <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+                         <p className="text-xs text-gray-400 mb-2">صورة المجلد (اختياري):</p>
+                         <div className="flex items-center gap-4">
+                             <input type="file" accept="image/*" onChange={handleFolderImageSelect} className="text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500"/>
+                            {newFolderImage && <img src={newFolderImage} alt="Preview" className="w-12 h-12 object-cover rounded-md border border-gray-600" />}
+                         </div>
+                    </div>
+
                     <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-700">
                         <p className="text-xs text-gray-400 mb-2">اختر الفصول:</p>
                         <div className="flex flex-wrap gap-2">
@@ -694,9 +701,15 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
                                         <button onClick={(e) => { e.stopPropagation(); moveFolder(fIndex, 1); }} disabled={fIndex === folders.length - 1} className="text-gray-500 hover:text-blue-400 disabled:opacity-20 text-xs"><FaArrowDown /></button>
                                     </div>
 
-                                    <div className={`p-3 rounded-lg ${folder.is_hidden ? 'bg-gray-700' : 'bg-blue-900/30 text-blue-400'}`}>
-                                        <FaFolderOpen className="text-xl" />
+                                    {/* عرض صورة المجلد */}
+                                    <div className={`rounded-lg overflow-hidden ${folder.cover_image ? 'w-14 h-14 border border-gray-600' : 'p-3 bg-blue-900/30 text-blue-400'}`}>
+                                        {folder.cover_image ? (
+                                            <img src={folder.cover_image} alt={folder.title} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <FaFolderOpen className="text-xl" />
+                                        )}
                                     </div>
+
                                     <div className="flex-1">
                                         <div>
                                             <h3 className="font-bold text-lg text-white">{folder.title}</h3>
@@ -705,9 +718,9 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
                                     </div>
                                 </div>
                                 <div className="flex gap-2 items-center" onClick={(e)=>e.stopPropagation()}>
-                                    <button onClick={()=>openShareModal(folder)} className="p-2 text-purple-400 hover:text-white" title="تعديل الفصول (مشاركة)"><FaShareAlt /></button>
+                                    <button onClick={()=>openShareModal(folder)} className="p-2 text-purple-400 hover:text-white" title="مشاركة"><FaShareAlt /></button>
                                     <button onClick={()=>toggleFolderVisibility(folder.id, folder.is_hidden)} className="p-2 text-gray-400 hover:text-white">{folder.is_hidden ? <FaEyeSlash /> : <FaEye />}</button>
-                                    <button onClick={()=>openRenameModal('folder', folder.id, folder.title)} className="p-2 text-blue-400 hover:text-white"><FaEdit /></button>
+                                    <button onClick={()=>openRenameModal('folder', folder.id, folder.title, folder.cover_image)} className="p-2 text-blue-400 hover:text-white"><FaEdit /></button>
                                     <button onClick={()=>handleDeleteFolder(folder.id)} className="p-2 text-red-400 hover:text-white"><FaTrash /></button>
                                 </div>
                             </div>
@@ -731,19 +744,17 @@ const ClassMaterialsManager = ({ show, onClose, gradeId, sectionId, teacherId, a
                                                     <button onClick={() => moveFile(fIndex, fileIdx, 1)} disabled={fileIdx === folder.files.length - 1} className="text-gray-500 hover:text-white disabled:opacity-20 text-[10px]"><FaArrowDown /></button>
                                                 </div>
 
-                                                <div className="p-2 bg-gray-900 rounded-md ml-2">
-                                                    {file.type?.includes('pdf') ? <FaFilePdf className="text-red-400" /> : <FaImage className="text-blue-400" />}
+                                                <div className="ml-3">
+                                                    {file.type?.includes('pdf') ? <PdfThumbnail url={file.url} /> : (
+                                                        <div className="p-2 bg-gray-900 rounded-md">
+                                                            {file.type?.startsWith('image/') ? <img src={file.url} alt="file" className="w-10 h-10 object-cover rounded" /> : <FaImage className="text-blue-400 text-xl" />}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 
                                                 <div className="flex-1 min-w-0 px-2 flex items-center group/title">
                                                     <p className="text-sm text-gray-200 truncate dir-ltr text-right ml-2">{file.name}</p>
-                                                    <button 
-                                                        onClick={() => openRenameModal('file', file.file_id, file.name)}
-                                                        className="text-gray-500 hover:text-blue-400 transition-colors"
-                                                        title="تعديل اسم الملف"
-                                                    >
-                                                        <FaEdit />
-                                                    </button>
+                                                    <button onClick={() => openRenameModal('file', file.file_id, file.name)} className="text-gray-500 hover:text-blue-400 transition-colors" title="تعديل الاسم"><FaEdit /></button>
                                                 </div>
 
                                                 <div className="flex gap-1 pr-2 border-r border-gray-700 mr-2">
