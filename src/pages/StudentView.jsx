@@ -70,6 +70,9 @@ function StudentView() {
   const navigate = useNavigate();
   const qrCardRef = useRef(null);
   
+  // مرجع لتخزين معرف الزيارة الحالية لتحديث وقت الخروج لاحقاً
+  const currentVisitIdRef = useRef(null);
+
   const [viewConfig, setViewConfig] = useState(null); 
   const [isLocked, setIsLocked] = useState(false);
   const [lockMessage, setLockMessage] = useState("");
@@ -167,6 +170,99 @@ function StudentView() {
       }));
       setAnnouncements(processedAnnouncements);
   };
+
+  // ----------------------------------------------------------------------
+  // 🔥🔥🔥 Visits Recording Logic (نظام تسجيل الزيارات) 🔥🔥🔥
+  // ----------------------------------------------------------------------
+  useEffect(() => {
+    // لا نقوم بأي شيء إذا لم تتوفر بيانات الطالب بعد أو إذا كان المستخدم مسجل دخول بالفعل (معلم)
+    if (!studentDisplayedData || !studentDisplayedData.id) return;
+
+    const recordVisit = async () => {
+        try {
+            // 1. التحقق من المستخدم الحالي
+            const { data: { user } } = await supabase.auth.getUser();
+
+            // إذا كان هناك مستخدم مسجل دخول، فهذا يعني أنه المعلم (أو المشرف)
+            // لذا لا نقوم بتسجيل زيارة في سجل الزيارات (نكتفي بتسجيل زيارات الطلاب فقط)
+            if (user) {
+                console.log("Visit Logic: Logged in user detected (Teacher). No visit recorded.");
+                return;
+            }
+
+            // 2. تسجيل بداية الزيارة للطالب (الذي ليس مسجل دخول)
+            console.log("Visit Logic: Guest/Student detected. Recording start...");
+            
+            const { data, error } = await supabase
+                .from('page_visits')
+                .insert({
+                    student_id: studentDisplayedData.id,
+                    teacher_id: studentDisplayedData.teacher_id,
+                    visit_start_time: new Date().toISOString(),
+                    // visit_end_time يترك فارغاً مبدئياً
+                })
+                .select('id')
+                .single();
+
+            if (error) throw error;
+
+            if (data) {
+                currentVisitIdRef.current = data.id;
+                console.log("Visit Started with ID:", data.id);
+            }
+
+        } catch (err) {
+            console.error("Error recording visit start:", err);
+        }
+    };
+
+    recordVisit();
+
+    // دالة لتحديث وقت المغادرة
+    const updateExitTime = async () => {
+        if (!currentVisitIdRef.current) return;
+        
+        const exitTime = new Date().toISOString();
+        console.log("Updating visit end time:", exitTime);
+        
+        // استخدام navigator.sendBeacon إذا أمكن لأنه أكثر موثوقية عند الإغلاق
+        // لكن Supabase يحتاج طلب خاص، لذا سنستخدم الطريقة العادية ونأمل أن المتصفح يسمح بها
+        // أو نستخدم fetch مع keepalive
+        
+        try {
+            await supabase
+                .from('page_visits')
+                .update({ visit_end_time: exitTime })
+                .eq('id', currentVisitIdRef.current);
+        } catch (err) {
+            console.error("Error updating exit time:", err);
+        }
+    };
+
+    // 3. الاستماع لأحداث المغادرة (إغلاق التبويب، تغيير الرابط، إخفاء المتصفح)
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'hidden') {
+            updateExitTime();
+        }
+    };
+
+    // الاستماع لحدث قبل الإغلاق
+    const handleBeforeUnload = () => {
+        updateExitTime();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // تنظيف عند إلغاء تحميل المكون (Component Unmount)
+    return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        updateExitTime();
+    };
+
+  }, [studentDisplayedData?.id]); // يعتمد فقط على معرف الطالب لضمان العمل عند تحميل بياناته
+
 
   // ----------------------------------------------------------------------
   // دالة التحديث الشاملة (يتم استدعاؤها عند حدوث أي تغيير)
@@ -530,14 +626,7 @@ function StudentView() {
       const gradeId = student.grade_level;
       const sectionId = student.section;
       
-      let visitId = null;
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // منطق تسجيل الزيارة (فقط إذا لم يكن المستخدم هو المعلم)
-      // يمكن تحسينه لعدم التكرار، لكنه مقبول حالياً
-      if (!user || user.id !== teacherId) {
-          // يمكن هنا إضافة كود الزيارة
-      }
+      // ملاحظة: تم نقل كود تسجيل الزيارة إلى useEffect منفصل في الأعلى لضمان الدقة
       
       let activeRecitationCurriculum = [];
       let activeHomeworkCurriculum = [];
