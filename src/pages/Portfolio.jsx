@@ -10,40 +10,61 @@ import {
   FaGripVertical, 
   FaExclamationTriangle,
   FaHome,
-  FaFileExport, 
-  FaDownload
+  FaFileExport,
+  FaTimesCircle
 } from 'react-icons/fa';
 import { QRCodeSVG } from 'qrcode.react';
 import FileViewer from '../components/FileViewer';
 import { v4 as uuidv4 } from 'uuid';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
-
-// --- التعديل 1: استبدال HTML5Backend بـ TouchBackend ---
 import { TouchBackend } from 'react-dnd-touch-backend'; 
-
 import { PDFDocument } from 'pdf-lib';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { pdfjs } from 'react-pdf';
 
-// إعداد Worker الخاص بـ react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const ItemTypes = { FILE: 'file' };
 
-// --- مكون فرعي لعرض مصغر للـ PDF ---
-const PdfThumbnail = ({ url }) => {
-  return (
-    <div className="w-full h-full overflow-hidden flex items-center justify-center bg-white relative">
-      <Document file={url} loading={<FaFilePdf size={40} className="text-red-500 animate-pulse" />}>
-        <Page 
-          pageNumber={1} 
-          width={200} 
-          renderTextLayer={false} 
-          renderAnnotationLayer={false} 
-        />
-      </Document>
-      <div className="absolute inset-0 z-10 bg-transparent"></div>
-    </div>
-  );
+// --- دالة إنشاء الصورة المصغرة (تم تحسين الدقة هنا) ---
+const createPdfThumbnail = async (file) => {
+  const fileReader = new FileReader();
+  return new Promise((resolve) => {
+    fileReader.onload = async function() {
+      const typedarray = new Uint8Array(this.result);
+      try {
+        const loadingTask = pdfjs.getDocument(typedarray);
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+        
+        // --- التعديل: زيادة الدقة ---
+        // بدلاً من 300، نجعل العرض 1000 بكسل لضمان الوضوح على شاشات الجوال عالية الدقة
+        const originalViewport = page.getViewport({ scale: 1 });
+        const targetWidth = 1000; 
+        const scale = targetWidth / originalViewport.width;
+        const scaledViewport = page.getViewport({ scale });
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = scaledViewport.height;
+        canvas.width = scaledViewport.width;
+
+        await page.render({
+          canvasContext: context,
+          viewport: scaledViewport
+        }).promise;
+
+        // تحسين الجودة عند التحويل إلى JPEG (0.9 بدلاً من 0.8)
+        canvas.toBlob((blob) => {
+          resolve(blob);
+        }, 'image/jpeg', 0.9);
+        
+      } catch (error) {
+        console.error("Error generating thumbnail:", error);
+        resolve(null);
+      }
+    };
+    fileReader.readAsArrayBuffer(file);
+  });
 };
 
 const DraggableFile = ({ file, index, moveFile, onDeleteClick, onEditClick, onClick }) => {
@@ -72,7 +93,7 @@ const DraggableFile = ({ file, index, moveFile, onDeleteClick, onEditClick, onCl
     <div 
       ref={ref}
       style={{ opacity: isDragging ? 0.5 : 1 }}
-      className="group bg-slate-800/40 border border-slate-700 rounded-2xl p-4 hover:border-blue-500/50 transition-all shadow-sm relative touch-none" // touch-none تحسن السحب في الجوال
+      className="group bg-slate-800/40 border border-slate-700 rounded-2xl p-4 hover:border-blue-500/50 transition-all shadow-sm relative touch-none"
     >
       <div className="absolute top-2 left-2 text-slate-600 hover:text-white cursor-move p-2 z-20">
         <FaGripVertical />
@@ -83,14 +104,31 @@ const DraggableFile = ({ file, index, moveFile, onDeleteClick, onEditClick, onCl
         onClick={() => onClick(index)}
       >
         {file.type.includes('pdf') ? (
-          <PdfThumbnail url={file.url} />
+            file.thumbnail_url ? (
+                <img 
+                  src={file.thumbnail_url} 
+                  loading="lazy"
+                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" 
+                  alt="PDF Thumbnail" 
+                />
+            ) : (
+                <div className="flex flex-col items-center justify-center animate-in fade-in">
+                    <FaFilePdf size={40} className="text-red-500 mb-2" />
+                    <span className="text-[10px] text-slate-400">PDF File</span>
+                </div>
+            )
         ) : (
-          <img src={file.url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="" />
+          <img 
+            src={file.url} 
+            loading="lazy"
+            className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" 
+            alt="" 
+          />
         )}
       </div>
 
       <div className="flex justify-between items-center gap-2">
-        <p className="text-xs font-bold truncate text-slate-300 flex-1">{file.name}</p>
+        <p className="text-xs font-bold truncate text-slate-300 flex-1" dir="auto">{file.name}</p>
         
         <div className="flex gap-1">
             <button 
@@ -136,8 +174,11 @@ const Portfolio = () => {
   const [newFileName, setNewFileName] = useState('');
   const [updatingName, setUpdatingName] = useState(false);
 
-  const [isExporting, setIsExporting] = useState(false);
+  // --- نافذة الخطأ ---
+  const [errorModalOpen, setErrorModalOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
+  const [isExporting, setIsExporting] = useState(false);
   const [currentFileIndex, setCurrentFileIndex] = useState(null);
   const [uploading, setUploading] = useState(false);
 
@@ -182,27 +223,68 @@ const Portfolio = () => {
 
   const handleFileUpload = async (e) => {
     const uploadedFiles = Array.from(e.target.files);
+    if(uploadedFiles.length === 0) return;
+
+    const MAX_SIZE = 4 * 1024 * 1024; // 4MB
+
     setUploading(true);
     const { data: { user } } = await supabase.auth.getUser();
 
     for (const file of uploadedFiles) {
-      const fileName = `${uuidv4()}.${file.name.split('.').pop()}`;
+      if (file.size > MAX_SIZE) {
+        setErrorMessage(`عذراً، الملف "${file.name}" حجمه كبير جداً. الحد الأقصى المسموح هو 4 ميجابايت.`);
+        setErrorModalOpen(true);
+        continue;
+      }
+
+      const fileId = uuidv4();
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${fileId}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
       
       const { error: uploadError } = await supabase.storage.from('portfolio-files').upload(filePath, file);
-      if (uploadError) continue;
+      if (uploadError) {
+          console.error("Upload error:", uploadError);
+          setErrorMessage(`حدث خطأ أثناء رفع الملف: ${file.name}`);
+          setErrorModalOpen(true);
+          continue;
+      }
 
-      const { data: { publicUrl } } = supabase.storage.from('portfolio-files').getPublicUrl(filePath);
+      const { data: { publicUrl: fileUrl } } = supabase.storage.from('portfolio-files').getPublicUrl(filePath);
       
+      let thumbnailUrl = null;
+
+      if (file.type.includes('pdf')) {
+          // استدعاء الدالة المحسنة لإنشاء الصورة
+          const thumbnailBlob = await createPdfThumbnail(file);
+          if (thumbnailBlob) {
+              const thumbName = `${fileId}_thumb.jpg`;
+              const thumbPath = `${user.id}/${thumbName}`;
+              
+              const { error: thumbError } = await supabase.storage
+                  .from('portfolio-files')
+                  .upload(thumbPath, thumbnailBlob);
+              
+              if (!thumbError) {
+                  const { data: { publicUrl: thumbPublicUrl } } = supabase.storage
+                      .from('portfolio-files')
+                      .getPublicUrl(thumbPath);
+                  thumbnailUrl = thumbPublicUrl;
+              }
+          }
+      }
+
       await supabase.from('files').insert([{ 
         user_id: user.id, 
-        name: file.name, 
-        url: publicUrl, 
+        name: file.name,
+        url: fileUrl, 
         type: file.type,
-        storage_path: filePath 
+        storage_path: filePath,
+        thumbnail_url: thumbnailUrl
       }]);
     }
-    fetchData();
+    
+    await fetchData();
     setUploading(false);
   };
 
@@ -274,7 +356,8 @@ const Portfolio = () => {
 
     } catch (error) {
       console.error('Error exporting PDF:', error);
-      alert('حدث خطأ أثناء تصدير الملفات. تأكد من صحة الملفات.');
+      setErrorMessage('حدث خطأ أثناء تصدير الملفات. يرجى المحاولة لاحقاً.');
+      setErrorModalOpen(true);
     } finally {
       setIsExporting(false);
     }
@@ -282,9 +365,16 @@ const Portfolio = () => {
 
   const confirmDelete = async () => {
     if (!fileToDelete) return;
+    
     if (fileToDelete.storage_path) {
       await supabase.storage.from('portfolio-files').remove([fileToDelete.storage_path]);
     }
+
+    if (fileToDelete.thumbnail_url) {
+        const thumbPath = fileToDelete.storage_path.replace(/(\.[^.]+)$/, '_thumb.jpg');
+        await supabase.storage.from('portfolio-files').remove([thumbPath]);
+    }
+
     const { error } = await supabase.from('files').delete().eq('id', fileToDelete.id);
     if (!error) {
       setFiles(files.filter(f => f.id !== fileToDelete.id));
@@ -296,7 +386,6 @@ const Portfolio = () => {
   if (loading) return <div className="h-screen bg-[#0f172a] flex items-center justify-center text-blue-400 font-bold tracking-widest">جاري تحميل لوحة التحكم...</div>;
 
   return (
-    // --- التعديل 2: تفعيل TouchBackend مع خيار الماوس ---
     <DndProvider backend={TouchBackend} options={{ enableMouseEvents: true }}>
       <div className="min-h-screen bg-[#0f172a] text-slate-200 font-['Noto_Sans_Arabic'] flex flex-col lg:flex-row" dir="rtl">
         
@@ -399,13 +488,35 @@ const Portfolio = () => {
           )}
         </main>
 
+        {/* --- Error Modal --- */}
+        {errorModalOpen && (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-md" onClick={() => setErrorModalOpen(false)}></div>
+            <div className="relative bg-slate-900 border border-slate-700 w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in duration-200">
+              <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-amber-500">
+                <FaExclamationTriangle size={30} />
+              </div>
+              <h3 className="text-xl font-bold text-white text-center mb-4">تنبيه</h3>
+              <p className="text-slate-300 text-center text-sm mb-8 leading-relaxed">
+                {errorMessage}
+              </p>
+              <button 
+                onClick={() => setErrorModalOpen(false)} 
+                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all border border-slate-700"
+              >
+                حسناً، فهمت
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Delete Modal */}
         {isDeleteModalOpen && (
           <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => setIsDeleteModalOpen(false)}></div>
             <div className="relative bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-8 shadow-2xl animate-in zoom-in duration-200">
               <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500">
-                <FaExclamationTriangle size={30} />
+                <FaTrash size={30} />
               </div>
               <h3 className="text-xl font-bold text-white text-center mb-2">تأكيد الحذف</h3>
               <p className="text-slate-400 text-center text-sm mb-8 leading-relaxed">

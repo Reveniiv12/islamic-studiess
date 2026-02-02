@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { FaFilePdf, FaImage, FaGraduationCap, FaSchool, FaCalendarAlt } from 'react-icons/fa';
+import { FaFilePdf, FaGraduationCap, FaSchool, FaCalendarAlt } from 'react-icons/fa';
 import FileViewer from '../components/FileViewer';
 
 const PortfolioPublic = () => {
@@ -20,7 +20,7 @@ const PortfolioPublic = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. جلب الملفات - نستخدمuserId القادم من الرابط
+        // 1. جلب الملفات (بما فيها عمود thumbnail_url الجديد تلقائياً)
         const { data: fData, error: fError } = await supabase
           .from('files')
           .select('*')
@@ -121,22 +121,46 @@ const PortfolioPublic = () => {
               onClick={() => setCurrentFileIndex(index)}
               className="group relative bg-slate-800/50 border border-white/5 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer hover:-translate-y-2 shadow-xl"
             >
-              <div className="aspect-video bg-slate-900 flex items-center justify-center relative">
+              <div className="aspect-video bg-slate-900 flex items-center justify-center relative overflow-hidden">
+                {/* --- التعديل هنا: منطق العرض الآمن --- */}
                 {file.type.includes('pdf') ? (
-                  <FaFilePdf size={56} className="text-red-500" />
+                   file.thumbnail_url ? (
+                     <img 
+                        src={file.thumbnail_url} 
+                        loading="lazy"
+                        alt="PDF cover" 
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                     />
+                   ) : (
+                     <div className="flex flex-col items-center justify-center">
+                        <FaFilePdf size={50} className="text-red-500 mb-3 shadow-lg drop-shadow-lg" />
+                        <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">PDF File</span>
+                     </div>
+                   )
                 ) : (
-                  <img src={file.url} alt="" className="w-full h-full object-cover" />
+                  <img 
+                    src={file.url} 
+                    loading="lazy"
+                    alt="" 
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                  />
                 )}
-                <div className="absolute inset-0 bg-blue-600/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                   <span className="bg-white text-blue-600 px-4 py-2 rounded-full font-bold text-xs">عرض</span>
+                
+                {/* طبقة التراكب عند التحويم */}
+                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[2px]">
+                   <span className="bg-white/90 text-slate-900 px-6 py-2 rounded-full font-bold text-sm shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform">
+                     فتح الملف
+                   </span>
                 </div>
               </div>
-              <div className="p-5">
-                <p className="text-sm font-bold truncate text-slate-100">{file.name}</p>
+              
+              <div className="p-5 border-t border-white/5">
+                <p className="text-sm font-bold truncate text-slate-200 group-hover:text-blue-400 transition-colors" dir="auto">{file.name}</p>
               </div>
             </div>
           ))}
         </div>
+
         {files.length === 0 && (
           <div className="text-center py-20 bg-slate-800/30 rounded-3xl border border-dashed border-slate-700">
              <p className="text-slate-500">لا توجد ملفات عامة متوفرة حالياً.</p>
