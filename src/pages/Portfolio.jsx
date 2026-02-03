@@ -4,9 +4,8 @@ import { supabase } from '../supabaseClient';
 import { 
   FaUpload, FaTrash, FaEdit, FaExternalLinkAlt, FaFilePdf, FaGripVertical, 
   FaExclamationTriangle, FaHome, FaFileExport, FaFolderPlus, FaLayerGroup,
-  FaLock, FaUnlock, FaCog, FaBoxOpen
+  FaLock, FaUnlock, FaCog, FaBoxOpen, FaArrowUp, FaArrowDown, FaArrowRight, FaArrowLeft
 } from 'react-icons/fa';
-import { QRCodeSVG } from 'qrcode.react';
 import FileViewer from '../components/FileViewer';
 import { v4 as uuidv4 } from 'uuid';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -51,7 +50,7 @@ const createPdfThumbnail = async (file) => {
 };
 
 // --- مكون الملف القابل للسحب والترتيب ---
-const DraggableFile = ({ file, index, onDeleteClick, onEditClick, onClick, isEditMode, moveFile, onDragEnd }) => {
+const DraggableFile = ({ file, index, totalFiles, onDeleteClick, onEditClick, onClick, isEditMode, moveFile, onDragEnd, onMoveArrows }) => {
   const ref = useRef(null);
   
   const [{ handlerId }, drop] = useDrop({
@@ -61,24 +60,14 @@ const DraggableFile = ({ file, index, onDeleteClick, onEditClick, onClick, isEdi
     },
     hover(item, monitor) {
       if (!ref.current || !isEditMode) return;
-      
       const dragIndex = item.index; 
       const hoverIndex = index;     
       const sourceListId = item.categoryId; 
       const targetListId = file.category_id; 
 
-      // إذا كان السحب داخل نفس التصنيف
       if (sourceListId === targetListId) {
-          // إذا كان العنصر فوق نفسه، لا تفعل شيئاً
           if (dragIndex === hoverIndex) return;
-
-          // --- التعديل هنا: تم إزالة الحسابات الهندسية (BoundingRect) ---
-          // في نظام الشبكة (Grid)، الحسابات الدقيقة تسبب مشاكل عند الانتقال بين الأسطر
-          // التبديل المباشر عند تغيير الـ Index هو الحل الأكثر استقراراً
-
           moveFile(dragIndex, hoverIndex, sourceListId, targetListId);
-          
-          // تحديث الـ index للعنصر المسحوب ليمثل موقعه الجديد فوراً
           item.index = hoverIndex;
       }
     },
@@ -131,18 +120,43 @@ const DraggableFile = ({ file, index, onDeleteClick, onEditClick, onClick, isEdi
         )}
       </div>
 
-      <div className="flex justify-between items-center gap-2">
-        <p className="text-xs font-bold truncate text-slate-300 flex-1" dir="auto">{file.name}</p>
-        <div className="flex gap-1">
-            <button onClick={(e) => { e.stopPropagation(); onEditClick(file); }} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg"><FaEdit size={14}/></button>
-            <button onClick={(e) => { e.stopPropagation(); onDeleteClick(file); }} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><FaTrash size={14}/></button>
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-bold truncate text-slate-300 w-full" dir="auto">{file.name}</p>
+        
+        <div className="flex items-center justify-between mt-1">
+            {/* أزرار التحكم والأسهم بتصميم + */}
+            {isEditMode ? (
+                <div className="flex items-center gap-1">
+                     <div className="grid grid-cols-3 gap-[1px] bg-slate-800 p-1 rounded-lg">
+                        {/* الصف العلوي */}
+                        <div />
+                        <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'up'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowUp size={8}/></button>
+                        <div />
+                        
+                        {/* الصف الأوسط */}
+                        <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'right'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowRight size={8}/></button>
+                        <div className="w-4 h-4 bg-slate-700/50 rounded-full"></div>
+                        <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'left'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowLeft size={8}/></button>
+                        
+                        {/* الصف السفلي */}
+                        <div />
+                        <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'down'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowDown size={8}/></button>
+                        <div />
+                     </div>
+                </div>
+            ) : <div />}
+
+            <div className="flex gap-1">
+                <button onClick={(e) => { e.stopPropagation(); onEditClick(file); }} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg"><FaEdit size={14}/></button>
+                <button onClick={(e) => { e.stopPropagation(); onDeleteClick(file); }} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg"><FaTrash size={14}/></button>
+            </div>
         </div>
       </div>
     </div>
   );
 };
 
-// --- منطقة "غير مصنف" ---
+// --- مكون المنطقة غير المصنفة (بدون تغييرات جوهرية) ---
 const UnclassifiedZone = ({ children, onDropFile, uploading, onUpload, maxFileSize }) => {
     const [{ isOver }, drop] = useDrop({
         accept: ItemTypes.FILE,
@@ -179,8 +193,8 @@ const UnclassifiedZone = ({ children, onDropFile, uploading, onUpload, maxFileSi
     );
 };
 
-// --- مكون القسم (Category) ---
-const DraggableCategory = ({ category, index, moveCategory, children, onDelete, onEdit, onUpload, uploading, isEditMode, onDropFile, maxFileSize }) => {
+// --- مكون القسم (بدون تغييرات جوهرية) ---
+const DraggableCategory = ({ category, index, totalCategories, moveCategory, children, onDelete, onEdit, onUpload, uploading, isEditMode, onDropFile, maxFileSize, onMoveArrows }) => {
   const ref = useRef(null);
   
   const [{ handlerId }, drop] = useDrop({
@@ -237,6 +251,13 @@ const DraggableCategory = ({ category, index, moveCategory, children, onDelete, 
           </h2>
         </div>
         <div className="flex items-center gap-2">
+           {isEditMode && (
+               <div className="flex flex-col gap-1 ml-2 border-l border-slate-700 pl-2">
+                 <button onClick={() => onMoveArrows(index, 'up')} disabled={index === 0} className="p-1 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded disabled:opacity-30"><FaArrowUp size={10} /></button>
+                 <button onClick={() => onMoveArrows(index, 'down')} disabled={index === totalCategories - 1} className="p-1 bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white rounded disabled:opacity-30"><FaArrowDown size={10} /></button>
+               </div>
+           )}
+
            <div className="flex flex-col items-end mr-4">
               <label className={`cursor-pointer px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${uploading ? 'bg-slate-800 text-slate-500' : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white'}`}>
                   <FaUpload size={14} />
@@ -310,12 +331,11 @@ const Portfolio = () => {
     setCategories(cData || []);
     setFiles(fData || []);
     
-    // --- هنا التعديل: استعادة رسم الخرائط الصحيح للبيانات ---
     if (sData) {
         setTeacherInfo({
           name: sData.teacher_name || 'اسم المعلم',
           school: sData.school_name || 'اسم المدرسة',
-          photo: sData.teacher_photo || '/images/default_teacher.png', // التأكد من قراءة العمود الصحيح
+          photo: sData.teacher_photo || '/images/default_teacher.png', 
           semester: sData.current_semester || 'غير محدد',
           userId: user.id
         });
@@ -350,6 +370,20 @@ const Portfolio = () => {
     });
   }, []);
 
+  const handleMoveCategoryArrow = async (index, direction) => {
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= categories.length) return;
+
+      const newCategories = [...categories];
+      [newCategories[index], newCategories[newIndex]] = [newCategories[newIndex], newCategories[index]];
+      setCategories(newCategories);
+
+      const updates = newCategories.map((cat, i) => ({ 
+          id: cat.id, user_id: cat.user_id, name: cat.name, order_index: i 
+      }));
+      await supabase.from('categories').upsert(updates);
+  };
+
   const moveFile = useCallback((dragIndex, hoverIndex, sourceCatId, targetCatId) => {
     setFiles((prevFiles) => {
         if (sourceCatId !== targetCatId) return prevFiles; 
@@ -375,32 +409,75 @@ const Portfolio = () => {
     });
   }, []);
 
-const handleSaveOrder = async (categoryId) => {
+  // --- دالة مساعدة لمعرفة عدد الأعمدة الحالية ---
+  const getGridColumns = () => {
+    // هذه الأرقام تتطابق مع نقاط التوقف في Tailwind: xl (1280px) و sm (640px)
+    if (window.innerWidth >= 1280) return 3; // 3 columns for xl
+    if (window.innerWidth >= 640) return 2;  // 2 columns for sm
+    return 1;                                // 1 column for mobile
+  };
+
+  // --- منطق نقل الملفات (بالأسهم - معدل ليدعم الحركة العمودية في الشبكة) ---
+  const handleMoveFileArrow = async (file, direction) => {
+      const categoryFiles = files.filter(f => f.category_id === file.category_id)
+                                 .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+      
+      const currentIndex = categoryFiles.findIndex(f => f.id === file.id);
+      if (currentIndex === -1) return;
+
+      const columnsCount = getGridColumns();
+      let targetIndex;
+
+      // منطق الاتجاهات
+      if (direction === 'right') {
+          // في اللغة العربية RTL، اليمين يعني العنصر السابق
+          targetIndex = currentIndex - 1;
+      } else if (direction === 'left') {
+          // اليسار يعني العنصر التالي
+          targetIndex = currentIndex + 1;
+      } else if (direction === 'up') {
+          // للأعلى يعني الرجوع للخلف بمقدار عدد الأعمدة
+          targetIndex = currentIndex - columnsCount;
+      } else if (direction === 'down') {
+          // للأسفل يعني التقدم للأمام بمقدار عدد الأعمدة
+          targetIndex = currentIndex + columnsCount;
+      }
+
+      // التحقق من الحدود
+      if (targetIndex < 0 || targetIndex >= categoryFiles.length) return;
+
+      // التبديل وتحديث البيانات
+      const updatedCatFiles = [...categoryFiles];
+      [updatedCatFiles[currentIndex], updatedCatFiles[targetIndex]] = [updatedCatFiles[targetIndex], updatedCatFiles[currentIndex]];
+
+      const newFiles = files.map(f => {
+          if (f.category_id !== file.category_id) return f;
+          const foundInSorted = updatedCatFiles.findIndex(sortedF => sortedF.id === f.id);
+          return { ...f, order_index: foundInSorted };
+      }).sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+
+      setFiles(newFiles);
+      await handleSaveOrder(file.category_id);
+  };
+
+  const handleSaveOrder = async (categoryId) => {
     const currentFiles = filesRef.current;
-    
-    // الحصول على معلومات المستخدم الحالي للتأكد من إرسالها
     const { data: { user } } = await supabase.auth.getUser();
 
     const categoryFiles = currentFiles
         .filter(f => f.category_id === categoryId)
         .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
 
-    // التعديل هنا: إضافة user_id ضمن البيانات المرسلة
     const updates = categoryFiles.map((f, i) => ({
         id: f.id,
-        user_id: user.id, // <--- هذا السطر ضروري جداً لنجاح الـ Upsert
-        category_id: f.category_id, // يفضل إرسال هذا أيضاً لضمان تطابق البيانات
+        user_id: user.id, 
+        category_id: f.category_id, 
         order_index: i
     }));
 
     if (updates.length > 0) {
-        // نستخدم upsert مع تجاهل التكرار للحقول الأخرى
         const { error } = await supabase.from('files').upsert(updates);
-        
-        if (error) {
-            console.error("Error saving order:", error);
-            // يمكنك هنا إظهار رسالة خطأ للمستخدم
-        }
+        if (error) console.error("Error saving order:", error);
     }
   };
 
@@ -462,8 +539,11 @@ const handleSaveOrder = async (categoryId) => {
     setTimeout(() => setUploadStatus({ active: false, current: 0, total: 0 }), 1000);
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = async (deleteFilesInside = false) => {
       if (!itemToDelete) return;
+      
+      const { data: { user } } = await supabase.auth.getUser();
+
       if (deleteType === 'file') {
           if (itemToDelete.storage_path) await supabase.storage.from('portfolio-files').remove([itemToDelete.storage_path]);
           if (itemToDelete.thumbnail_url) {
@@ -472,10 +552,57 @@ const handleSaveOrder = async (categoryId) => {
           }
           await supabase.from('files').delete().eq('id', itemToDelete.id);
           setFiles(files.filter(f => f.id !== itemToDelete.id));
+
       } else {
-          await supabase.from('categories').delete().eq('id', itemToDelete.id);
-          setCategories(categories.filter(c => c.id !== itemToDelete.id));
-          setFiles(files.filter(f => f.category_id !== itemToDelete.id));
+          if (deleteFilesInside) {
+              const filesToDelete = files.filter(f => f.category_id === itemToDelete.id);
+              for (const file of filesToDelete) {
+                  if (file.storage_path) await supabase.storage.from('portfolio-files').remove([file.storage_path]);
+                  if (file.thumbnail_url) {
+                      const thumbPath = file.storage_path.replace(/(\.[^.]+)$/, '_thumb.jpg');
+                      await supabase.storage.from('portfolio-files').remove([thumbPath]);
+                  }
+              }
+              await supabase.from('files').delete().eq('category_id', itemToDelete.id);
+              await supabase.from('categories').delete().eq('id', itemToDelete.id);
+              
+              setFiles(files.filter(f => f.category_id !== itemToDelete.id));
+              setCategories(categories.filter(c => c.id !== itemToDelete.id));
+
+          } else {
+              // --- منطق نقل الملفات إلى النهاية ---
+              const currentUnclassified = files.filter(f => !f.category_id);
+              const maxIndex = currentUnclassified.length > 0 
+                  ? Math.max(...currentUnclassified.map(f => f.order_index || 0)) 
+                  : -1;
+
+              const filesToMove = files
+                  .filter(f => f.category_id === itemToDelete.id)
+                  .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+
+              const updates = filesToMove.map((f, i) => ({
+                  id: f.id,
+                  user_id: user.id,
+                  category_id: null, 
+                  order_index: maxIndex + 1 + i 
+              }));
+
+              if (updates.length > 0) {
+                  await supabase.from('files').upsert(updates);
+              }
+              
+              await supabase.from('categories').delete().eq('id', itemToDelete.id);
+
+              const movedFilesMap = new Map(updates.map(u => [u.id, u.order_index]));
+              
+              setFiles(files.map(f => {
+                  if (f.category_id === itemToDelete.id) {
+                      return { ...f, category_id: null, order_index: movedFilesMap.get(f.id) };
+                  }
+                  return f;
+              }));
+              setCategories(categories.filter(c => c.id !== itemToDelete.id));
+          }
       }
       setIsDeleteModalOpen(false);
   };
@@ -590,8 +717,10 @@ const handleSaveOrder = async (categoryId) => {
                 <DraggableCategory
                     key={category.id}
                     index={catIndex}
+                    totalCategories={categories.length}
                     category={category}
                     moveCategory={moveCategory}
+                    onMoveArrows={handleMoveCategoryArrow}
                     uploading={uploadStatus.active}
                     onUpload={handleFileUpload}
                     onDelete={(c) => { setItemToDelete(c); setDeleteType('category'); setIsDeleteModalOpen(true); }}
@@ -604,12 +733,14 @@ const handleSaveOrder = async (categoryId) => {
                     <DraggableFile
                         key={file.id}
                         file={file}
-                        index={fileIndex} 
+                        index={fileIndex}
+                        totalFiles={categoryFiles.length}
                         onDeleteClick={(f) => { setItemToDelete(f); setDeleteType('file'); setIsDeleteModalOpen(true); }}
                         onEditClick={(f) => { setItemToEdit(f); setEditType('file'); setNewName(f.name); setIsEditModalOpen(true); }}
                         onClick={() => setCurrentFileIndex(files.findIndex(x => x.id === file.id))}
                         isEditMode={isEditMode}
                         moveFile={moveFile}
+                        onMoveArrows={handleMoveFileArrow}
                         onDragEnd={() => handleSaveOrder(category.id)}
                     />
                     ))}
@@ -627,16 +758,18 @@ const handleSaveOrder = async (categoryId) => {
                 {files
                     .filter(f => !f.category_id)
                     .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
-                    .map((file, index) => (
+                    .map((file, index, arr) => (
                     <DraggableFile
                         key={file.id}
                         file={file}
                         index={index}
+                        totalFiles={arr.length}
                         onDeleteClick={(f) => { setItemToDelete(f); setDeleteType('file'); setIsDeleteModalOpen(true); }}
                         onEditClick={(f) => { setItemToEdit(f); setEditType('file'); setNewName(f.name); setIsEditModalOpen(true); }}
                         onClick={() => setCurrentFileIndex(files.findIndex(x => x.id === file.id))}
                         isEditMode={isEditMode}
                         moveFile={moveFile}
+                        onMoveArrows={handleMoveFileArrow}
                         onDragEnd={() => handleSaveOrder(null)}
                     />
                 ))}
@@ -648,7 +781,49 @@ const handleSaveOrder = async (categoryId) => {
         {uploadStatus.active && (<div className="fixed inset-0 z-[600] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm"><div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl flex flex-col items-center"><div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div><p className="text-white">جاري الرفع {uploadStatus.current}/{uploadStatus.total}</p></div></div>)}
         {errorModalOpen && <div className="fixed inset-0 z-[500] flex items-center justify-center p-4"><div className="absolute inset-0 bg-slate-950/70" onClick={()=>setErrorModalOpen(false)}></div><div className="relative bg-slate-900 border border-slate-700 p-8 rounded-3xl"><div className="text-center mb-4 text-amber-500"><FaExclamationTriangle size={30} className="mx-auto"/></div><p className="text-white text-center mb-6">{errorMessage}</p><button onClick={()=>setErrorModalOpen(false)} className="w-full bg-slate-800 py-3 rounded text-white">حسناً</button></div></div>}
         {isEditModalOpen && <div className="fixed inset-0 z-[400] flex items-center justify-center bg-slate-950/60" onClick={()=>setIsEditModalOpen(false)}><div className="bg-slate-900 p-8 rounded-3xl w-full max-w-sm" onClick={e=>e.stopPropagation()}><input value={newName} onChange={e=>setNewName(e.target.value)} className="w-full bg-slate-800 p-3 rounded mb-4 text-white"/><button onClick={handleUpdateName} className="w-full bg-blue-600 py-3 rounded text-white font-bold">حفظ</button></div></div>}
-        {isDeleteModalOpen && <div className="fixed inset-0 z-[400] flex items-center justify-center bg-slate-950/60" onClick={()=>setIsDeleteModalOpen(false)}><div className="bg-slate-900 p-8 rounded-3xl w-full max-w-sm" onClick={e=>e.stopPropagation()}><p className="text-white text-center mb-6">هل أنت متأكد؟</p><div className="flex gap-2"><button onClick={confirmDelete} className="flex-1 bg-red-600 py-2 rounded text-white">حذف</button><button onClick={()=>setIsDeleteModalOpen(false)} className="flex-1 bg-slate-800 py-2 rounded text-white">إلغاء</button></div></div></div>}
+        
+        {/* مودال الحذف */}
+        {isDeleteModalOpen && (
+            <div className="fixed inset-0 z-[400] flex items-center justify-center bg-slate-950/60" onClick={() => setIsDeleteModalOpen(false)}>
+                <div className="bg-slate-900 p-8 rounded-3xl w-full max-w-md border border-slate-800" onClick={e => e.stopPropagation()}>
+                    <div className="text-center mb-6">
+                        <div className="w-12 h-12 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <FaTrash size={20} />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-2">
+                            {deleteType === 'category' ? `حذف القسم "${itemToDelete?.name}"` : 'حذف الملف'}
+                        </h3>
+                        <p className="text-slate-400 text-sm">
+                            {deleteType === 'category' 
+                                ? 'يحتوي هذا القسم على ملفات. كيف تريد المتابعة؟' 
+                                : 'هل أنت متأكد من حذف هذا الملف نهائياً؟'}
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                        {deleteType === 'category' ? (
+                            <>
+                                <button onClick={() => confirmDelete(true)} className="w-full bg-red-600 hover:bg-red-700 py-3 rounded-xl text-white font-bold transition-colors">
+                                    نعم، احذف القسم مع الملفات
+                                </button>
+                                <button onClick={() => confirmDelete(false)} className="w-full bg-slate-700 hover:bg-slate-600 py-3 rounded-xl text-white font-bold transition-colors border border-slate-600">
+                                    احذف القسم فقط (انقل الملفات لغير مصنف)
+                                </button>
+                                <button onClick={() => setIsDeleteModalOpen(false)} className="w-full text-slate-400 hover:text-white py-2 mt-2">
+                                    إلغاء
+                                </button>
+                            </>
+                        ) : (
+                            <div className="flex gap-3">
+                                <button onClick={() => confirmDelete(true)} className="flex-1 bg-red-600 hover:bg-red-700 py-3 rounded-xl text-white font-bold">حذف</button>
+                                <button onClick={() => setIsDeleteModalOpen(false)} className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-xl text-white border border-slate-700">إلغاء</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+
         {currentFileIndex !== null && <FileViewer files={files} currentIndex={currentFileIndex} onClose={() => setCurrentFileIndex(null)} onNext={() => setCurrentFileIndex(prev => Math.min(files.length-1, prev+1))} onPrev={() => setCurrentFileIndex(prev => Math.max(0, prev-1))} />}
       </div>
     </DndProvider>
