@@ -127,7 +127,7 @@ const DraggableFile = ({ file, index, totalFiles, onDeleteClick, onEditClick, on
             {/* أزرار التحكم والأسهم بتصميم + */}
             {isEditMode ? (
                 <div className="flex items-center gap-1">
-                     <div className="grid grid-cols-3 gap-[1px] bg-slate-800 p-1 rounded-lg">
+                     <div className="grid grid-cols-3 gap-[1px] bg-slate-800 p-1 rounded-lg shadow-md border border-slate-700">
                         {/* الصف العلوي */}
                         <div />
                         <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'up'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowUp size={8}/></button>
@@ -135,7 +135,7 @@ const DraggableFile = ({ file, index, totalFiles, onDeleteClick, onEditClick, on
                         
                         {/* الصف الأوسط */}
                         <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'right'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowRight size={8}/></button>
-                        <div className="w-4 h-4 bg-slate-700/50 rounded-full"></div>
+                        <div className="w-4 h-4 bg-slate-700/50 rounded-full flex items-center justify-center"><div className="w-1 h-1 bg-slate-500 rounded-full"></div></div>
                         <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'left'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowLeft size={8}/></button>
                         
                         {/* الصف السفلي */}
@@ -156,7 +156,7 @@ const DraggableFile = ({ file, index, totalFiles, onDeleteClick, onEditClick, on
   );
 };
 
-// --- مكون المنطقة غير المصنفة (بدون تغييرات جوهرية) ---
+// --- مكون المنطقة غير المصنفة ---
 const UnclassifiedZone = ({ children, onDropFile, uploading, onUpload, maxFileSize }) => {
     const [{ isOver }, drop] = useDrop({
         accept: ItemTypes.FILE,
@@ -193,7 +193,7 @@ const UnclassifiedZone = ({ children, onDropFile, uploading, onUpload, maxFileSi
     );
 };
 
-// --- مكون القسم (بدون تغييرات جوهرية) ---
+// --- مكون القسم (Category) ---
 const DraggableCategory = ({ category, index, totalCategories, moveCategory, children, onDelete, onEdit, onUpload, uploading, isEditMode, onDropFile, maxFileSize, onMoveArrows }) => {
   const ref = useRef(null);
   
@@ -411,13 +411,12 @@ const Portfolio = () => {
 
   // --- دالة مساعدة لمعرفة عدد الأعمدة الحالية ---
   const getGridColumns = () => {
-    // هذه الأرقام تتطابق مع نقاط التوقف في Tailwind: xl (1280px) و sm (640px)
-    if (window.innerWidth >= 1280) return 3; // 3 columns for xl
-    if (window.innerWidth >= 640) return 2;  // 2 columns for sm
-    return 1;                                // 1 column for mobile
+    if (window.innerWidth >= 1280) return 3; // xl
+    if (window.innerWidth >= 640) return 2;  // sm
+    return 1;                                // mobile
   };
 
-  // --- منطق نقل الملفات (بالأسهم - معدل ليدعم الحركة العمودية في الشبكة) ---
+  // --- منطق نقل الملفات (بالأسهم 4 اتجاهات) ---
   const handleMoveFileArrow = async (file, direction) => {
       const categoryFiles = files.filter(f => f.category_id === file.category_id)
                                  .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
@@ -428,25 +427,14 @@ const Portfolio = () => {
       const columnsCount = getGridColumns();
       let targetIndex;
 
-      // منطق الاتجاهات
-      if (direction === 'right') {
-          // في اللغة العربية RTL، اليمين يعني العنصر السابق
-          targetIndex = currentIndex - 1;
-      } else if (direction === 'left') {
-          // اليسار يعني العنصر التالي
-          targetIndex = currentIndex + 1;
-      } else if (direction === 'up') {
-          // للأعلى يعني الرجوع للخلف بمقدار عدد الأعمدة
-          targetIndex = currentIndex - columnsCount;
-      } else if (direction === 'down') {
-          // للأسفل يعني التقدم للأمام بمقدار عدد الأعمدة
-          targetIndex = currentIndex + columnsCount;
-      }
+      // RTL: Right=Prev, Left=Next
+      if (direction === 'right') targetIndex = currentIndex - 1;
+      else if (direction === 'left') targetIndex = currentIndex + 1;
+      else if (direction === 'up') targetIndex = currentIndex - columnsCount;
+      else if (direction === 'down') targetIndex = currentIndex + columnsCount;
 
-      // التحقق من الحدود
       if (targetIndex < 0 || targetIndex >= categoryFiles.length) return;
 
-      // التبديل وتحديث البيانات
       const updatedCatFiles = [...categoryFiles];
       [updatedCatFiles[currentIndex], updatedCatFiles[targetIndex]] = [updatedCatFiles[targetIndex], updatedCatFiles[currentIndex]];
 
@@ -457,14 +445,16 @@ const Portfolio = () => {
       }).sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
 
       setFiles(newFiles);
-      await handleSaveOrder(file.category_id);
+      
+      // نمرر القائمة الجديدة مباشرة للحفظ الفوري
+      await handleSaveOrder(file.category_id, newFiles);
   };
 
-  const handleSaveOrder = async (categoryId) => {
-    const currentFiles = filesRef.current;
+  const handleSaveOrder = async (categoryId, passedFiles = null) => {
+    const filesSource = passedFiles || filesRef.current;
     const { data: { user } } = await supabase.auth.getUser();
 
-    const categoryFiles = currentFiles
+    const categoryFiles = filesSource
         .filter(f => f.category_id === categoryId)
         .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
 
