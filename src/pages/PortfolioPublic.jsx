@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { FaFilePdf, FaGraduationCap, FaSchool, FaCalendarAlt, FaLayerGroup } from 'react-icons/fa';
@@ -50,11 +50,35 @@ const PortfolioPublic = () => {
     fetchData();
   }, [userId]);
 
+  // --- التعديل الجديد: إنشاء قائمة عرض مرتبة بصرياً ---
+  // تقوم هذه الدالة بدمج الملفات بنفس ترتيب ظهورها في الشاشة (قسم تلو الآخر)
+  const sortedDisplayFiles = useMemo(() => {
+    let orderedList = [];
+
+    // 1. إضافة ملفات كل قسم بالترتيب
+    categories.forEach((category) => {
+      const categoryFiles = files
+        .filter((f) => f.category_id === category.id)
+        .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+      
+      orderedList = [...orderedList, ...categoryFiles];
+    });
+
+    // 2. إضافة الملفات غير المصنفة في النهاية
+    const unclassifiedFiles = files
+      .filter((f) => !f.category_id)
+      .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+
+    orderedList = [...orderedList, ...unclassifiedFiles];
+
+    return orderedList;
+  }, [categories, files]);
+
   if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center text-blue-400 font-bold">جاري تحميل ملف الإنجاز...</div>;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-200 font-['Noto_Sans_Arabic'] pb-20" dir="rtl">
-      {/* Header Section (Same as before) */}
+      {/* Header Section */}
       <div className="relative h-80 bg-gradient-to-l from-blue-900 to-indigo-900 flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 opacity-20 pattern-grid-lg"></div>
         <div className="relative text-center z-10 flex flex-col items-center">
@@ -79,8 +103,12 @@ const PortfolioPublic = () => {
       {/* Categories & Files */}
       <div className="max-w-6xl mx-auto px-4 space-y-16">
         {categories.map((category) => {
-           const categoryFiles = files.filter(f => f.category_id === category.id);
-           if (categoryFiles.length === 0) return null; // إخفاء الأقسام الفارغة
+           // هنا نستخدم الفلترة العادية للعرض فقط داخل القسم
+           const categoryFiles = files
+                .filter(f => f.category_id === category.id)
+                .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+
+           if (categoryFiles.length === 0) return null; 
            
            return (
              <div key={category.id} className="animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -94,7 +122,8 @@ const PortfolioPublic = () => {
                  {categoryFiles.map((file) => (
                    <div 
                      key={file.id}
-                     onClick={() => setCurrentFileIndex(files.findIndex(f => f.id === file.id))}
+                     // التعديل: البحث عن الاندكس في القائمة المرتبة كلياً
+                     onClick={() => setCurrentFileIndex(sortedDisplayFiles.findIndex(f => f.id === file.id))}
                      className="group relative bg-slate-800/50 border border-white/5 rounded-2xl overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer hover:-translate-y-2 shadow-xl"
                    >
                      <div className="aspect-video bg-slate-900 flex items-center justify-center relative overflow-hidden">
@@ -122,17 +151,19 @@ const PortfolioPublic = () => {
              <div className="pt-8 border-t border-slate-800">
                <h2 className="text-xl font-bold text-slate-400 mb-6">ملفات أخرى</h2>
                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {files.filter(f => !f.category_id).map((file) => (
-                    // ... (نفس كود عرض البطاقة)
+                  {files.filter(f => !f.category_id)
+                       .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
+                       .map((file) => (
                     <div 
                      key={file.id}
-                     onClick={() => setCurrentFileIndex(files.findIndex(f => f.id === file.id))}
+                     // التعديل: البحث عن الاندكس في القائمة المرتبة كلياً
+                     onClick={() => setCurrentFileIndex(sortedDisplayFiles.findIndex(f => f.id === file.id))}
                      className="group relative bg-slate-800/30 border border-white/5 rounded-2xl overflow-hidden hover:border-blue-500/30 transition-all cursor-pointer"
                    >
                      <div className="aspect-video bg-slate-900/50 flex items-center justify-center relative overflow-hidden">
                        {file.type.includes('pdf') ? (
-                          file.thumbnail_url ? <img src={file.thumbnail_url} className="w-full h-full object-cover opacity-60" /> : <FaFilePdf size={40} className="text-slate-600"/>
-                       ) : ( <img src={file.url} className="w-full h-full object-cover opacity-60" /> )}
+                          file.thumbnail_url ? <img src={file.thumbnail_url} className="w-full h-full object-cover opacity-60" alt="thumb"/> : <FaFilePdf size={40} className="text-slate-600"/>
+                       ) : ( <img src={file.url} className="w-full h-full object-cover opacity-60" alt="file"/> )}
                      </div>
                      <div className="p-4"><p className="text-sm font-bold truncate text-slate-400" dir="auto">{file.name}</p></div>
                    </div>
@@ -143,7 +174,13 @@ const PortfolioPublic = () => {
       </div>
 
       {currentFileIndex !== null && (
-        <FileViewer files={files} currentIndex={currentFileIndex} onClose={() => setCurrentFileIndex(null)} onNext={() => setCurrentFileIndex(prev => Math.min(files.length-1, prev+1))} onPrev={() => setCurrentFileIndex(prev => Math.max(0, prev-1))} />
+        <FileViewer 
+          files={sortedDisplayFiles} // التعديل: تمرير القائمة المرتبة
+          currentIndex={currentFileIndex} 
+          onClose={() => setCurrentFileIndex(null)} 
+          onNext={() => setCurrentFileIndex(prev => Math.min(sortedDisplayFiles.length - 1, prev + 1))} 
+          onPrev={() => setCurrentFileIndex(prev => Math.max(0, prev - 1))} 
+        />
       )}
     </div>
   );
