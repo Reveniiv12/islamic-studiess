@@ -12,6 +12,7 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { PDFDocument } from 'pdf-lib';
 import { pdfjs } from 'react-pdf';
+import QRCode from 'react-qr-code'; // <-- تم إضافة الاستيراد هنا
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -669,6 +670,23 @@ const Portfolio = () => {
              </select>
           </div>
           <a href={`/portfolio/${teacherInfo.userId}`} target="_blank" rel="noreferrer" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg"><FaExternalLinkAlt size={14}/> معاينة الملف العام</a>
+
+          {/* --- بداية كود الـ QR الجديد --- */}
+          <div className="bg-white p-4 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center justify-center mt-4">
+              <div className="w-full max-w-[120px]">
+                  <QRCode
+                      size={256}
+                      style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                      value={`${window.location.origin}/portfolio/${teacherInfo.userId}`}
+                      viewBox={`0 0 256 256`}
+                  />
+              </div>
+              <p className="text-slate-900 text-xs font-bold mt-3 text-center">
+                  امسح الرمز للمعاينة بالجوال
+              </p>
+          </div>
+          {/* --- نهاية كود الـ QR الجديد --- */}
+
         </aside>
 
         {/* Main Content */}
