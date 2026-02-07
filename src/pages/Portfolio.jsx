@@ -5,7 +5,7 @@ import {
   FaUpload, FaTrash, FaEdit, FaExternalLinkAlt, FaFilePdf, FaGripVertical, 
   FaExclamationTriangle, FaHome, FaFileExport, FaFolderPlus, FaLayerGroup,
   FaLock, FaUnlock, FaCog, FaBoxOpen, FaArrowUp, FaArrowDown, FaArrowRight, FaArrowLeft,
-  FaDownload
+  FaFileImage
 } from 'react-icons/fa';
 import FileViewer from '../components/FileViewer';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,6 +15,7 @@ import { PDFDocument } from 'pdf-lib';
 import { pdfjs } from 'react-pdf';
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf'; 
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -635,25 +636,84 @@ const Portfolio = () => {
      setIsExporting(false);
   };
 
-  const handleDownloadQrCard = async () => {
+  // --- دالة التصدير الموحدة للـ QR المحسنة لملء كامل الصفحة ---
+  const handleDownloadCard = async (type) => {
       const element = document.getElementById('qr-card-container');
       if (!element) return;
       
       try {
+          // التقاط العنصر بدقة عالية جداً للطباعة
           const canvas = await html2canvas(element, { 
               backgroundColor: '#ffffff',
-              scale: 2 
+              scale: 4, // زيادة الجودة للطباعة
+              useCORS: true
           });
-          const data = canvas.toDataURL('image/png');
-          const link = document.createElement('a');
-          link.href = data;
-          link.download = `QR-${teacherInfo.name}.png`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          
+          const imgData = canvas.toDataURL('image/png');
+          
+          if (type === 'pdf') {
+              // إنشاء ملف PDF بوضعية الطول (p) ملم (mm) مقاس (a4)
+              const pdf = new jsPDF('p', 'mm', 'a4');
+              const pageWidth = pdf.internal.pageSize.getWidth();
+              const pageHeight = pdf.internal.pageSize.getHeight();
+              
+              // حساب الأبعاد لملء كامل الصفحة مع الحفاظ على نسبة العرض للطول
+              const imgProps = pdf.getImageProperties(imgData);
+              const pdfWidth = pageWidth;
+              const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+              // إذا كان الارتفاع المحسوب أكبر من الصفحة، نجعله بارتفاع الصفحة ونقلل العرض
+              let finalW = pdfWidth;
+              let finalH = pdfHeight;
+              
+              if (pdfHeight > pageHeight) {
+                  finalH = pageHeight;
+                  finalW = (imgProps.width * finalH) / imgProps.height;
+              }
+
+              // توسيط الصورة في حال لم تكن تملأ العرض تماماً
+              const x = (pageWidth - finalW) / 2;
+              const y = (pageHeight - finalH) / 2;
+              
+              pdf.addImage(imgData, 'PNG', x, y, finalW, finalH);
+              pdf.save(`QR-FullPage-${teacherInfo.name}.pdf`);
+              
+          } else {
+              // تصدير كصورة A4 كاملة
+              const a4Canvas = document.createElement('canvas');
+              // أبعاد A4 بدقة 300 DPI
+              a4Canvas.width = 2480;
+              a4Canvas.height = 3508;
+              const ctx = a4Canvas.getContext('2d');
+              
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, a4Canvas.width, a4Canvas.height);
+              
+              // حساب الأبعاد لملء الكانفاس
+              const ratio = canvas.width / canvas.height;
+              let drawWidth = a4Canvas.width;
+              let drawHeight = drawWidth / ratio;
+              
+              if (drawHeight > a4Canvas.height) {
+                  drawHeight = a4Canvas.height;
+                  drawWidth = drawHeight * ratio;
+              }
+
+              const x = (a4Canvas.width - drawWidth) / 2;
+              const y = (a4Canvas.height - drawHeight) / 2;
+              
+              ctx.drawImage(canvas, 0, 0, canvas.width, canvas.height, x, y, drawWidth, drawHeight);
+              
+              const data = a4Canvas.toDataURL('image/png');
+              const link = document.createElement('a');
+              link.href = data;
+              link.download = `QR-FullPage-${teacherInfo.name}.png`;
+              link.click();
+          }
+          
       } catch (error) {
-          console.error("Error downloading QR:", error);
-          setErrorMessage("فشل تحميل بطاقة الرمز");
+          console.error("Error downloading:", error);
+          setErrorMessage("فشل عملية التصدير كاملة الصفحة");
           setErrorModalOpen(true);
       }
   };
@@ -693,7 +753,6 @@ const Portfolio = () => {
                 
                 {/* رأس البطاقة */}
                 <div className="w-full text-center border-b border-slate-200 pb-3 mb-3">
-                    {/* -- الإضافة الجديدة هنا -- */}
                     <p className="text-emerald-600 font-bold text-xs mb-1">ملف الإنجاز الرقمي للأستاذ</p>
                     <h3 className="text-slate-900 font-black text-sm">{teacherInfo.name || 'اسم المعلم'}</h3>
                     <p className="text-slate-600 text-xs mt-1">{teacherInfo.school}</p>
@@ -723,13 +782,21 @@ const Portfolio = () => {
                 </p>
             </div>
 
-            {/* زر التحميل أسفل البطاقة */}
-            <button 
-                onClick={handleDownloadQrCard}
-                className="w-full mt-2 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center justify-center gap-2 text-xs font-bold shadow transition-colors"
-            >
-                <FaDownload /> حفظ البطاقة كصورة
-            </button>
+            {/* أزرار التحميل */}
+            <div className="flex gap-2 mt-2">
+                <button 
+                    onClick={() => handleDownloadCard('pdf')}
+                    className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg flex items-center justify-center gap-1 text-[10px] font-bold shadow transition-colors"
+                >
+                    <FaFilePdf /> PDF A4
+                </button>
+                <button 
+                    onClick={() => handleDownloadCard('image')}
+                    className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center justify-center gap-1 text-[10px] font-bold shadow transition-colors"
+                >
+                    <FaFileImage /> صورة A4
+                </button>
+            </div>
           </div>
           {/* --- نهاية القسم --- */}
 
