@@ -4,7 +4,8 @@ import { supabase } from '../supabaseClient';
 import { 
   FaUpload, FaTrash, FaEdit, FaExternalLinkAlt, FaFilePdf, FaGripVertical, 
   FaExclamationTriangle, FaHome, FaFileExport, FaFolderPlus, FaLayerGroup,
-  FaLock, FaUnlock, FaCog, FaBoxOpen, FaArrowUp, FaArrowDown, FaArrowRight, FaArrowLeft
+  FaLock, FaUnlock, FaCog, FaBoxOpen, FaArrowUp, FaArrowDown, FaArrowRight, FaArrowLeft,
+  FaDownload
 } from 'react-icons/fa';
 import FileViewer from '../components/FileViewer';
 import { v4 as uuidv4 } from 'uuid';
@@ -12,7 +13,8 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { PDFDocument } from 'pdf-lib';
 import { pdfjs } from 'react-pdf';
-import QRCode from 'react-qr-code'; // <-- تم إضافة الاستيراد هنا
+import QRCode from 'react-qr-code';
+import html2canvas from 'html2canvas';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -20,6 +22,10 @@ const ItemTypes = {
   FILE: 'file',
   CATEGORY: 'category' 
 };
+
+// --- ثوابت البيانات ---
+const SUBJECT_NAME = "القرآن الكريم والدراسات الإسلامية";
+const ACADEMIC_YEAR = "١٤٤٧هـ";
 
 // --- دالة إنشاء الصورة المصغرة ---
 const createPdfThumbnail = async (file) => {
@@ -125,21 +131,15 @@ const DraggableFile = ({ file, index, totalFiles, onDeleteClick, onEditClick, on
         <p className="text-xs font-bold truncate text-slate-300 w-full" dir="auto">{file.name}</p>
         
         <div className="flex items-center justify-between mt-1">
-            {/* أزرار التحكم والأسهم بتصميم + */}
             {isEditMode ? (
                 <div className="flex items-center gap-1">
                      <div className="grid grid-cols-3 gap-[1px] bg-slate-800 p-1 rounded-lg shadow-md border border-slate-700">
-                        {/* الصف العلوي */}
                         <div />
                         <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'up'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowUp size={8}/></button>
                         <div />
-                        
-                        {/* الصف الأوسط */}
                         <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'right'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowRight size={8}/></button>
                         <div className="w-4 h-4 bg-slate-700/50 rounded-full flex items-center justify-center"><div className="w-1 h-1 bg-slate-500 rounded-full"></div></div>
                         <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'left'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowLeft size={8}/></button>
-                        
-                        {/* الصف السفلي */}
                         <div />
                         <button onClick={(e) => { e.stopPropagation(); onMoveArrows(file, 'down'); }} className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded flex justify-center"><FaArrowDown size={8}/></button>
                         <div />
@@ -410,14 +410,12 @@ const Portfolio = () => {
     });
   }, []);
 
-  // --- دالة مساعدة لمعرفة عدد الأعمدة الحالية ---
   const getGridColumns = () => {
-    if (window.innerWidth >= 1280) return 3; // xl
-    if (window.innerWidth >= 640) return 2;  // sm
-    return 1;                                // mobile
+    if (window.innerWidth >= 1280) return 3; 
+    if (window.innerWidth >= 640) return 2;  
+    return 1;                                
   };
 
-  // --- منطق نقل الملفات (بالأسهم 4 اتجاهات) ---
   const handleMoveFileArrow = async (file, direction) => {
       const categoryFiles = files.filter(f => f.category_id === file.category_id)
                                  .sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
@@ -428,7 +426,6 @@ const Portfolio = () => {
       const columnsCount = getGridColumns();
       let targetIndex;
 
-      // RTL: Right=Prev, Left=Next
       if (direction === 'right') targetIndex = currentIndex - 1;
       else if (direction === 'left') targetIndex = currentIndex + 1;
       else if (direction === 'up') targetIndex = currentIndex - columnsCount;
@@ -446,8 +443,6 @@ const Portfolio = () => {
       }).sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
 
       setFiles(newFiles);
-      
-      // نمرر القائمة الجديدة مباشرة للحفظ الفوري
       await handleSaveOrder(file.category_id, newFiles);
   };
 
@@ -532,7 +527,6 @@ const Portfolio = () => {
 
   const confirmDelete = async (deleteFilesInside = false) => {
       if (!itemToDelete) return;
-      
       const { data: { user } } = await supabase.auth.getUser();
 
       if (deleteType === 'file') {
@@ -561,7 +555,6 @@ const Portfolio = () => {
               setCategories(categories.filter(c => c.id !== itemToDelete.id));
 
           } else {
-              // --- منطق نقل الملفات إلى النهاية ---
               const currentUnclassified = files.filter(f => !f.category_id);
               const maxIndex = currentUnclassified.length > 0 
                   ? Math.max(...currentUnclassified.map(f => f.order_index || 0)) 
@@ -642,6 +635,29 @@ const Portfolio = () => {
      setIsExporting(false);
   };
 
+  const handleDownloadQrCard = async () => {
+      const element = document.getElementById('qr-card-container');
+      if (!element) return;
+      
+      try {
+          const canvas = await html2canvas(element, { 
+              backgroundColor: '#ffffff',
+              scale: 2 
+          });
+          const data = canvas.toDataURL('image/png');
+          const link = document.createElement('a');
+          link.href = data;
+          link.download = `QR-${teacherInfo.name}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+      } catch (error) {
+          console.error("Error downloading QR:", error);
+          setErrorMessage("فشل تحميل بطاقة الرمز");
+          setErrorModalOpen(true);
+      }
+  };
+
   if (loading) return <div className="h-screen bg-[#0f172a] flex items-center justify-center text-blue-400 font-bold tracking-widest">جاري التحميل...</div>;
 
   return (
@@ -671,21 +687,51 @@ const Portfolio = () => {
           </div>
           <a href={`/portfolio/${teacherInfo.userId}`} target="_blank" rel="noreferrer" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg"><FaExternalLinkAlt size={14}/> معاينة الملف العام</a>
 
-          {/* --- بداية كود الـ QR الجديد --- */}
-          <div className="bg-white p-4 rounded-xl border border-slate-700 shadow-lg flex flex-col items-center justify-center mt-4">
-              <div className="w-full max-w-[120px]">
-                  <QRCode
-                      size={256}
-                      style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                      value={`${window.location.origin}/portfolio/${teacherInfo.userId}`}
-                      viewBox={`0 0 256 256`}
-                  />
-              </div>
-              <p className="text-slate-900 text-xs font-bold mt-3 text-center">
-                  امسح الرمز للمعاينة بالجوال
-              </p>
+          {/* --- قسم بطاقة الـ QR والبيانات --- */}
+          <div className="relative group">
+            <div id="qr-card-container" className="bg-white p-5 rounded-xl border border-slate-700 shadow-xl flex flex-col items-center justify-center mt-4">
+                
+                {/* رأس البطاقة */}
+                <div className="w-full text-center border-b border-slate-200 pb-3 mb-3">
+                    {/* -- الإضافة الجديدة هنا -- */}
+                    <p className="text-emerald-600 font-bold text-xs mb-1">ملف الإنجاز الرقمي للأستاذ</p>
+                    <h3 className="text-slate-900 font-black text-sm">{teacherInfo.name || 'اسم المعلم'}</h3>
+                    <p className="text-slate-600 text-xs mt-1">{teacherInfo.school}</p>
+                </div>
+
+                {/* البيانات الثابتة المطلوبة */}
+                <div className="w-full text-center mb-3 space-y-1">
+                    <p className="text-slate-800 text-[10px] font-bold bg-slate-100 py-1 rounded">المادة: {SUBJECT_NAME}</p>
+                    <div className="flex justify-between gap-1">
+                         <p className="flex-1 text-slate-800 text-[10px] bg-slate-100 py-1 rounded">السنة: {ACADEMIC_YEAR}</p>
+                         <p className="flex-1 text-slate-800 text-[10px] bg-slate-100 py-1 rounded">{teacherInfo.semester}</p>
+                    </div>
+                </div>
+
+                {/* كود QR */}
+                <div className="w-full max-w-[120px] p-1 border border-slate-100 rounded">
+                    <QRCode
+                        size={256}
+                        style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                        value={`${window.location.origin}/portfolio/${teacherInfo.userId}`}
+                        viewBox={`0 0 256 256`}
+                    />
+                </div>
+
+                <p className="text-slate-500 text-[9px] font-bold mt-2 text-center">
+                    امسح الرمز لعرض ملف الإنجاز
+                </p>
+            </div>
+
+            {/* زر التحميل أسفل البطاقة */}
+            <button 
+                onClick={handleDownloadQrCard}
+                className="w-full mt-2 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center justify-center gap-2 text-xs font-bold shadow transition-colors"
+            >
+                <FaDownload /> حفظ البطاقة كصورة
+            </button>
           </div>
-          {/* --- نهاية كود الـ QR الجديد --- */}
+          {/* --- نهاية القسم --- */}
 
         </aside>
 
