@@ -15,6 +15,7 @@
     "firebase": "^9.23.0",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
+    "jspdf": "^4.1.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^3.4.120",
     "qrcode": "^1.5.4",
