@@ -12,9 +12,12 @@ import {
   FaLayerGroup, 
   FaStar, 
   FaRegStar,
-  FaToggleOn, // أيقونة جديدة
-  FaToggleOff, // أيقونة جديدة
-  FaGamepad // أيقونة للقسم الجديد
+  FaToggleOn, 
+  FaToggleOff, 
+  FaGamepad,
+  FaBriefcase,
+  FaBookOpen,
+  FaGift
 } from 'react-icons/fa';
 
 const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
@@ -24,9 +27,10 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
     lock_message: "عذراً، الصفحة مغلقة حالياً للتحديث ورصد الدرجات.",
     allowed_views: [],
     default_view: null,
-    // إعدادات الأزرار الجديدة (الافتراضي true للظهور)
+    // الإعدادات الافتراضية للأزرار
     show_rewards_button: true, 
-    show_solutions_button: true 
+    show_solutions_button: true,
+    show_portfolio_button: true // مفتاح التحكم الجديد
   });
 
   // جلب الإعدادات عند فتح النافذة
@@ -52,9 +56,10 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
                 ? data.student_view_config.allowed_views 
                 : [],
             default_view: data.student_view_config.default_view || null,
-            // ضمان وجود القيم الجديدة حتى لو كانت الإعدادات قديمة
+            // ضمان وجود القيم الجديدة
             show_rewards_button: data.student_view_config.show_rewards_button !== false,
-            show_solutions_button: data.student_view_config.show_solutions_button !== false
+            show_solutions_button: data.student_view_config.show_solutions_button !== false,
+            show_portfolio_button: data.student_view_config.show_portfolio_button !== false,
         };
         setConfig(loadedConfig);
       }
@@ -117,6 +122,10 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
       }
   };
 
+  const toggleFeature = (key) => {
+      setConfig(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   const isSelected = (id) => config.allowed_views?.includes(id);
   const isDefault = (id) => config.default_view === id;
 
@@ -134,7 +143,7 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
 
         {isSelected(id) && (
             <button
-                onClick={() => setDefaultView(id)}
+                onClick={(e) => { e.stopPropagation(); setDefaultView(id); }}
                 className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all w-full sm:w-auto border ${
                     isDefault(id) 
                     ? 'bg-yellow-600/20 border-yellow-500 text-yellow-400 hover:bg-yellow-600/30' 
@@ -203,10 +212,10 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
         <div className="bg-gray-700/30 p-4 rounded-xl border border-gray-600/50">
           <div className="mb-4">
              <h3 className="font-bold text-lg text-white flex items-center gap-2 mb-1">
-                <FaEye className="text-blue-400"/> إعدادات العرض
+                <FaEye className="text-blue-400"/> صلاحيات الفترات
              </h3>
              <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
-                حدد الفترات التي تود إظهارها. اضغط على زر "تعيين كافتراضي" <FaStar className="inline text-yellow-500 mx-1"/> بجانب الفترة ليدخل الطالب عليها مباشرة.
+                حدد الفترات التي تود إظهارها.
              </p>
           </div>
           
@@ -216,39 +225,52 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
           </div>
         </div>
 
-        {/* 3. قسم الأزرار (الجديد) */}
+        {/* 3. قسم إعدادات الأزرار الإضافية (جديد) */}
         <div className="bg-gray-700/30 p-4 rounded-xl border border-gray-600/50">
-           <h3 className="font-bold text-lg text-white flex items-center gap-2 mb-4 border-b border-gray-600 pb-2">
-              <FaGamepad className="text-purple-400"/> إعدادات الأزرار
+           <h3 className="font-bold text-lg text-white flex items-center gap-2 mb-4">
+              <FaGamepad className="text-purple-400"/> إعدادات الأزرار الإضافية
            </h3>
-           
-           <div className="flex flex-col gap-3">
-              {/* زر المكافآت */}
-              <div className="flex items-center justify-between bg-gray-800 p-3 rounded-lg border border-gray-700">
-                  <span className="text-gray-200 font-medium">إظهار زر المكافآت</span>
-                  <button 
-                    onClick={() => setConfig({...config, show_rewards_button: !config.show_rewards_button})}
-                    className={`text-3xl transition-colors ${config.show_rewards_button ? 'text-green-500' : 'text-gray-500'}`}
-                  >
-                    {config.show_rewards_button ? <FaToggleOn /> : <FaToggleOff />}
-                  </button>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* زر حلول الكتاب */}
+              <div 
+                 onClick={() => toggleFeature('show_solutions_button')}
+                 className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${config.show_solutions_button ? 'bg-blue-900/30 border-blue-500/50' : 'bg-gray-800 border-gray-700'}`}
+              >
+                  <div className="flex items-center gap-2 text-white">
+                      <FaBookOpen className="text-blue-400"/>
+                      <span className="text-sm font-bold">حلول الكتاب</span>
+                  </div>
+                  {config.show_solutions_button ? <FaToggleOn className="text-2xl text-green-400"/> : <FaToggleOff className="text-2xl text-gray-500"/>}
               </div>
 
-              {/* زر حل أسئلة الكتاب */}
-              <div className="flex items-center justify-between bg-gray-800 p-3 rounded-lg border border-gray-700">
-                  <span className="text-gray-200 font-medium">إظهار زر "حل أسئلة الكتاب"</span>
-                  <button 
-                    onClick={() => setConfig({...config, show_solutions_button: !config.show_solutions_button})}
-                    className={`text-3xl transition-colors ${config.show_solutions_button ? 'text-green-500' : 'text-gray-500'}`}
-                  >
-                    {config.show_solutions_button ? <FaToggleOn /> : <FaToggleOff />}
-                  </button>
+              {/* زر ملف الإنجاز */}
+              <div 
+                 onClick={() => toggleFeature('show_portfolio_button')}
+                 className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${config.show_portfolio_button ? 'bg-teal-900/30 border-teal-500/50' : 'bg-gray-800 border-gray-700'}`}
+              >
+                  <div className="flex items-center gap-2 text-white">
+                      <FaBriefcase className="text-teal-400"/>
+                      <span className="text-sm font-bold">ملف الإنجاز</span>
+                  </div>
+                  {config.show_portfolio_button ? <FaToggleOn className="text-2xl text-green-400"/> : <FaToggleOff className="text-2xl text-gray-500"/>}
+              </div>
+
+              {/* زر المكافآت */}
+              <div 
+                 onClick={() => toggleFeature('show_rewards_button')}
+                 className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${config.show_rewards_button ? 'bg-purple-900/30 border-purple-500/50' : 'bg-gray-800 border-gray-700'}`}
+              >
+                  <div className="flex items-center gap-2 text-white">
+                      <FaGift className="text-purple-400"/>
+                      <span className="text-sm font-bold">المكافآت</span>
+                  </div>
+                  {config.show_rewards_button ? <FaToggleOn className="text-2xl text-green-400"/> : <FaToggleOff className="text-2xl text-gray-500"/>}
               </div>
            </div>
         </div>
 
-        {/* 4. أزرار التحكم السفلية */}
-        <div className="flex flex-col-reverse sm:flex-row gap-3 mt-2 border-t border-gray-700 pt-4 pb-2">
+        {/* 4. أزرار الحفظ والإلغاء */}
+        <div className="flex flex-col-reverse sm:flex-row gap-3 mt-4 border-t border-gray-700 pt-4">
           <button 
             onClick={onClose} 
             className="px-6 py-3 bg-gray-700 text-gray-200 rounded-xl font-bold hover:bg-gray-600 hover:text-white transition-all w-full sm:w-auto"
