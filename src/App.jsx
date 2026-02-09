@@ -1,21 +1,22 @@
+// src/App.jsx
 import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
-import StudentGradesPublic from "./pages/StudentGradesPublic";
 import SectionsPage from "./pages/SectionsPage";
 import SectionGrades from "./pages/SectionGrades";
 import StudentList from "./pages/StudentList";
-import StudentGrades from "./pages/StudentGrades";
 import StudentView from "./pages/StudentView";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { supabase } from "./supabaseClient"; 
-import Portfolio from "./pages/Portfolio";
-import PortfolioPublic from "./pages/PortfolioPublic";
+import Portfolio from "./pages/Portfolio"; // القديم إذا كنت تستخدمه
+import PortfolioPublic from "./pages/PortfolioPublic"; // القديم
 import ReportGenerator from "./pages/ReportGenerator";
+
+// --- الاستيرادات الجديدة ---
+import StudentPortfolio from "./pages/StudentPortfolio";
+import SectionPortfoliosViewer from "./pages/SectionPortfoliosViewer";
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -25,7 +26,7 @@ export default function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* الصفحة الرئيسية الجديدة - لوحة تحكم المعلم (مسار محمي) */}
+            {/* الصفحة الرئيسية - لوحة تحكم المعلم (محمية) */}
             <Route
               path="/"
               element={
@@ -35,16 +36,11 @@ export default function App() {
               }
             />
 
-            {/* صفحة تسجيل الدخول */}
+            {/* المصادقة */}
             <Route path="/login" element={<Login />} />
-
-            {/* صفحة إنشاء حساب جديد */}
             <Route path="/register" element={<Register />} />
 
-            {/* صفحة درجات الطالب العامة (بدون حماية) */}
-            <Route path="/student-grades/:id" element={<StudentGradesPublic />} />
-
-            {/* مسار الصفوف (مسار محمي) */}
+            {/* عرض الأقسام لصف معين (محمية) */}
             <Route
               path="/grades/:gradeId"
               element={
@@ -53,23 +49,13 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            
-            {/* مسار صفحة درجات الفصل (مسار محمي) */}
+
+            {/* لوحة درجات القسم (محمية) */}
             <Route
               path="/grades/:gradeId/sections/:sectionId"
               element={
                 <ProtectedRoute>
                   <SectionGrades />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* لوحة تحكم الطالب (مسار محمي) */}
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
                 </ProtectedRoute>
               }
             />
@@ -84,28 +70,63 @@ export default function App() {
               }
             />
 
-            {/* عرض درجات طالب معين (مسار عام لروابط الـ QR) - تم إزالة ProtectedRoute منه */}
+            {/* عرض واجهة الطالب (التي تحتوي على زر ملف الإنجاز) */}
+            <Route
+              path="/student-view/:studentId"
+              element={<StudentView />}
+            />
+            
+            {/* وأيضاً المسار الطويل القديم لضمان عمل الروابط القديمة */}
             <Route
               path="/grades/:gradeId/sections/:sectionId/students/:studentId"
               element={<StudentView />}
             />
 
-            {/* مسار ملف الإنجاز المحمي */}
-            <Route
-              path="/portfolio"
-              element={
-                <ProtectedRoute>
-                  <Portfolio />
-                </ProtectedRoute>
-              }
+            {/* ======================================================== */}
+            {/* مسارات ملف الإنجاز الجديدة                */}
+            {/* ======================================================== */}
+
+            {/* 1. صفحة الطالب (لرفع الملفات) */}
+            <Route 
+              path="/student-portfolio/:studentId" 
+              element={<StudentPortfolio />} 
             />
 
-<Route path="/reports" element={<ReportGenerator />} />
+            {/* 2. صفحة المعلم (لعرض الملفات والموافقة على الحذف) */}
+            <Route 
+              path="/section-portfolios/:gradeId/:sectionId" 
+              element={<SectionPortfoliosViewer />} 
+            />
 
-            {/* مسار ملف الإنجاز العام (بدون حماية) */}
+            {/* 3. صفحة المشرف (للعرض فقط وتسجيل الزيارة) - المسار القديم */}
+            <Route 
+              path="/supervisor/section/:gradeId/:sectionId" 
+              element={<SectionPortfoliosViewer />} 
+            />
+
+            {/* 4. مسار المشرف الجديد (المتوافق مع QR Code للفصل) - تمت إضافته سابقاً */}
+            <Route 
+              path="/section-portfolios/:gradeId/:sectionId/supervisor" 
+              element={<SectionPortfoliosViewer />} 
+            />
+
+            {/* 5. مسار المشرف الموحد للصف (جديد) - يختار المشرف الفصل من الداخل */}
+            <Route 
+              path="/supervisor/grade/:gradeId" 
+              element={<SectionPortfoliosViewer />} 
+            />
+
+            {/* ======================================================== */}
+
+
+            {/* مسارات أخرى (التقارير وغيرها) */}
+            <Route path="/reports" element={<ReportGenerator />} />
+            
+            {/* مسارات قديمة (إذا كنت لا تزال تستخدمها) */}
+            <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
             <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
 
-            {/* إعادة توجيه أي مسار غير معروف. تم تعديلها لتوجيه المستخدمين إلى المسار المحمي "/" */}
+            {/* إعادة توجيه أي مسار خاطئ للرئيسية */}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </Router>
