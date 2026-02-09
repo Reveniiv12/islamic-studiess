@@ -74,7 +74,8 @@ import {
   FaCalendarAlt, 
   FaCalendarCheck,
   FaFilter,
-  FaGift 
+  FaGift,
+  FaFolderOpen 
 } from "react-icons/fa";
 
 import {
@@ -1478,6 +1479,13 @@ const handleExportQRCodes = async () => {
 >
   <FaFolderPlus /> المصادر والحلول
 </button>
+<button
+  onClick={() => navigate(`/section-portfolios/${gradeId}/${sectionId}`)}
+  className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-white text-indigo-700 rounded-lg hover:bg-gray-100 transition-colors shadow-md text-xs md:text-sm font-bold border border-gray-300"
+>
+  <FaFolderOpen />  ملفات انجاز الطلاب
+</button>
+
         </div>
       </div>
 

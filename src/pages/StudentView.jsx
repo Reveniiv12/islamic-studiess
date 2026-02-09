@@ -31,7 +31,8 @@ import {
   FaFileImage,
   FaDownload,
   FaBoxOpen,
-  FaQrcode
+  FaQrcode,
+  FaBriefcase
 } from "react-icons/fa";
 
 import {
@@ -175,22 +176,17 @@ function StudentView() {
   // 🔥🔥🔥 Visits Recording Logic (نظام تسجيل الزيارات) 🔥🔥🔥
   // ----------------------------------------------------------------------
   useEffect(() => {
-    // لا نقوم بأي شيء إذا لم تتوفر بيانات الطالب بعد أو إذا كان المستخدم مسجل دخول بالفعل (معلم)
     if (!studentDisplayedData || !studentDisplayedData.id) return;
 
     const recordVisit = async () => {
         try {
-            // 1. التحقق من المستخدم الحالي
             const { data: { user } } = await supabase.auth.getUser();
 
-            // إذا كان هناك مستخدم مسجل دخول، فهذا يعني أنه المعلم (أو المشرف)
-            // لذا لا نقوم بتسجيل زيارة في سجل الزيارات (نكتفي بتسجيل زيارات الطلاب فقط)
             if (user) {
                 console.log("Visit Logic: Logged in user detected (Teacher). No visit recorded.");
                 return;
             }
 
-            // 2. تسجيل بداية الزيارة للطالب (الذي ليس مسجل دخول)
             console.log("Visit Logic: Guest/Student detected. Recording start...");
             
             const { data, error } = await supabase
@@ -199,7 +195,6 @@ function StudentView() {
                     student_id: studentDisplayedData.id,
                     teacher_id: studentDisplayedData.teacher_id,
                     visit_start_time: new Date().toISOString(),
-                    // visit_end_time يترك فارغاً مبدئياً
                 })
                 .select('id')
                 .single();
@@ -218,16 +213,11 @@ function StudentView() {
 
     recordVisit();
 
-    // دالة لتحديث وقت المغادرة
     const updateExitTime = async () => {
         if (!currentVisitIdRef.current) return;
         
         const exitTime = new Date().toISOString();
         console.log("Updating visit end time:", exitTime);
-        
-        // استخدام navigator.sendBeacon إذا أمكن لأنه أكثر موثوقية عند الإغلاق
-        // لكن Supabase يحتاج طلب خاص، لذا سنستخدم الطريقة العادية ونأمل أن المتصفح يسمح بها
-        // أو نستخدم fetch مع keepalive
         
         try {
             await supabase
@@ -239,14 +229,12 @@ function StudentView() {
         }
     };
 
-    // 3. الاستماع لأحداث المغادرة (إغلاق التبويب، تغيير الرابط، إخفاء المتصفح)
     const handleVisibilityChange = () => {
         if (document.visibilityState === 'hidden') {
             updateExitTime();
         }
     };
 
-    // الاستماع لحدث قبل الإغلاق
     const handleBeforeUnload = () => {
         updateExitTime();
     };
@@ -254,14 +242,13 @@ function StudentView() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
-    // تنظيف عند إلغاء تحميل المكون (Component Unmount)
     return () => {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         window.removeEventListener('beforeunload', handleBeforeUnload);
         updateExitTime();
     };
 
-  }, [studentDisplayedData?.id]); // يعتمد فقط على معرف الطالب لضمان العمل عند تحميل بياناته
+  }, [studentDisplayedData?.id]);
 
 
   // ----------------------------------------------------------------------
@@ -269,7 +256,6 @@ function StudentView() {
   // ----------------------------------------------------------------------
   const refreshStudentData = useCallback(async () => {
       try {
-          // 1. تحديث الإعدادات (للأزرار والقفل)
           const { data: settingsData } = await supabase
               .from('settings')
               .select('student_view_config')
@@ -280,7 +266,6 @@ function StudentView() {
              const config = settingsData.student_view_config;
              setViewConfig(config);
              
-             // التحقق من القفل فوراً
              if (config.is_locked) {
                 setIsLocked(true);
                 setLockMessage(config.lock_message);
@@ -289,7 +274,6 @@ function StudentView() {
              }
           }
 
-          // 2. تحديث بيانات الطالب
           const { data: student, error: studentError } = await supabase
               .from('students')
               .select('*, teacher_id, absences(*), book_absences(*)')
@@ -304,7 +288,6 @@ function StudentView() {
               teacherId = String(rawTeacherId).trim();
           }
           
-          // 3. تحديث طلبات المكافآت
           const { data: rData } = await supabase
               .from('reward_requests')
               .select('*, prizes(id, name, cost)')
@@ -329,7 +312,6 @@ function StudentView() {
           setStudentBaseData(newBaseData);
           setRewardRequests(filteredRequests);
           
-          // 4. تحديث بيانات الفترة الحالية إذا كانت مفتوحة
           if (selectedSemester && currentPeriod) {
               await fetchPeriodData(currentPeriod, selectedSemester, newBaseData, filteredRequests);
               await fetchAnnouncements(student.grade_level, student.section, teacherId, selectedSemester);
@@ -346,40 +328,33 @@ function StudentView() {
   useEffect(() => {
     if (!studentId) return;
 
-    // اشتراك للاستماع للتغييرات في قاعدة البيانات
     const channel = supabase
       .channel('student-view-realtime-updates')
-      // 1. الاستماع لتعديلات جدول الطلاب (درجات، ملاحظات، نجوم)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'students', filter: `id=eq.${studentId}` },
         () => refreshStudentData()
       )
-      // 2. الاستماع لتعديلات الإعدادات (القفل، إظهار/إخفاء الأزرار)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'settings', filter: 'id=eq.general' },
         () => refreshStudentData()
       )
-      // 3. الاستماع لتعديلات طلبات المكافآت
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'reward_requests', filter: `student_id=eq.${studentId}` },
         () => refreshStudentData()
       )
-      // 4. الاستماع للإعلانات
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'announcements' },
         () => refreshStudentData()
       )
-      // 5. الاستماع للغياب
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'absences', filter: `student_id=eq.${studentId}` },
         () => refreshStudentData()
       )
-      // 6. الاستماع لغياب الكتب
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'book_absences', filter: `student_id=eq.${studentId}` },
@@ -625,8 +600,6 @@ function StudentView() {
       const teacherId = student.teacher_id;
       const gradeId = student.grade_level;
       const sectionId = student.section;
-      
-      // ملاحظة: تم نقل كود تسجيل الزيارة إلى useEffect منفصل في الأعلى لضمان الدقة
       
       let activeRecitationCurriculum = [];
       let activeHomeworkCurriculum = [];
@@ -965,8 +938,7 @@ function StudentView() {
     );
   }
 
-  // إذا لم تكن هناك بيانات للعرض، نعرض شاشة التحميل (فقط في المرة الأولى أو عند التبديل اليدوي)
-  // أما التحديث التلقائي فلن يظهر هذه الشاشة
+  // إذا لم تكن هناك بيانات للعرض، نعرض شاشة التحميل
   if (!studentDisplayedData) {
     const semesterLabel = selectedSemester === 'semester1' ? 'الفصل الأول' : 'الفصل الثاني';
     const periodLabel = currentPeriod === 1 ? 'الفترة الأولى' : 'الفترة الثانية';
@@ -1063,6 +1035,8 @@ function StudentView() {
     
   const showRewardsButton = viewConfig?.show_rewards_button !== false;
   const showSolutionsButton = viewConfig?.show_solutions_button !== false;
+  // 🔥 تصحيح الخطأ هنا: تعريف المتغير قبل استخدامه
+  const showPortfolioButton = viewConfig?.show_portfolio_button !== false;
 
   return (
     <div className="min-h-screen bg-gray-900 p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100 flex justify-center items-start" dir="rtl">
@@ -1562,29 +1536,66 @@ function StudentView() {
                 </div>
             </div>
 
-            {/* 🔥🔥 زر حل أسئلة الكتاب 🔥🔥 */}
-            {showSolutionsButton && (
-                <div className="w-full mt-6">
+{/* 8. روابط خارجية (حلول الكتاب وملف الإنجاز) - في حاوية واحدة */}
+            <div className="w-full mt-8 flex flex-col gap-4 p-5 bg-slate-900 rounded-3xl border border-slate-800 shadow-inner relative overflow-hidden">
+                
+                {/* تأثير خلفية خفيف للحاوية */}
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-slate-800/20 to-transparent pointer-events-none"></div>
+
+                {/* زر حل أسئلة الكتاب */}
+                {showSolutionsButton && (
                     <button
                         onClick={() => setShowMaterialsView(true)}
-                        className="w-full p-6 bg-gradient-to-l from-blue-700 via-blue-800 to-blue-900 rounded-2xl border border-blue-600/50 shadow-2xl shadow-blue-900/20 hover:scale-[1.01] transition-transform duration-300 group overflow-hidden relative"
+                        className="w-full p-5 bg-gradient-to-l from-blue-700 via-blue-800 to-blue-900 rounded-2xl border border-blue-600/50 shadow-lg hover:shadow-blue-900/30 hover:scale-[1.01] transition-all duration-300 group relative overflow-hidden"
                     >
-                         <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                         <div className="relative z-10 flex items-center justify-between md:justify-center gap-4">
-                             <div className="bg-blue-600/40 p-3 rounded-full border border-blue-400/30">
-                                 <FaBoxOpen className="text-3xl text-blue-200" />
-                             </div>
-                             <div className="text-right md:text-center">
-                                 <h3 className="text-xl md:text-2xl font-bold text-white mb-1">حل أسئلة الكتاب</h3>
-                                 <p className="text-blue-300 text-sm md:text-base">تصفح الحلول والمواد الإثرائية الخاصة بمنهجك</p>
-                             </div>
-                             <FaArrowLeft className="text-xl text-blue-400 group-hover:-translate-x-2 transition-transform" />
-                         </div>
+                        {/* زخرفة خلفية الزر */}
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                        
+                        {/* محتوى الزر */}
+                        <div className="relative z-10 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 text-right">
+                                <div className="bg-blue-600/40 p-3 rounded-full border border-blue-400/30 shrink-0">
+                                    <FaBoxOpen className="text-2xl text-blue-200" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white mb-0.5">حل أسئلة الكتاب</h3>
+                                    <p className="text-blue-300 text-xs md:text-sm">تصفح الحلول والمواد الإثرائية</p>
+                                </div>
+                            </div>
+                            <FaArrowLeft className="text-lg text-blue-400 group-hover:-translate-x-1 transition-transform" />
+                        </div>
                     </button>
-                </div>
-            )}
+                )}
 
-        </div>
+                {/* زر ملف الإنجاز الإلكتروني */}
+                {/* ملاحظة: تأكد من أن المتغير showPortfolioButton معرف لديك، أو يمكنك إزالة الشرط لإظهاره دائماً */}
+                {showPortfolioButton && (
+                    <button
+                        onClick={() => navigate(`/student-portfolio/${studentData.id}`)}
+                        className="w-full p-5 bg-gradient-to-l from-teal-700 via-teal-800 to-teal-900 rounded-2xl border border-teal-600/50 shadow-lg hover:shadow-teal-900/30 hover:scale-[1.01] transition-all duration-300 group relative overflow-hidden"
+                    >
+                        {/* زخرفة خلفية الزر */}
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                        
+                        {/* محتوى الزر */}
+                        <div className="relative z-10 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 text-right">
+                                <div className="bg-teal-600/40 p-3 rounded-full border border-teal-400/30 shrink-0">
+                                    <FaBriefcase className="text-2xl text-teal-200" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white mb-0.5">ملف الإنجاز الإلكتروني</h3>
+                                    <p className="text-teal-300 text-xs md:text-sm">استعراض واضف أعمالك ومشاريعك</p>
+                                </div>
+                            </div>
+                            <FaArrowLeft className="text-lg text-teal-400 group-hover:-translate-x-1 transition-transform" />
+                        </div>
+                    </button>
+                )}
+            </div>
+
+        </div> 
+        {/* End of Body p-6 */}
 
         {/* === Footer === */}
         {showRewardsButton && (
