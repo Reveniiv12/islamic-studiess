@@ -125,12 +125,13 @@ const StudentPortfolio = () => {
         if (teacher) setTeacherName(teacher.name);
       }
 
-      // جلب الملفات
+      // جلب الملفات (استثناء المحذوفة)
       const { data: filesData } = await supabase
         .from('portfolio_files')
         .select('*')
         .eq('student_id', studentId)
-        .neq('status', 'deleted')
+        .neq('status', 'deleted') // استثناء المحذوف مؤقتاً
+        .neq('status', 'perm_deleted') // استثناء المحذوف نهائياً (للأمان)
         .order('created_at', { ascending: false });
 
       if (filesData) setFiles(filesData);
@@ -241,38 +242,35 @@ const StudentPortfolio = () => {
     });
   };
 
-  // دالة الرفع المعدلة لدعم شريط التقدم
+  // --- دالة الرفع المعدلة والمصححة ---
   const uploadFile = async (file) => {
     setUploading(true);
     setUploadProgress(0);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
+      // 1. التحقق الصارم من الجلسة
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session || !session.access_token) {
+        throw new Error("عفواً، الجلسة منتهية. يرجى تسجيل الخروج والدخول مرة أخرى.");
+      }
 
-      // إزالة شرط "if (!accessToken) throw new Error..." 
-      // أو استبداله للسماح بالرفع إذا كان التوكن غير موجود
-
+      const accessToken = session.access_token;
       const functionUrl = 'https://timeeqkhoxhvxlgcxlcz.supabase.co/functions/v1/upload-to-drive';
 
       const result = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', functionUrl);
 
-        // إذا وجد التوكن نرسله، وإذا لم يوجد نرسل قيمة فارغة أو Anon Key
-        if (accessToken) {
-          xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
-        } else {
-          // يمكنك إرسال الـ anon key الخاص بمشروعك هنا إذا كانت الوظيفة تتطلبه
-          xhr.setRequestHeader('apikey', 'YOUR_SUPABASE_ANON_KEY');
-        }
-
+        // 2. ضبط الهيدرز الصحيحة (حل مشكلة 401 و 406)
         xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+        xhr.setRequestHeader('Accept', 'application/json'); // هام جداً لحل خطأ 406
         xhr.setRequestHeader('x-student-id', studentId);
         xhr.setRequestHeader('x-file-name', encodeURIComponent(file.name));
-        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        
+        // ملاحظة: لا نضع Content-Type هنا، المتصفح سيضعه تلقائياً مع الحدود (boundary)
 
-        // حدث التقدم
+        // تتبع التقدم
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
             const percentComplete = Math.round((event.loaded / event.total) * 100);
@@ -286,24 +284,31 @@ const StudentPortfolio = () => {
               const responseData = JSON.parse(xhr.responseText);
               resolve(responseData);
             } catch (e) {
-              reject(new Error("فشل في قراءة استجابة الخادم"));
+              reject(new Error("نجح الرفع ولكن فشل قراءة استجابة السيرفر"));
             }
           } else {
+            // معالجة الأخطاء
             try {
-              const errorData = JSON.parse(xhr.responseText);
-              reject(new Error(errorData.error || errorData.details || xhr.statusText));
+                const errorData = JSON.parse(xhr.responseText);
+                reject(new Error(errorData.error || errorData.message || xhr.statusText));
             } catch (e) {
-              reject(new Error(`Server Error: ${xhr.statusText}`));
+                // إذا كان الخطأ 401
+                if (xhr.status === 401) {
+                    reject(new Error("غير مصرح (401): يرجى تحديث الصفحة أو إعادة تسجيل الدخول."));
+                } else {
+                    reject(new Error(`Server Error: ${xhr.status} ${xhr.statusText}`));
+                }
             }
           }
         };
 
-        xhr.onerror = () => reject(new Error("فشل الاتصال بالشبكة"));
-
+        xhr.onerror = () => reject(new Error("فشل الاتصال بالشبكة، تحقق من الإنترنت."));
+        
+        // إرسال الملف
         xhr.send(file);
       });
 
-      // الحفظ في قاعدة البيانات
+      // 3. الحفظ في قاعدة البيانات بعد نجاح الرفع
       const { error: dbError } = await supabase.from('portfolio_files').insert({
         student_id: studentId,
         file_url: result.url,
