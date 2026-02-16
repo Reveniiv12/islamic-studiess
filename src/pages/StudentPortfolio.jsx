@@ -243,33 +243,31 @@ const StudentPortfolio = () => {
   };
 
   // --- دالة الرفع المعدلة والمصححة ---
+// --- دالة الرفع المعدلة للطلاب (بدون تسجيل دخول) ---
   const uploadFile = async (file) => {
     setUploading(true);
     setUploadProgress(0);
 
     try {
-      // 1. التحقق الصارم من الجلسة
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // 1. محاولة جلب الجلسة (اختياري الآن)
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (sessionError || !session || !session.access_token) {
-        throw new Error("عفواً، الجلسة منتهية. يرجى تسجيل الخروج والدخول مرة أخرى.");
-      }
+      // نستخدم توكن المستخدم إذا كان مسجلاً، وإلا نستخدم مفتاح Anon Key الموجود في الإعدادات
+      // ملاحظة: supabase.supabaseKey يجلب المفتاح العام تلقائياً من العميل
+      const token = session?.access_token || supabase.supabaseKey; 
 
-      const accessToken = session.access_token;
       const functionUrl = 'https://timeeqkhoxhvxlgcxlcz.supabase.co/functions/v1/upload-to-drive';
 
       const result = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', functionUrl);
 
-        // 2. ضبط الهيدرز الصحيحة (حل مشكلة 401 و 406)
-        xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
-        xhr.setRequestHeader('Accept', 'application/json'); // هام جداً لحل خطأ 406
+        // 2. إعداد الهيدرز للسماح للزوار
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.setRequestHeader('Accept', 'application/json'); 
         xhr.setRequestHeader('x-student-id', studentId);
         xhr.setRequestHeader('x-file-name', encodeURIComponent(file.name));
         
-        // ملاحظة: لا نضع Content-Type هنا، المتصفح سيضعه تلقائياً مع الحدود (boundary)
-
         // تتبع التقدم
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
@@ -292,23 +290,17 @@ const StudentPortfolio = () => {
                 const errorData = JSON.parse(xhr.responseText);
                 reject(new Error(errorData.error || errorData.message || xhr.statusText));
             } catch (e) {
-                // إذا كان الخطأ 401
-                if (xhr.status === 401) {
-                    reject(new Error("غير مصرح (401): يرجى تحديث الصفحة أو إعادة تسجيل الدخول."));
-                } else {
-                    reject(new Error(`Server Error: ${xhr.status} ${xhr.statusText}`));
-                }
+                reject(new Error(`Server Error: ${xhr.status} ${xhr.statusText}`));
             }
           }
         };
 
         xhr.onerror = () => reject(new Error("فشل الاتصال بالشبكة، تحقق من الإنترنت."));
         
-        // إرسال الملف
         xhr.send(file);
       });
 
-      // 3. الحفظ في قاعدة البيانات بعد نجاح الرفع
+      // 3. الحفظ في قاعدة البيانات
       const { error: dbError } = await supabase.from('portfolio_files').insert({
         student_id: studentId,
         file_url: result.url,
@@ -321,7 +313,7 @@ const StudentPortfolio = () => {
 
       if (dbError) throw dbError;
 
-      await fetchData(); // تحديث القائمة
+      await fetchData(); 
 
       showAlert({
         type: 'success',
