@@ -203,8 +203,15 @@ const NotesModal = ({ students = [], onClose, onSave, initialTab, initialSelecte
     setDialog({ isOpen: true, type: 'prompt', title, message, initialValue, onConfirm: (val) => { if (val) onConfirm(val); closeDialog(); }, onCancel: closeDialog });
   };
 
-  const getHijriDate = () => new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
-  
+const getHijriDate = () => {
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { 
+        day: 'numeric', 
+        month: 'long', 
+        year: 'numeric',
+        timeZone: 'Asia/Riyadh' // هذا السطر يضمن ثبات التاريخ وعدم تذبذبه
+    }).format(new Date());
+};
+
   const getNoteText = () => noteType === 'custom' ? customNote : templates.find(t => t.id === selectedTemplate)?.text || '';
 
   // العمليات
