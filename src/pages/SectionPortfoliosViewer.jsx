@@ -6,7 +6,8 @@ import {
   FaUserTie, FaClipboardList, FaArrowLeft, FaFilePdf, FaEye, FaEyeSlash,
   FaExclamationTriangle, FaCheck, FaHistory, FaLayerGroup, 
   FaSchool, FaShapes, FaTrash, FaQrcode, FaFileAlt, FaTimes, FaSearch,
-  FaUserSecret, FaUserShield, FaChalkboardTeacher, FaBell, FaTrashAlt, FaCog, FaToggleOn, FaToggleOff, FaSave, FaPen
+  FaUserSecret, FaUserShield, FaChalkboardTeacher, FaBell, FaTrashAlt, FaCog, FaToggleOn, FaToggleOff, FaSave, FaPen,
+  FaExchangeAlt, FaTimesCircle // <-- تم إضافة أيقونات النقل والرفض هنا
 } from 'react-icons/fa';
 import QRCode from "react-qr-code"; 
 import StudentPortfolioFileViewer from '../components/StudentPortfolioFileViewer';
@@ -247,14 +248,12 @@ const SectionPortfoliosViewer = () => {
       
       const tasks = periodData?.performanceTasks || periodData?.performance_tasks || student.grades?.performanceTasks || [null, null, null, null];
       
-      // التأكد من أن المصفوفة بطول 4 عناصر (للعرض)
       const result = [...tasks];
       while(result.length < 4) result.push(null);
-      return result.slice(0, 4); // قص الزائد إذا وجد
+      return result.slice(0, 4); 
   };
 
-const handleGradeChange = (studentId, index, value) => {
-      // تحويل الأرقام العربية إلى إنجليزية
+  const handleGradeChange = (studentId, index, value) => {
       const arabicNumbers = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
       const englishNumbers = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
       let englishValue = value;
@@ -262,35 +261,27 @@ const handleGradeChange = (studentId, index, value) => {
           englishValue = englishValue.replace(new RegExp(arabicNumbers[i], "g"), englishNumbers[i]);
       }
 
-      // التحقق من القيمة
       const numValue = englishValue === '' ? null : Number(englishValue);
       if (numValue !== null && (isNaN(numValue) || numValue < 0 || numValue > 10)) {
-          return; // قيمة غير صالحة
+          return; 
       }
 
       setStudents(prevStudents => prevStudents.map(student => {
           if (student.id === studentId) {
-              // 1. نسخ عميق للهيكل القديم
               const newGrades = JSON.parse(JSON.stringify(student.grades || {}));
 
-              // 2. ضمان وجود المسار
               if (!newGrades[activeSemester]) newGrades[activeSemester] = {};
               if (!newGrades[activeSemester][activePeriod]) newGrades[activeSemester][activePeriod] = {};
 
-              // 3. جلب الدرجات الحالية بدقة (هنا كان الخطأ: تم إضافة performance_tasks)
               const periodData = newGrades[activeSemester][activePeriod];
-              // نقرأ من كلا المصدرين المحتملين لتجنب فقدان البيانات
               const currentTasks = periodData.performanceTasks || periodData.performance_tasks || []; 
               
-              // 4. بناء مصفوفة جديدة مكونة من 4 خانات مع الحفاظ على القديم
               let tasks = [0, 1, 2, 3].map(i => {
                   if (i === index) return numValue;
                   return currentTasks[i] !== undefined ? currentTasks[i] : null;
               });
 
-              // 5. حفظ المصفوفة الجديدة بالاسم الموحد
               newGrades[activeSemester][activePeriod].performanceTasks = tasks;
-              // نقوم بمسح الاسم القديم لتجنب التضارب مستقبلاً
               if (newGrades[activeSemester][activePeriod].performance_tasks) {
                   delete newGrades[activeSemester][activePeriod].performance_tasks;
               }
@@ -319,8 +310,7 @@ const handleGradeChange = (studentId, index, value) => {
       }
   };
 
-  // دالة الرصد الجماعي (مع منطق التخطي والتنبيه)
-const applyBatchGrade = () => {
+  const applyBatchGrade = () => {
       if (!batchGradeInput) return;
       
       const numValue = Number(batchGradeInput);
@@ -334,29 +324,22 @@ const applyBatchGrade = () => {
 
       setStudents(prevStudents => {
           const updatedStudents = prevStudents.map(student => {
-              // فقط للطلاب المحددين
               if (selectedStudents.includes(student.id)) {
                   const newGrades = JSON.parse(JSON.stringify(student.grades || {}));
                   
                   if (!newGrades[activeSemester]) newGrades[activeSemester] = {};
                   if (!newGrades[activeSemester][activePeriod]) newGrades[activeSemester][activePeriod] = {};
 
-                  // 1. جلب الدرجات الحالية (التصحيح هنا أيضاً)
                   const periodData = newGrades[activeSemester][activePeriod];
                   const currentTasks = periodData.performanceTasks || periodData.performance_tasks || [];
 
-                  // 2. تجهيز مصفوفة العمل (4 خانات)
                   let tasks = [0, 1, 2, 3].map(i => currentTasks[i] !== undefined ? currentTasks[i] : null);
 
-                  // 3. البحث عن أول خانة فارغة (null أو نص فارغ)
-                  // ملاحظة: الرقم 0 يعتبر درجة ولا يعتبر خانة فارغة
                   const firstEmptyIndex = tasks.findIndex(g => g === null || g === '' || g === undefined);
                   
                   if (firstEmptyIndex !== -1) {
-                      // وجدنا خانة فارغة -> نضع الدرجة فيها
                       tasks[firstEmptyIndex] = numValue;
                       
-                      // تحديث بيانات الطالب وتوحيد المسمى
                       newGrades[activeSemester][activePeriod].performanceTasks = tasks;
                       if (newGrades[activeSemester][activePeriod].performance_tasks) {
                           delete newGrades[activeSemester][activePeriod].performance_tasks;
@@ -365,15 +348,13 @@ const applyBatchGrade = () => {
                       changesMade = true;
                       return { ...student, grades: newGrades };
                   } else {
-                      // جميع الخانات ممتلئة -> نتجاهل الطالب ونحفظ اسمه
                       skippedStudentsNames.push(student.name);
-                      return student; // إرجاع الطالب كما هو دون تعديل
+                      return student; 
                   }
               }
               return student;
           });
 
-          // تأخير عرض التنبيه قليلاً ليظهر بعد تحديث الـ State
           setTimeout(() => {
             if (skippedStudentsNames.length > 0) {
                 const namesList = skippedStudentsNames.join('، ');
@@ -395,21 +376,19 @@ const applyBatchGrade = () => {
 
       setBatchGradeInput('');
   };
-  // --- SAVE FUNCTIONS ---
 
-const saveAllGrades = async () => {
+  // --- SAVE FUNCTIONS ---
+  const saveAllGrades = async () => {
       setIsSaving(true);
       try {
-          // التعديل هنا: قمنا بإضافة الاسم وبقية البيانات الضرورية لتجنب خطأ القيمة الفارغة
           const updates = students.map(s => ({
               id: s.id,
-              name: s.name,           // <--- ضروري جداً لتفادي الخطأ
-              section: s.section,     // يفضل إضافته إذا كان إجبارياً في قاعدة البيانات
-              grade_level: s.grade_level, // يفضل إضافته إذا كان إجبارياً
+              name: s.name,           
+              section: s.section,     
+              grade_level: s.grade_level, 
               grades: s.grades
           }));
 
-          // استخدام onConflict للتأكيد على أن التحديث يتم بناءً على المعرف
           const { error } = await supabase
               .from('students')
               .upsert(updates, { onConflict: 'id' });
@@ -528,30 +507,51 @@ const saveAllGrades = async () => {
   };
 
   // --- Teacher Actions ---
+// --- Teacher Actions ---
   const fetchVisitsLog = async (secId) => {
       const { data } = await supabase
         .from('supervisor_visits')
         .select('*')
         .eq('section_id', secId)
         .order('visit_date', { ascending: false });
+        
       if (data) {
           setVisitsLog(data);
+          // البحث عن أحدث زيارة تحتوي على ملاحظة نصية
           const lastNote = data.find(v => v.notes && v.notes.trim() !== "");
-          if (lastNote) {
-             const hiddenVisitId = localStorage.getItem('hidden_visit_id');
-             if (hiddenVisitId !== lastNote.id.toString()) {
-                 setLatestSupervisorNote(lastNote);
-                 setShowNoteAlert(true);
-             }
+          
+          // التحقق من قاعدة البيانات مباشرة: إذا لم تكن مقروءة (is_read = false)
+          if (lastNote && !lastNote.is_read) {
+              setLatestSupervisorNote(lastNote);
+              setShowNoteAlert(true);
           }
       }
   };
   
-  const handleCloseNoteAlert = () => {
+  const handleCloseNoteAlert = async () => {
       if (latestSupervisorNote) {
-          localStorage.setItem('hidden_visit_id', latestSupervisorNote.id.toString());
+          // 1. إخفاء الإشعار فوراً من الشاشة (لتجربة مستخدم سريعة)
+          setShowNoteAlert(false);
+          
+          try {
+              // 2. إرسال تحديث لقاعدة البيانات بأن الملاحظة تمت قراءتها
+              const { error } = await supabase
+                  .from('supervisor_visits')
+                  .update({ is_read: true })
+                  .eq('id', latestSupervisorNote.id);
+                  
+              if (error) throw error;
+              
+              // 3. تحديث السجل في الذاكرة حتى تظهر علامة الصح أو تختفي التنبيهات لاحقاً
+              setVisitsLog(prevLog => 
+                  prevLog.map(v => v.id === latestSupervisorNote.id ? { ...v, is_read: true } : v)
+              );
+              
+          } catch (err) {
+              console.error("حدث خطأ أثناء تحديث حالة الملاحظة:", err);
+              // يمكنك إعادة إظهار التنبيه هنا إذا فشل الاتصال بقاعدة البيانات
+          }
       }
-      setShowNoteAlert(false);
   };
 
   const toggleStudentNotes = (studentId) => {
@@ -576,6 +576,8 @@ const saveAllGrades = async () => {
     });
   };
 
+  // --- NEW FEATURES: Delete, Reject Delete, and Move Category ---
+
   const handleDeleteFile = (fileId) => {
     showAlert({
         type: 'confirm',
@@ -597,6 +599,55 @@ const saveAllGrades = async () => {
             }
         }
     });
+  };
+
+  const handleRejectDelete = (fileId) => {
+      showAlert({
+          type: 'confirm',
+          title: 'رفض طلب الحذف',
+          message: 'هل أنت متأكد من رفض طلب الحذف والاحتفاظ بالملف؟',
+          confirmText: 'رفض',
+          onConfirm: async () => {
+              const { error } = await supabase
+                  .from('portfolio_files')
+                  .update({ status: 'active' }) // إرجاع الحالة إلى نشط
+                  .eq('id', fileId);
+              
+              if (!error) {
+                  setFiles(prevFiles => prevFiles.map(f => f.id === fileId ? { ...f, status: 'active' } : f));
+                  showAlert({ type: 'success', title: 'نجاح', message: 'تم رفض طلب الحذف، الملف الآن متاح كالسابق.', showCancelButton: false });
+              } else {
+                  console.error(error);
+                  showAlert({ type: 'error', title: 'خطأ', message: 'حدث خطأ أثناء الرفض.', showCancelButton: false });
+              }
+          }
+      });
+  };
+
+  const handleMoveFile = (fileId, currentCategory) => {
+      const targetCategory = currentCategory === 'performance_tasks' ? 'others' : 'performance_tasks';
+      const categoryName = targetCategory === 'performance_tasks' ? 'المهام الأدائية' : 'أعمال ومشاريع أخرى';
+
+      showAlert({
+          type: 'confirm',
+          title: 'نقل الملف',
+          message: `هل تود بالفعل نقل هذا الملف إلى قسم (${categoryName})؟`,
+          confirmText: 'نقل',
+          onConfirm: async () => {
+              const { error } = await supabase
+                  .from('portfolio_files')
+                  .update({ category: targetCategory }) 
+                  .eq('id', fileId);
+              
+              if (!error) {
+                  setFiles(prevFiles => prevFiles.map(f => f.id === fileId ? { ...f, category: targetCategory } : f));
+                  showAlert({ type: 'success', title: 'نجاح', message: 'تم نقل الملف بنجاح.', showCancelButton: false });
+              } else {
+                  console.error(error);
+                  showAlert({ type: 'error', title: 'خطأ', message: 'حدث خطأ أثناء نقل الملف.', showCancelButton: false });
+              }
+          }
+      });
   };
 
   const pendingDeleteFiles = files.filter(f => f.status === 'pending_delete');
@@ -752,20 +803,20 @@ const saveAllGrades = async () => {
 
                                 {/* Icon Buttons Group */}
                                 <div className="flex items-center bg-slate-800/50 rounded-xl border border-slate-700/50 p-1">
-<button 
-    onClick={() => setShowDeleteRequestsModal(true)}
-    className="bg-slate-800 p-3 rounded-xl border border-slate-700 hover:bg-slate-700 transition-all relative group shadow-lg"
-    title="طلبات الحذف"
->
-    <FaTrashAlt className={pendingDeleteFiles.length > 0 ? "text-red-500" : "text-slate-400"} size={20} />
-    
-    {/* ظهور الرقم في دائرة حمراء إذا وجدت طلبات */}
-    {pendingDeleteFiles.length > 0 && (
-        <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center animate-bounce shadow-[0_0_10px_rgba(220,38,38,0.5)] border-2 border-slate-900">
-            {pendingDeleteFiles.length}
-        </span>
-    )}
-</button>
+                                    <button 
+                                        onClick={() => setShowDeleteRequestsModal(true)}
+                                        className="bg-slate-800 p-3 rounded-xl border border-slate-700 hover:bg-slate-700 transition-all relative group shadow-lg"
+                                        title="طلبات الحذف"
+                                    >
+                                        <FaTrashAlt className={pendingDeleteFiles.length > 0 ? "text-red-500" : "text-slate-400"} size={20} />
+                                        
+                                        {/* ظهور الرقم في دائرة حمراء إذا وجدت طلبات */}
+                                        {pendingDeleteFiles.length > 0 && (
+                                            <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center animate-bounce shadow-[0_0_10px_rgba(220,38,38,0.5)] border-2 border-slate-900">
+                                                {pendingDeleteFiles.length}
+                                            </span>
+                                        )}
+                                    </button>
                                 </div>
 
                                 {/* Secondary Actions */}
@@ -994,7 +1045,18 @@ const saveAllGrades = async () => {
                                     {performanceTasks.length > 0 ? (
                                         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                                             {performanceTasks.map((file) => (
-                                                <FileCard key={file.id} file={file} isSupervisor={isSupervisor} onDelete={() => handleDeleteFile(file.id)} onClick={(e) => { e.stopPropagation(); openFileViewer(file, studentFiles); }} imageErrors={imageErrors} onImageError={() => setImageErrors({...imageErrors, [file.id]: true})} getOptimizedUrl={getOptimizedUrl} />
+                                                <FileCard 
+                                                    key={file.id} 
+                                                    file={file} 
+                                                    isSupervisor={isSupervisor} 
+                                                    onDelete={() => handleDeleteFile(file.id)} 
+                                                    onReject={() => handleRejectDelete(file.id)}
+                                                    onMove={() => handleMoveFile(file.id, file.category)}
+                                                    onClick={(e) => { e.stopPropagation(); openFileViewer(file, studentFiles); }} 
+                                                    imageErrors={imageErrors} 
+                                                    onImageError={() => setImageErrors({...imageErrors, [file.id]: true})} 
+                                                    getOptimizedUrl={getOptimizedUrl} 
+                                                />
                                             ))}
                                         </div>
                                     ) : <p className="text-xs text-slate-600 italic py-2 pr-4">لا توجد ملفات</p>}
@@ -1005,7 +1067,18 @@ const saveAllGrades = async () => {
                                     {otherWorks.length > 0 ? (
                                         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                                             {otherWorks.map((file) => (
-                                                <FileCard key={file.id} file={file} isSupervisor={isSupervisor} onDelete={() => handleDeleteFile(file.id)} onClick={(e) => { e.stopPropagation(); openFileViewer(file, studentFiles); }} imageErrors={imageErrors} onImageError={() => setImageErrors({...imageErrors, [file.id]: true})} getOptimizedUrl={getOptimizedUrl} />
+                                                <FileCard 
+                                                    key={file.id} 
+                                                    file={file} 
+                                                    isSupervisor={isSupervisor} 
+                                                    onDelete={() => handleDeleteFile(file.id)} 
+                                                    onReject={() => handleRejectDelete(file.id)}
+                                                    onMove={() => handleMoveFile(file.id, file.category)}
+                                                    onClick={(e) => { e.stopPropagation(); openFileViewer(file, studentFiles); }} 
+                                                    imageErrors={imageErrors} 
+                                                    onImageError={() => setImageErrors({...imageErrors, [file.id]: true})} 
+                                                    getOptimizedUrl={getOptimizedUrl} 
+                                                />
                                             ))}
                                         </div>
                                     ) : <p className="text-xs text-slate-600 italic py-2 pr-4">لا توجد ملفات</p>}
@@ -1031,15 +1104,18 @@ const saveAllGrades = async () => {
                                 {pendingDeleteFiles.map((file) => {
                                     const studentName = students.find(s => s.id === file.student_id)?.name || "طالب غير معروف";
                                     return (
-                                        <div key={file.id} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
-                                            <div className="flex items-center gap-3">
+                                        <div key={file.id} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+                                            <div className="flex items-center gap-3 w-full sm:w-auto">
                                                 <div className="bg-red-900/30 p-2 rounded-lg text-red-400"><FaFileAlt /></div>
                                                 <div>
                                                     <p className="text-white font-bold text-sm">{file.file_name}</p>
                                                     <p className="text-xs text-slate-400">الطالب: {studentName}</p>
                                                 </div>
                                             </div>
-                                            <button onClick={() => handleDeleteFile(file.id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs flex items-center gap-1"><FaCheck size={10} /> موافقة وحذف</button>
+                                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                <button onClick={() => handleDeleteFile(file.id)} className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1"><FaCheck size={10} /> موافقة وحذف</button>
+                                                <button onClick={() => handleRejectDelete(file.id)} className="flex-1 sm:flex-none bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1"><FaTimesCircle size={10} /> رفض</button>
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -1137,7 +1213,7 @@ const saveAllGrades = async () => {
 };
 
 // --- File Card Sub-component ---
-const FileCard = ({ file, isSupervisor, onDelete, onClick, imageErrors, onImageError, getOptimizedUrl }) => {
+const FileCard = ({ file, isSupervisor, onDelete, onReject, onMove, onClick, imageErrors, onImageError, getOptimizedUrl }) => {
   return (
     <div onClick={onClick} className={`group bg-slate-800/40 border border-slate-700 rounded-2xl p-4 transition-all shadow-sm relative hover:border-blue-500/50 hover:shadow-lg cursor-pointer transform hover:-translate-y-1 ${file.status === 'pending_delete' ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]' : ''}`}>
         <div className="aspect-video bg-slate-950 rounded-xl mb-4 flex items-center justify-center overflow-hidden border border-slate-800 relative">
@@ -1152,15 +1228,39 @@ const FileCard = ({ file, isSupervisor, onDelete, onClick, imageErrors, onImageE
                 <span className="bg-white/10 backdrop-blur-md p-3 rounded-full text-white border border-white/20 shadow-lg scale-75 group-hover:scale-100 transition-transform"><FaEye /></span>
             </div>
         </div>
+        
         <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-start"><p className="text-sm font-bold truncate text-slate-300 w-full" dir="auto" title={file.file_name}>{file.file_name}</p></div>
+            <div className="flex justify-between items-start">
+                <p className="text-sm font-bold truncate text-slate-300 w-full" dir="auto" title={file.file_name}>{file.file_name}</p>
+            </div>
+            
             {!isSupervisor ? (
-                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className={`w-full text-white text-[10px] py-2 rounded-lg flex items-center justify-center gap-1 transition-colors shadow-lg mt-1 ${file.status === 'pending_delete' ? 'bg-red-600 hover:bg-red-700 animate-pulse' : 'bg-slate-700 hover:bg-red-600'}`}>
-                    <FaTrash size={10} /> {file.status === 'pending_delete' ? 'موافقة على الحذف' : 'حذف الملف'}
-                </button>
+                <div className="flex flex-col gap-1 mt-1">
+                    {file.status === 'pending_delete' ? (
+                        <div className="flex gap-1 w-full">
+                            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="flex-1 bg-red-600 hover:bg-red-700 text-white text-[10px] py-2 rounded-lg flex items-center justify-center gap-1 transition-colors shadow-lg animate-pulse">
+                                <FaCheck size={10} /> موافقة
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); onReject(); }} className="flex-1 bg-slate-600 hover:bg-slate-500 text-white text-[10px] py-2 rounded-lg flex items-center justify-center gap-1 transition-colors shadow-lg">
+                                <FaTimesCircle size={10} /> رفض
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex gap-1 w-full">
+                            <button onClick={(e) => { e.stopPropagation(); onMove(); }} className="flex-1 bg-blue-900/40 hover:bg-blue-600 text-blue-300 hover:text-white text-[10px] py-2 rounded-lg flex items-center justify-center gap-1 transition-colors border border-blue-800/50" title="نقل الملف للقسم الآخر">
+                                <FaExchangeAlt size={10} /> نقل
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="flex-1 bg-slate-800 hover:bg-red-600 text-slate-400 hover:text-white text-[10px] py-2 rounded-lg flex items-center justify-center gap-1 transition-colors border border-slate-700">
+                                <FaTrash size={10} /> حذف
+                            </button>
+                        </div>
+                    )}
+                </div>
             ) : (
                 <div className="flex justify-between items-center text-[10px] text-slate-500 border-t border-slate-700/50 pt-2 mt-1">
-                    <div className="flex items-center gap-1">{file.status === 'pending_delete' && <span className="text-yellow-500 flex items-center gap-1"><FaExclamationTriangle /> يطلب الحذف</span>}</div>
+                    <div className="flex items-center gap-1">
+                        {file.status === 'pending_delete' && <span className="text-yellow-500 flex items-center gap-1"><FaExclamationTriangle /> يطلب الحذف</span>}
+                    </div>
                     <span>{new Date(file.created_at).toLocaleDateString('ar-EG')}</span>
                 </div>
             )}
