@@ -1507,7 +1507,7 @@ function StudentView() {
 
             </div>
 
-            {/* 7. سجل الملاحظات الأسبوعية الكامل */}
+{/* 7. سجل الملاحظات الأسبوعية الكامل */}
             <div className="bg-gray-700/40 p-5 rounded-xl border border-gray-600">
                 <div className="flex justify-between items-center border-b border-gray-600 pb-2 mb-4">
                      <h4 className="flex items-center gap-2 font-bold text-gray-200 text-lg">
@@ -1519,12 +1519,20 @@ function StudentView() {
                          if (!notes || notes.length === 0) return null;
                          return (
                             <div key={wIndex} className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-md hover:shadow-lg transition-shadow">
-                                <h5 className="text-blue-300 font-bold text-sm mb-2 border-b border-gray-600 pb-1 text-center">الأسبوع {wIndex + 1}</h5>
-                                <ul className="list-disc list-inside text-gray-300 text-sm space-y-1">
+                                <h5 className="text-blue-300 font-bold text-sm mb-3 border-b border-gray-600 pb-2 text-center">الأسبوع {wIndex + 1}</h5>
+                                
+                                {/* التعديل تم هنا: استخدام مربعات مبطنة بخط جانبي لكل ملاحظة بدلاً من النقاط المدمجة */}
+                                <ul className="text-gray-300 text-sm space-y-2">
                                     {notes.map((note, nIndex) => (
-                                        <li key={nIndex} className="leading-relaxed">{note}</li>
+                                        <li 
+                                            key={nIndex} 
+                                            className="leading-relaxed bg-gray-700/50 p-2.5 rounded-md border-r-4 border-r-blue-500 border border-gray-600 shadow-sm"
+                                        >
+                                            {note}
+                                        </li>
                                     ))}
                                 </ul>
+
                             </div>
                          );
                     })}
