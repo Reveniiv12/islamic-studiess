@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 
-// دالة تحويل الأرقام
+// دالة تحويل الأرقام العربية إلى إنجليزية
 const convertToEnglishNumbers = (input) => {
     if (input === null || input === undefined) {
         return null;
@@ -31,6 +31,9 @@ const StudentRowComponent = ({
 }) => {
 
     const isSelected = selectedStudents.includes(student.id);
+    
+    // state محلي لتتبع القيمة المؤقتة أثناء الكتابة
+    const [tempValues, setTempValues] = useState({});
 
     const checkCurriculumExists = (category, index) => {
         if (category === 'classInteraction' || category === 'participation') {
@@ -56,6 +59,28 @@ const StudentRowComponent = ({
         return index < items.length;
     };
 
+    const handleLocalGradeChange = (studentId, category, index, e) => {
+        const value = e.target.value;
+        
+        // حفظ القيمة المؤقتة
+        setTempValues(prev => ({
+            ...prev,
+            [`${studentId}_${category}_${index}`]: value
+        }));
+        
+        // تمرير التغيير للمكون الأب
+        handleGradeChange(studentId, category, index, value);
+    };
+
+    const handleBlur = (studentId, category, index) => {
+        // عند فقدان التركيز، نمسح القيمة المؤقتة
+        setTempValues(prev => {
+            const newTemp = {...prev};
+            delete newTemp[`${studentId}_${category}_${index}`];
+            return newTemp;
+        });
+    };
+
     const renderGradeInputs = (category, color, count) => {
         return Array(count).fill(0).map((_, i) => {
             const hasCurriculum = checkCurriculumExists(category, i);
@@ -65,6 +90,17 @@ const StudentRowComponent = ({
                 : `bg-black/50 text-gray-500 border border-gray-800 focus:ring-gray-600 cursor-default placeholder-gray-700`;
 
             const titleText = hasCurriculum ? "" : "لا يوجد منهج محدد لهذا البند";
+            
+            // استخدام القيمة المؤقتة إذا وجدت، وإلا استخدم القيمة من student
+            const inputKey = `${student.id}_${category}_${i}`;
+            let displayValue = tempValues[inputKey] !== undefined 
+                ? tempValues[inputKey] 
+                : (student.grades[category]?.[i] ?? '');
+            
+            // إذا كانت القيمة المخزنة رقماً، نحولها لنص للعرض
+            if (typeof displayValue === 'number') {
+                displayValue = displayValue.toString();
+            }
 
             return (
                 <td key={`${category}_input_${student.id}_${i}`} className="p-1 whitespace-nowrap text-sm text-center border-l border-r border-gray-600">
@@ -72,9 +108,11 @@ const StudentRowComponent = ({
                         type="text"
                         inputMode="decimal"
                         title={titleText}
-                        value={student.grades[category]?.[i] ?? ''} 
-                        onChange={(e) => handleGradeChange(student.id, category, i, e.target.value)}
+                        value={displayValue}
+                        onChange={(e) => handleLocalGradeChange(student.id, category, i, e)}
+                        onBlur={() => handleBlur(student.id, category, i)}
                         className={`w-10 p-1 text-base md:text-sm text-center rounded focus:outline-none focus:ring-2 transition-all duration-200 ${inputStyle}`}
+                        disabled={!hasCurriculum}
                     />
                 </td>
             );
@@ -269,9 +307,7 @@ const GradesModal = ({
         }
     }, []);
 
-    // 1. تعديل دالة تغيير التبويب لضمان تصفير الحالات
     const handleTabChange = (tab) => {
-        // تصفير حالات الإخفاء فوراً
         setIsScrolledDown(false);
         setIsManuallyHidden(false); 
         
@@ -280,7 +316,6 @@ const GradesModal = ({
         setSelectedStudentsPerTab(prev => ({ ...prev, [activeTab]: [] }));
         setFilteredStudents(modalStudents);
 
-        // تصفير مؤشرات الإدخال حسب التبويب
         if (tab === 'tests') setTestIndex(0);
         else if (tab === 'homework') setHomeworkIndex(0);
         else if (tab === 'performanceTasks') setPerformanceTaskIndex(0);
@@ -290,7 +325,6 @@ const GradesModal = ({
 
         setActiveTab(tab);
 
-        // التمرير للأعلى عند تغيير القسم
         if (tableContainerRef.current) {
             tableContainerRef.current.scrollTop = 0;
         }
@@ -300,9 +334,66 @@ const GradesModal = ({
         setSearchQueries(prev => ({ ...prev, [activeTab]: e.target.value }));
     };
 
-    const handleGradeChange = React.useCallback((studentId, category, index, value) => {
-        const englishValue = convertToEnglishNumbers(value);
-        const numericValue = englishValue === '' ? null : Number(englishValue);
+    const handleGradeChange = useCallback((studentId, category, index, value) => {
+        // السماح بالقيم الفارغة
+        if (value === '') {
+            setModalStudents(prevStudents =>
+                prevStudents.map(student => {
+                    if (student.id === studentId) {
+                        const newGrades = [...(student.grades[category] || [])];
+                        newGrades[index] = null;
+                        return {
+                            ...student,
+                            grades: {
+                                ...student.grades,
+                                [category]: newGrades,
+                            },
+                        };
+                    }
+                    return student;
+                })
+            );
+            return;
+        }
+
+        // تحويل الأرقام العربية إلى إنجليزية
+        let englishValue = convertToEnglishNumbers(value);
+        
+        // استبدال الفاصلة العربية (،) بالنقطة (.)
+        englishValue = englishValue.replace(/،/g, '.');
+        
+        // التحقق من صحة الرقم - نسمح بأي شيء يبدو كرقم
+        if (!/^-?\d*\.?\d*$/.test(englishValue)) {
+            return;
+        }
+        
+        // إذا كانت القيمة تنتهي بنقطة أو هي نقطة فقط، نخزنها كنص مؤقتاً
+        if (englishValue === '.' || englishValue.endsWith('.')) {
+            setModalStudents(prevStudents =>
+                prevStudents.map(student => {
+                    if (student.id === studentId) {
+                        const newGrades = [...(student.grades[category] || [])];
+                        newGrades[index] = englishValue; // نخزن كنص مؤقت
+                        return {
+                            ...student,
+                            grades: {
+                                ...student.grades,
+                                [category]: newGrades,
+                            },
+                        };
+                    }
+                    return student;
+                })
+            );
+            return;
+        }
+        
+        // تحويل إلى رقم
+        const numericValue = parseFloat(englishValue);
+        
+        if (isNaN(numericValue)) {
+            return;
+        }
         
         let maxLimit = 0;
         let errorMessage = '';
@@ -318,7 +409,7 @@ const GradesModal = ({
             default: break;
         }
 
-        if (numericValue !== null && (numericValue > maxLimit || numericValue < 0)) {
+        if (numericValue > maxLimit || numericValue < 0) {
             setCustomDialog({
                 isOpen: true,
                 title: 'خطأ في إدخال الدرجة',
@@ -331,7 +422,7 @@ const GradesModal = ({
             prevStudents.map(student => {
                 if (student.id === studentId) {
                     const newGrades = [...(student.grades[category] || [])];
-                    newGrades[index] = value === '' ? null : numericValue;
+                    newGrades[index] = numericValue;
                     return {
                         ...student,
                         grades: {
@@ -345,15 +436,37 @@ const GradesModal = ({
         );
     }, [setCustomDialog]);
 
-    const calculateCategoryScore = React.useCallback((student, category) => {
-        if (!student.grades || !student.grades[category]) return 0;
-        const grades = student.grades[category].filter(g => g !== null && g !== undefined && g !== '');
-        if (grades.length === 0) return 0;
+    const calculateCategoryScore = useCallback((student, category) => {
+        if (!student.grades || !student.grades[category]) return "0.00";
+        
+        // تصفية القيم وتحويلها إلى أرقام
+        const grades = student.grades[category]
+            .filter(g => g !== null && g !== undefined && g !== '')
+            .map(g => {
+                // إذا كانت القيمة نصية (مثلاً "15.")، نحولها إلى رقم
+                if (typeof g === 'string') {
+                    // إذا كانت نصاً مثل "15."، نأخذ الجزء الرقمي
+                    const num = parseFloat(g);
+                    return isNaN(num) ? 0 : num;
+                }
+                return g;
+            })
+            .filter(g => !isNaN(g));
+        
+        if (grades.length === 0) return "0.00";
+        
         const sum = grades.reduce((acc, curr) => acc + curr, 0);
 
-        if (category === 'tests') { return sum.toFixed(2); }
-        if (category === 'classInteraction' || category === 'performanceTasks') { return Math.max(...grades).toFixed(2); }
-        if (category === 'quranRecitation' || category === 'quranMemorization') { return (sum / grades.length).toFixed(2); }
+        if (category === 'tests') { 
+            return sum.toFixed(2); 
+        }
+        if (category === 'classInteraction' || category === 'performanceTasks') { 
+            return Math.max(...grades).toFixed(2); 
+        }
+        if (category === 'quranRecitation' || category === 'quranMemorization') { 
+            return (sum / grades.length).toFixed(2); 
+        }
+        
         return sum.toFixed(2);
     }, []);
 
@@ -366,7 +479,7 @@ const GradesModal = ({
         }
     };
 
-    const toggleStudentSelection = React.useCallback((studentId) => {
+    const toggleStudentSelection = useCallback((studentId) => {
         setSelectedStudentsPerTab(prev => {
             const newSelected = prev[activeTab].includes(studentId)
                 ? prev[activeTab].filter(id => id !== studentId)
@@ -380,8 +493,38 @@ const GradesModal = ({
     };
 
     const applyBatchGrade = () => {
-        const englishBatchGrade = convertToEnglishNumbers(batchGrade);
-        const batchNumericValue = englishBatchGrade !== '' ? Number(englishBatchGrade) : null;
+        let englishBatchGrade = convertToEnglishNumbers(batchGrade);
+        
+        // استبدال الفاصلة العربية (،) بالنقطة (.)
+        englishBatchGrade = englishBatchGrade.replace(/،/g, '.');
+        
+        // إزالة أي نقاط إضافية
+        const parts = englishBatchGrade.split('.');
+        if (parts.length > 2) {
+            englishBatchGrade = parts[0] + '.' + parts.slice(1).join('');
+        }
+        
+        if (englishBatchGrade === '') {
+            setCustomDialog({ 
+                isOpen: true, 
+                title: 'خطأ في إدخال الدرجة', 
+                message: 'الرجاء إدخال قيمة الدرجة' 
+            });
+            return;
+        }
+        
+        // التحقق من صحة الإدخال
+        if (!/^-?\d*\.?\d+$/.test(englishBatchGrade)) {
+            setCustomDialog({ 
+                isOpen: true, 
+                title: 'خطأ في إدخال الدرجة', 
+                message: 'الرجاء إدخال رقم صحيح (مثال: 15.5)' 
+            });
+            return;
+        }
+        
+        const batchNumericValue = parseFloat(englishBatchGrade);
+        
         let maxLimit = 0;
         let errorMessage = '';
 
@@ -396,7 +539,7 @@ const GradesModal = ({
             default: break;
         }
 
-        if (batchNumericValue !== null && (batchNumericValue > maxLimit || batchNumericValue < 0)) {
+        if (batchNumericValue > maxLimit || batchNumericValue < 0) {
             setCustomDialog({ isOpen: true, title: 'خطأ في إدخال الدرجة', message: errorMessage });
             return;
         }
@@ -407,6 +550,7 @@ const GradesModal = ({
                     const newGrades = [...(student.grades[activeTab] || [])];
                     let updated = false;
                     let indexToUpdate;
+                    
                     if (activeTab === 'tests') indexToUpdate = testIndex;
                     else if (activeTab === 'homework') indexToUpdate = homeworkIndex;
                     else if (activeTab === 'performanceTasks') indexToUpdate = performanceTaskIndex;
@@ -419,7 +563,10 @@ const GradesModal = ({
                         updated = true;
                     } else if (activeTab === 'participation') {
                         const emptyIndex = newGrades.findIndex(grade => grade === null || grade === undefined || grade === '');
-                        if (emptyIndex !== -1) { newGrades[emptyIndex] = batchNumericValue; updated = true; }
+                        if (emptyIndex !== -1) { 
+                            newGrades[emptyIndex] = batchNumericValue; 
+                            updated = true; 
+                        }
                     }
                     
                     if (updated) {
@@ -429,6 +576,9 @@ const GradesModal = ({
                 return student;
             })
         );
+        
+        // مسح حقل الإدخال بعد التطبيق
+        setBatchGrade('');
     };
 
     const handleSave = () => {
@@ -542,7 +692,7 @@ const GradesModal = ({
                             <div className="flex-1">
                                 <input
                                     type="text"
-                                    inputMode="numeric"
+                                    inputMode="decimal"
                                     value={batchGrade}
                                     onChange={handleBatchGradeChange}
                                     placeholder="الدرجة"
@@ -612,7 +762,7 @@ const GradesModal = ({
                             <div className="flex-1">
                                 <input
                                     type="text"
-                                    inputMode="numeric"
+                                    inputMode="decimal"
                                     value={batchGrade}
                                     onChange={handleBatchGradeChange}
                                     placeholder="الدرجة"
@@ -683,7 +833,7 @@ const GradesModal = ({
                             <div className="flex-1">
                                 <input
                                     type="text"
-                                    inputMode="numeric"
+                                    inputMode="decimal"
                                     value={batchGrade}
                                     onChange={handleBatchGradeChange}
                                     placeholder="الدرجة"
@@ -754,7 +904,7 @@ const GradesModal = ({
                             <div className="flex-1">
                                 <input
                                     type="text"
-                                    inputMode="numeric"
+                                    inputMode="decimal"
                                     value={batchGrade}
                                     onChange={handleBatchGradeChange}
                                     placeholder="الدرجة"
@@ -815,7 +965,7 @@ const GradesModal = ({
                             <div className="flex-1">
                                 <input
                                     type="text"
-                                    inputMode="numeric"
+                                    inputMode="decimal"
                                     value={batchGrade}
                                     onChange={handleBatchGradeChange}
                                     placeholder="الدرجة"
@@ -886,7 +1036,7 @@ const GradesModal = ({
                             <div className="flex-1">
                                 <input
                                     type="text"
-                                    inputMode="numeric"
+                                    inputMode="decimal"
                                     value={batchGrade}
                                     onChange={handleBatchGradeChange}
                                     placeholder="الدرجة"
