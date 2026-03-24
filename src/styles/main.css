@@ -1,0 +1,65 @@
+/* النمط الليلي */
+.dark {
+  background-color: #1a202c;
+  color: #f7fafc;
+}
+
+.dark .border {
+  border-color: #2d3748;
+}
+
+/* أنماط النجوم */
+.star-rating {
+  direction: ltr;
+}
+
+.star {
+  color: #e2e8f0;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.star.active {
+  color: #f6e05e;
+}
+
+/* حالات التسميع */
+.recitation-not-recited {
+  background-color: #fed7d7;
+  color: #9b2c2c;
+}
+
+.recitation-delayed {
+  background-color: #feebc8;
+  color: #9c4221;
+}
+
+.recitation-completed {
+  background-color: #c6f6d5;
+  color: #276749;
+}
+
+.dark .recitation-not-recited {
+  background-color: #742a2a;
+  color: #fed7d7;
+}
+
+.dark .recitation-delayed {
+  background-color: #7b341e;
+  color: #feebc8;
+}
+
+.dark .recitation-completed {
+  background-color: #22543d;
+  color: #c6f6d5;
+}
+
+/* بطاقات الطلاب */
+.student-card {
+  transition: all 0.3s ease;
+}
+
+.student-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
