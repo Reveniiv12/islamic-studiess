@@ -202,7 +202,7 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
         <div className={`p-4 rounded-xl border-2 transition-colors ${config.is_locked ? 'bg-red-900/10 border-red-500/50' : 'bg-green-900/10 border-green-500/50'}`}>
           <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
             <h3 className="font-bold text-lg text-white flex items-center gap-2">
-              {config.is_locked ? <FaLock className="text-red-500"/> : <FaUnlock className="text-green-500"/>}
+              {config.is_locked ? <FaLock className="text-red-500"/> : <FaUnlock className="text-green-400"/>}
               حالة الصفحة: {config.is_locked ? <span className="text-red-400">مغلقة</span> : <span className="text-green-400">مفتوحة</span>}
             </h3>
             <button
