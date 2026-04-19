@@ -170,6 +170,25 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
     </div>
   );
 
+  const renderPortfolioLockToggle = (periodKey, label) => {
+      const configKey = periodKey === 'period1' ? 'portfolio_p1_locked' : 'portfolio_p2_locked';
+      const isLocked = config[configKey] === true;
+      
+      return (
+        <div 
+           onClick={() => toggleFeature(configKey)}
+           className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${isLocked ? 'bg-red-900/30 border-red-500/50' : 'bg-green-900/30 border-green-500/50'}`}
+        >
+            <div className="flex items-center gap-2 text-white">
+                {isLocked ? <FaLock className="text-red-400"/> : <FaUnlock className="text-green-400"/>}
+                <span className="text-sm font-bold">{label}</span>
+            </div>
+            {isLocked ? <FaToggleOn className="text-2xl text-red-500"/> : <FaToggleOff className="text-2xl text-gray-500"/>}
+        </div>
+      );
+  };
+
+
   if (!show) return null;
 
   return (
@@ -281,7 +300,19 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
            </div>
         </div>
 
-        {/* 4. أزرار الحفظ والإلغاء */}
+        {/* 4. إعدادات قفل ملف الإنجاز */}
+        <div className="bg-gray-700/30 p-4 rounded-xl border border-gray-600/50">
+           <h3 className="font-bold text-lg text-white flex items-center gap-2 mb-4">
+              <FaBriefcase className="text-teal-400"/> قفل إرفاق وحذف ملفات الإنجاز
+           </h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+               {renderPortfolioLockToggle('period1', 'قفل الفترة الأولى')}
+               {renderPortfolioLockToggle('period2', 'قفل الفترة الثانية')}
+           </div>
+           <p className="text-xs text-gray-400 mt-3">يمنع القفل الطالب من رفع ملفات جديدة أو حذف ملفاته الحالية في الفترة المحددة.</p>
+        </div>
+
+        {/* 5. أزرار الحفظ والإلغاء */}
         <div className="flex flex-col-reverse sm:flex-row gap-3 mt-4 border-t border-gray-700 pt-4">
           <button 
             onClick={onClose} 

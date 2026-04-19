@@ -17,6 +17,7 @@ import ReportGenerator from "./pages/ReportGenerator";
 // --- الاستيرادات الجديدة ---
 import StudentPortfolio from "./pages/StudentPortfolio";
 import SectionPortfoliosViewer from "./pages/SectionPortfoliosViewer";
+import ChallengePage from "./pages/ChallengePage";
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -125,6 +126,12 @@ export default function App() {
             {/* مسارات قديمة (إذا كنت لا تزال تستخدمها) */}
             <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
             <Route path="/portfolio/:userId" element={<PortfolioPublic />} />
+
+            {/* مسار التحدي الجديد */}
+            <Route 
+              path="/challenge/:gradeId/:sectionId" 
+              element={<ProtectedRoute><ChallengePage /></ProtectedRoute>} 
+            />
 
             {/* إعادة توجيه أي مسار خاطئ للرئيسية */}
             <Route path="*" element={<Navigate to="/" />} />

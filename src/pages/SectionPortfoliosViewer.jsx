@@ -7,7 +7,7 @@ import {
   FaExclamationTriangle, FaCheck, FaHistory, FaLayerGroup, 
   FaSchool, FaShapes, FaTrash, FaQrcode, FaFileAlt, FaTimes, FaSearch,
   FaUserSecret, FaUserShield, FaChalkboardTeacher, FaBell, FaTrashAlt, FaCog, FaToggleOn, FaToggleOff, FaSave, FaPen,
-  FaExchangeAlt, FaTimesCircle // <-- تم إضافة أيقونات النقل والرفض هنا
+  FaExchangeAlt, FaTimesCircle, FaLock, FaUnlock // <-- تم إضافة أيقونات النقل والرفض والقفل هنا
 } from 'react-icons/fa';
 import QRCode from "react-qr-code"; 
 import StudentPortfolioFileViewer from '../components/StudentPortfolioFileViewer';
@@ -60,6 +60,8 @@ const SectionPortfoliosViewer = () => {
   const [showNoteAlert, setShowNoteAlert] = useState(false); 
   const [showVisitsModal, setShowVisitsModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
+  const [studentViewConfig, setStudentViewConfig] = useState({});
+
 
   // File Viewer
   const [currentFileIndex, setCurrentFileIndex] = useState(null);
@@ -123,9 +125,33 @@ const SectionPortfoliosViewer = () => {
             });
             if (data.active_semester_key) setActiveSemester(data.active_semester_key);
             if (data.current_period) setActivePeriod(data.current_period);
+            if (data.student_view_config) setStudentViewConfig(data.student_view_config);
         }
       } catch (error) { console.error("Error fetching settings:", error); }
   };
+
+  const togglePeriodLock = async (periodKey) => {
+      const configKey = periodKey === 'period1' ? 'portfolio_p1_locked' : 'portfolio_p2_locked';
+      const isCurrentlyLocked = studentViewConfig[configKey] === true;
+      const newConfig = { ...studentViewConfig, [configKey]: !isCurrentlyLocked };
+      
+      setStudentViewConfig(newConfig);
+      
+      try {
+          const { error } = await supabase
+            .from('settings')
+            .update({ student_view_config: newConfig })
+            .eq('id', 'general');
+          
+          if (error) throw error;
+      } catch (err) {
+          console.error("Failed to update lock", err);
+          showAlert({ type: 'error', title: 'خطأ', message: 'فشل تحديث حالة القفل' });
+          // Rollback on error
+          setStudentViewConfig(studentViewConfig);
+      }
+  };
+
 
   const fetchHiddenSections = async () => {
       const { data } = await supabase.from('section_visibility').select('section_id').eq('grade_id', gradeId).eq('is_hidden', true);
@@ -242,9 +268,11 @@ const SectionPortfoliosViewer = () => {
 
   // --- Grading Logic (4 Fields + Fixes) ---
 
-  const getPerformanceTasks = (student) => {
+  // --- Grading Logic (4 Fields + Fixes) ---
+
+  const getPerformanceTasks = (student, periodKey = activePeriod) => {
       const semesterData = student.grades?.[activeSemester];
-      const periodData = semesterData?.[activePeriod];
+      const periodData = semesterData?.[periodKey];
       
       const tasks = periodData?.performanceTasks || periodData?.performance_tasks || student.grades?.performanceTasks || [null, null, null, null];
       
@@ -253,7 +281,7 @@ const SectionPortfoliosViewer = () => {
       return result.slice(0, 4); 
   };
 
-  const handleGradeChange = (studentId, index, value) => {
+  const handleGradeChange = (studentId, index, value, periodKey = activePeriod) => {
       const arabicNumbers = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
       const englishNumbers = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
       let englishValue = value;
@@ -271,9 +299,9 @@ const SectionPortfoliosViewer = () => {
               const newGrades = JSON.parse(JSON.stringify(student.grades || {}));
 
               if (!newGrades[activeSemester]) newGrades[activeSemester] = {};
-              if (!newGrades[activeSemester][activePeriod]) newGrades[activeSemester][activePeriod] = {};
+              if (!newGrades[activeSemester][periodKey]) newGrades[activeSemester][periodKey] = {};
 
-              const periodData = newGrades[activeSemester][activePeriod];
+              const periodData = newGrades[activeSemester][periodKey];
               const currentTasks = periodData.performanceTasks || periodData.performance_tasks || []; 
               
               let tasks = [0, 1, 2, 3].map(i => {
@@ -281,9 +309,9 @@ const SectionPortfoliosViewer = () => {
                   return currentTasks[i] !== undefined ? currentTasks[i] : null;
               });
 
-              newGrades[activeSemester][activePeriod].performanceTasks = tasks;
-              if (newGrades[activeSemester][activePeriod].performance_tasks) {
-                  delete newGrades[activeSemester][activePeriod].performance_tasks;
+              newGrades[activeSemester][periodKey].performanceTasks = tasks;
+              if (newGrades[activeSemester][periodKey].performance_tasks) {
+                  delete newGrades[activeSemester][periodKey].performance_tasks;
               }
 
               return { ...student, grades: newGrades };
@@ -626,7 +654,8 @@ const SectionPortfoliosViewer = () => {
 
   const handleMoveFile = (fileId, currentCategory) => {
       const targetCategory = currentCategory === 'performance_tasks' ? 'others' : 'performance_tasks';
-      const categoryName = targetCategory === 'performance_tasks' ? 'المهام الأدائية' : 'أعمال ومشاريع أخرى';
+      const categoryName = targetCategory === 'performance_tasks' ? 'الفترة الأولى' : 'الفترة الثانية';
+
 
       showAlert({
           type: 'confirm',
@@ -977,25 +1006,47 @@ const SectionPortfoliosViewer = () => {
                                 )}
                             </div>
                             
-                            {/* Grading Inputs Section (4 Fields Only) */}
+                            {/* Grading Inputs Section (Dual Periods) */}
                             {(!isSupervisor || isGradingMode) && (
-                                <div className="mb-8 bg-slate-800/30 p-4 rounded-xl border border-slate-700/50" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <h4 className="text-orange-400 font-bold flex items-center gap-2 text-sm">
-                                            <FaPen className="text-xs" /> درجات المهام الأدائية
-                                        </h4>
-                                        <span className="text-xs text-slate-500">الفترة: {activePeriod === 'period1' ? 'الأولى' : 'الثانية'}</span>
-                                    </div>
-                                    <div className="flex gap-2 max-w-lg items-center">
-                                        <div className="flex gap-2 flex-1">
-                                            {/* عرض 4 خانات فقط */}
-                                            {ptGrades.slice(0, 4).map((grade, idx) => (
+                                <div className="space-y-4 mb-8" onClick={(e) => e.stopPropagation()}>
+                                    {/* Period 1 Grading */}
+                                    <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700/50">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <div className="flex items-center gap-3">
+                                                <h4 className="text-orange-400 font-bold flex items-center gap-2 text-sm">
+                                                    <FaPen className="text-xs" /> درجات المهام (الفترة الأولى)
+                                                </h4>
+                                                {!isSupervisor && (
+                                                    <button 
+                                                        onClick={() => togglePeriodLock('period1')}
+                                                        className={`p-1.5 rounded-lg transition-all border ${studentViewConfig.portfolio_p1_locked ? 'bg-red-500/10 border-red-500/50 text-red-500' : 'bg-green-500/10 border-green-500/50 text-green-500'}`}
+                                                        title={studentViewConfig.portfolio_p1_locked ? "فك قفل الفترة الأولى" : "قفل الفترة الأولى"}
+                                                    >
+                                                        {studentViewConfig.portfolio_p1_locked ? <FaLock size={12}/> : <FaUnlock size={12}/>}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {!isSupervisor && (
+                                                    <button 
+                                                        onClick={() => saveStudentGrades(student.id)}
+                                                        disabled={savingStudentId === student.id}
+                                                        className="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white p-1.5 rounded-lg transition-all border border-blue-500/30"
+                                                        title="حفظ"
+                                                    >
+                                                        {savingStudentId === student.id ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <FaSave size={12}/>}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {getPerformanceTasks(student, 'period1').map((grade, idx) => (
                                                 <div key={idx} className="flex-1">
                                                     <input 
                                                         type="text"
                                                         inputMode="numeric"
                                                         value={grade ?? ''}
-                                                        onChange={(e) => handleGradeChange(student.id, idx, e.target.value)}
+                                                        onChange={(e) => handleGradeChange(student.id, idx, e.target.value, 'period1')}
                                                         disabled={isSupervisor}
                                                         placeholder="-"
                                                         className={`w-full text-center py-2 rounded-lg font-bold text-lg outline-none border transition-all 
@@ -1006,21 +1057,60 @@ const SectionPortfoliosViewer = () => {
                                                 </div>
                                             ))}
                                         </div>
-                                        
-                                        {/* Individual Save Button */}
-                                        {!isSupervisor && (
-                                            <button 
-                                                onClick={() => saveStudentGrades(student.id)}
-                                                disabled={savingStudentId === student.id}
-                                                className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-lg shadow-lg border border-blue-500 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-wait"
-                                                title="حفظ درجات هذا الطالب"
-                                            >
-                                                {savingStudentId === student.id ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <FaSave />}
-                                            </button>
-                                        )}
+                                    </div>
+
+                                    {/* Period 2 Grading */}
+                                    <div className="bg-slate-800/30 p-4 rounded-xl border border-slate-700/50">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <div className="flex items-center gap-3">
+                                                <h4 className="text-purple-400 font-bold flex items-center gap-2 text-sm">
+                                                    <FaPen className="text-xs" /> درجات المهام (الفترة الثانية)
+                                                </h4>
+                                                {!isSupervisor && (
+                                                    <button 
+                                                        onClick={() => togglePeriodLock('period2')}
+                                                        className={`p-1.5 rounded-lg transition-all border ${studentViewConfig.portfolio_p2_locked ? 'bg-red-500/10 border-red-500/50 text-red-500' : 'bg-green-500/10 border-green-500/50 text-green-500'}`}
+                                                        title={studentViewConfig.portfolio_p2_locked ? "فك قفل الفترة الثانية" : "قفل الفترة الثانية"}
+                                                    >
+                                                        {studentViewConfig.portfolio_p2_locked ? <FaLock size={12}/> : <FaUnlock size={12}/>}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {!isSupervisor && (
+                                                    <button 
+                                                        onClick={() => saveStudentGrades(student.id)}
+                                                        disabled={savingStudentId === student.id}
+                                                        className="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white p-1.5 rounded-lg transition-all border border-blue-500/30"
+                                                        title="حفظ"
+                                                    >
+                                                        {savingStudentId === student.id ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <FaSave size={12}/>}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {getPerformanceTasks(student, 'period2').map((grade, idx) => (
+                                                <div key={idx} className="flex-1">
+                                                    <input 
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        value={grade ?? ''}
+                                                        onChange={(e) => handleGradeChange(student.id, idx, e.target.value, 'period2')}
+                                                        disabled={isSupervisor}
+                                                        placeholder="-"
+                                                        className={`w-full text-center py-2 rounded-lg font-bold text-lg outline-none border transition-all 
+                                                            ${grade !== null ? 'bg-slate-700 text-white border-purple-500/50' : 'bg-black/40 text-gray-500 border-slate-800'}
+                                                            ${!isSupervisor ? 'focus:border-purple-500 focus:ring-1 focus:ring-purple-500' : ''}
+                                                        `}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
                             )}
+
 
                             {/* Notes Area */}
                             {isNotesExpanded && (
@@ -1041,7 +1131,7 @@ const SectionPortfoliosViewer = () => {
                             {/* Categories */}
                             <div className="space-y-8">
                                 <div>
-                                    <h4 className="text-blue-400 font-bold mb-4 flex items-center gap-2 text-sm border-r-2 border-blue-500 pr-3"><FaShapes /> المهام الأدائية</h4>
+                                    <h4 className="text-blue-400 font-bold mb-4 flex items-center gap-2 text-sm border-r-2 border-blue-500 pr-3"><FaShapes /> الفترة الأولى</h4>
                                     {performanceTasks.length > 0 ? (
                                         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                                             {performanceTasks.map((file) => (
@@ -1063,7 +1153,7 @@ const SectionPortfoliosViewer = () => {
                                 </div>
 
                                 <div>
-                                    <h4 className="text-purple-400 font-bold mb-4 flex items-center gap-2 text-sm border-r-2 border-purple-500 pr-3"><FaLayerGroup /> أعمال ومشاريع أخرى</h4>
+                                    <h4 className="text-purple-400 font-bold mb-4 flex items-center gap-2 text-sm border-r-2 border-purple-500 pr-3"><FaLayerGroup /> الفترة الثانية</h4>
                                     {otherWorks.length > 0 ? (
                                         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                                             {otherWorks.map((file) => (
@@ -1084,6 +1174,7 @@ const SectionPortfoliosViewer = () => {
                                     ) : <p className="text-xs text-slate-600 italic py-2 pr-4">لا توجد ملفات</p>}
                                 </div>
                             </div>
+
                         </div>
                     );
                 })

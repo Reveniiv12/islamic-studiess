@@ -79,7 +79,8 @@ import {
   FaCalendarCheck,
   FaFilter,
   FaGift,
-  FaFolderOpen 
+  FaFolderOpen,
+  FaGamepad
 } from "react-icons/fa";
 
 import {
@@ -1466,7 +1467,6 @@ const handleExportQRCodes = async () => {
   <FaFolderOpen />  ملفات انجاز الطلاب
 </button>
 
-{/* === زر المحادثات المضاف حديثاً === */}
 <button
   onClick={() => setShowTeacherChat(true)}
   className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-blue-800 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md text-xs md:text-sm font-bold border border-blue-600"
@@ -1474,6 +1474,13 @@ const handleExportQRCodes = async () => {
   <FaCommentDots /> المحادثات
 </button>
 {/* ============================= */}
+
+<button
+  onClick={() => navigate(`/challenge/${gradeId}/${sectionId}`)}
+  className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-500 hover:to-indigo-500 transition-all shadow-lg text-xs md:text-sm font-bold border border-purple-400 transform hover:scale-105"
+>
+  <FaGamepad /> التحدي
+</button>
 
         </div>
       </div>

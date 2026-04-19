@@ -35,6 +35,8 @@ const StudentPortfolio = () => {
   // حالات القفل والوصول
   const [isLocked, setIsLocked] = useState(false);
   const [lockMessage, setLockMessage] = useState("");
+  const [studentViewConfig, setStudentViewConfig] = useState({});
+
 
   // نظام التنبيهات
   const [alert, setAlert] = useState({
@@ -90,6 +92,7 @@ const StudentPortfolio = () => {
 
         if (settingsData.student_view_config) {
           const config = settingsData.student_view_config;
+          setStudentViewConfig(config);
           const isGlobalLocked = config.is_locked === true;
           const isPortfolioDisabled = config.show_portfolio_button === false;
 
@@ -103,6 +106,7 @@ const StudentPortfolio = () => {
             setIsLocked(false);
           }
         }
+
       }
 
       // جلب بيانات الطالب
@@ -201,6 +205,18 @@ const StudentPortfolio = () => {
   };
 
   const initUpload = (category) => {
+    const configKey = category === 'performance_tasks' ? 'portfolio_p1_locked' : 'portfolio_p2_locked';
+    if (studentViewConfig[configKey]) {
+      showAlert({
+        type: 'warning',
+        title: 'القسم مغلق',
+        message: 'عذراً، هذا القسم مغلق حالياً بواسطة المعلم.',
+        showCancelButton: false,
+        confirmText: 'حسناً'
+      });
+      return;
+    }
+
     if (files.length >= 5) {
       showAlert({
         type: 'warning',
@@ -214,6 +230,7 @@ const StudentPortfolio = () => {
     setTargetCategory(category);
     if (fileInputRef.current) fileInputRef.current.click();
   };
+
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -231,7 +248,8 @@ const StudentPortfolio = () => {
       return;
     }
 
-    const categoryLabel = targetCategory === 'performance_tasks' ? 'المهام الأدائية' : 'أعمال أخرى';
+    const categoryLabel = targetCategory === 'performance_tasks' ? 'الفترة الأولى' : 'الفترة الثانية';
+
 
     showAlert({
       type: 'confirm',
@@ -339,8 +357,22 @@ const StudentPortfolio = () => {
     }
   };
 
-  const requestDeletion = (e, fileId) => {
+  const requestDeletion = (e, fileId, category) => {
     e.stopPropagation();
+    
+    // تحقق من القفل
+    const configKey = category === 'performance_tasks' ? 'portfolio_p1_locked' : 'portfolio_p2_locked';
+    if (studentViewConfig[configKey]) {
+      showAlert({
+        type: 'warning',
+        title: 'القسم مغلق',
+        message: 'عذراً، لا يمكن حذف الملفات في هذا القسم حالياً لأنه مغلق بواسطة المعلم.',
+        showCancelButton: false,
+        confirmText: 'حسناً'
+      });
+      return;
+    }
+
     showAlert({
       type: 'confirm',
       title: 'طلب حذف',
@@ -360,6 +392,7 @@ const StudentPortfolio = () => {
       }
     });
   };
+
 
   const getOrderedFilesForViewer = () => {
     const allFiles = [...performanceFiles, ...otherFiles];
@@ -450,12 +483,17 @@ const StudentPortfolio = () => {
 
         <button
           onClick={() => initUpload(categoryKey)}
-          disabled={uploading}
-          className="bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white border border-slate-600 hover:border-blue-500 px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg text-sm font-bold disabled:opacity-50"
+          disabled={uploading || studentViewConfig[categoryKey === 'performance_tasks' ? 'portfolio_p1_locked' : 'portfolio_p2_locked']}
+          className={`px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg text-sm font-bold disabled:opacity-50 
+            ${studentViewConfig[categoryKey === 'performance_tasks' ? 'portfolio_p1_locked' : 'portfolio_p2_locked'] 
+              ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' 
+              : 'bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white border border-slate-600 hover:border-blue-500'}`}
         >
-          <FaCloudUploadAlt size={16} /> إضافة ملف هنا
+          {studentViewConfig[categoryKey === 'performance_tasks' ? 'portfolio_p1_locked' : 'portfolio_p2_locked'] ? <FaLock size={14} /> : <FaCloudUploadAlt size={16} />}
+          {studentViewConfig[categoryKey === 'performance_tasks' ? 'portfolio_p1_locked' : 'portfolio_p2_locked'] ? 'القسم مغلق' : 'إضافة ملف هنا'}
         </button>
       </div>
+
 
       {items.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-slate-700/50 rounded-3xl bg-slate-800/20">
@@ -515,12 +553,17 @@ const StudentPortfolio = () => {
                     </span>
                   ) : (
                     <button
-                      onClick={(e) => requestDeletion(e, file.id)}
-                      className="text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all p-2 rounded-lg"
-                      title="حذف الملف"
+                      onClick={(e) => requestDeletion(e, file.id, file.category)}
+                      disabled={studentViewConfig[file.category === 'performance_tasks' ? 'portfolio_p1_locked' : 'portfolio_p2_locked']}
+                      className={`transition-all p-2 rounded-lg 
+                        ${studentViewConfig[file.category === 'performance_tasks' ? 'portfolio_p1_locked' : 'portfolio_p2_locked']
+                          ? 'text-slate-700 cursor-not-allowed opacity-30'
+                          : 'text-slate-500 hover:text-red-400 hover:bg-red-500/10'}`}
+                      title={studentViewConfig[file.category === 'performance_tasks' ? 'portfolio_p1_locked' : 'portfolio_p2_locked'] ? "مغلق" : "حذف الملف"}
                     >
                       <FaTrash size={14} />
                     </button>
+
                   )}
                 </div>
 
@@ -630,18 +673,19 @@ const StudentPortfolio = () => {
         ) : (
           <>
             <PortfolioSection
-              title="المهام الأدائية"
+              title="الفترة الأولى"
               icon={<FaShapes size={24} />}
               items={performanceFiles}
               categoryKey="performance_tasks"
             />
 
             <PortfolioSection
-              title="أعمال ومشاريع أخرى"
+              title="الفترة الثانية"
               icon={<FaLayerGroup size={24} />}
               items={otherFiles}
               categoryKey="others"
             />
+
           </>
         )}
       </div>
