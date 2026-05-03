@@ -21,10 +21,12 @@ import {
   FaStopwatch,
   FaDice,
   FaArrowLeft,
-  FaChalkboardTeacher
+  FaChalkboardTeacher,
+  FaTasks
 } from "react-icons/fa";
 import WheelOfFortune from "../components/WheelOfFortune";
 import ChallengeImporter from "../components/ChallengeImporter";
+import CustomDialog from "../components/CustomDialog";
 
 const ChallengePage = () => {
   const { gradeId, sectionId } = useParams();
@@ -38,7 +40,24 @@ const ChallengePage = () => {
   
   // States for Game Configuration
   const [rounds, setRounds] = useState(10);
+  const [questionsPerStudent, setQuestionsPerStudent] = useState(1);
   const [gameMode, setGameMode] = useState("random");
+  
+  // States for Individual Mode
+  const [challengeType, setChallengeType] = useState("classroom"); // classroom | individual
+  const [questionsCount, setQuestionsCount] = useState(5);
+  const [attemptsCount, setAttemptsCount] = useState(1);
+  const [assigning, setAssigning] = useState(false);
+  const [sectionsList, setSectionsList] = useState([]);
+  const [selectedSections, setSelectedSections] = useState([`${gradeId}|${sectionId}`]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+
+  // States for Dialog
+  const [dialogConfig, setDialogConfig] = useState({ show: false, title: "", message: "", type: "info", onConfirm: null });
+  
+  const handleDialog = (title, message, type, onConfirm = null) => {
+      setDialogConfig({ show: true, title, message, type, onConfirm });
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -47,6 +66,7 @@ const ChallengePage = () => {
         setTeacherId(user.id);
         fetchStudents(user.id);
         fetchChallenges(user.id);
+        fetchSectionsList(user.id);
       } else {
         navigate("/login");
       }
@@ -61,7 +81,25 @@ const ChallengePage = () => {
       .eq("grade_level", gradeId)
       .eq("section", sectionId)
       .eq("teacher_id", tId);
-    if (!error) setStudents(data);
+    if (!error) {
+      setStudents(data);
+      setSelectedStudentIds(data.map(s => s.id));
+    }
+  };
+
+  const fetchSectionsList = async (tId) => {
+    const { data, error } = await supabase
+      .from('students')
+      .select('grade_level, section')
+      .eq('teacher_id', tId);
+    if (!error && data) {
+      const uniqueSections = Array.from(new Set(data.map(s => `${s.grade_level}|${s.section}`)))
+        .map(key => {
+            const [g, s] = key.split('|');
+            return { grade_level: g, section: s };
+        });
+      setSectionsList(uniqueSections);
+    }
   };
 
   const fetchChallenges = async (tId) => {
@@ -76,6 +114,69 @@ const ChallengePage = () => {
   const handleStartGame = () => {
     if (!selectedChallenge) return;
     setView("game");
+  };
+
+  const handleAssignIndividual = async () => {
+    if (!selectedChallenge) return;
+    if (selectedStudentIds.length === 0 && selectedSections.length === 1 && selectedSections[0] === `${gradeId}|${sectionId}`) {
+      handleDialog("تنبيه", "الرجاء تحديد طالب واحد على الأقل أو فصل إضافي للتكليف.", "warning");
+      return;
+    }
+
+    setAssigning(true);
+    try {
+      const newAssignment = {
+        id: Date.now().toString(),
+        challenge_id: selectedChallenge.id,
+        subject_name: selectedChallenge.subject_name,
+        lesson_name: selectedChallenge.lesson_name,
+        questions_count: questionsCount,
+        attempts_allowed: attemptsCount,
+        attempts_used: 0,
+        assigned_at: new Date().toISOString(),
+        best_score: null
+      };
+
+      let targetStudents = [];
+
+      // Fetch students for all selected sections (except current one if we want to use the specific selectedStudentIds for the current one)
+      for (const secKey of selectedSections) {
+         const [g, s] = secKey.split('|');
+         if (g === gradeId && s === sectionId) {
+            targetStudents.push(...students.filter(st => selectedStudentIds.includes(st.id)));
+         } else {
+            const { data, error } = await supabase.from("students").select("*").eq("grade_level", g).eq("section", s).eq("teacher_id", teacherId);
+            if (!error && data) targetStudents.push(...data);
+         }
+      }
+
+      if (targetStudents.length === 0) {
+         handleDialog("تنبيه", "لا يوجد طلاب متاحين للتكليف بناءً على اختياراتك.", "warning");
+         setAssigning(false);
+         return;
+      }
+
+      for (const student of targetStudents) {
+        const currentGrades = student.grades || {};
+        const assignedChallenges = currentGrades.assigned_challenges || [];
+        const newGrades = {
+          ...currentGrades,
+          assigned_challenges: [...assignedChallenges, newAssignment]
+        };
+
+        await supabase
+          .from('students')
+          .update({ grades: newGrades })
+          .eq('id', student.id);
+      }
+
+      handleDialog("نجاح", `تم التكليف بنجاح لـ ${targetStudents.length} طالب/طالبة!`, "success");
+    } catch (err) {
+      console.error("Error assigning challenge:", err);
+      handleDialog("خطأ", "حدث خطأ أثناء التكليف.", "error");
+    } finally {
+      setAssigning(false);
+    }
   };
 
   return (
@@ -126,6 +227,12 @@ const ChallengePage = () => {
                   active={view === "history"} 
                   onClick={() => setView("history")} 
                 />
+                <NavButton 
+                  icon={<FaTasks />} 
+                  label="إدارة التكاليف" 
+                  active={view === "assignments"} 
+                  onClick={() => setView("assignments")} 
+                />
               </>
             )}
           </div>
@@ -141,9 +248,26 @@ const ChallengePage = () => {
               setSelectedChallenge={setSelectedChallenge}
               rounds={rounds}
               setRounds={setRounds}
+              questionsPerStudent={questionsPerStudent}
+              setQuestionsPerStudent={setQuestionsPerStudent}
               gameMode={gameMode}
               setGameMode={setGameMode}
+              challengeType={challengeType}
+              setChallengeType={setChallengeType}
+              questionsCount={questionsCount}
+              setQuestionsCount={setQuestionsCount}
+              attemptsCount={attemptsCount}
+              setAttemptsCount={setAttemptsCount}
               onStart={handleStartGame}
+              onAssign={handleAssignIndividual}
+              assigning={assigning}
+              sectionsList={sectionsList}
+              selectedSections={selectedSections}
+              setSelectedSections={setSelectedSections}
+              selectedStudentIds={selectedStudentIds}
+              setSelectedStudentIds={setSelectedStudentIds}
+              gradeId={gradeId}
+              sectionId={sectionId}
             />
           )}
 
@@ -156,6 +280,9 @@ const ChallengePage = () => {
               fetchChallenges={fetchChallenges}
               setView={setView}
               setSelectedChallenge={setSelectedChallenge}
+              handleDialog={handleDialog}
+              dialogConfig={dialogConfig}
+              setDialogConfig={setDialogConfig}
             />
           )}
 
@@ -164,6 +291,7 @@ const ChallengePage = () => {
               challenge={selectedChallenge} 
               students={students} 
               rounds={rounds} 
+              questionsPerStudent={questionsPerStudent}
               mode={gameMode} 
               teacherId={teacherId}
               sectionId={sectionId}
@@ -178,6 +306,17 @@ const ChallengePage = () => {
                 sectionId={sectionId} 
                 teacherId={teacherId} 
                 onClose={() => setView("setup")}
+             />
+          )}
+
+          {view === "assignments" && (
+             <AssignmentsView
+                gradeId={gradeId}
+                teacherId={teacherId}
+                onClose={() => setView("setup")}
+                handleDialog={handleDialog}
+                dialogConfig={dialogConfig}
+                setDialogConfig={setDialogConfig}
              />
           )}
 
@@ -196,10 +335,21 @@ const ChallengePage = () => {
               gradeId={gradeId} 
               teacherId={teacherId} 
               onClose={() => { setView("manager"); fetchChallenges(teacherId); }}
+              handleDialog={handleDialog}
             />
           )}
         </div>
       </main>
+
+      {dialogConfig.show && (
+        <CustomDialog 
+          title={dialogConfig.title}
+          message={dialogConfig.message}
+          type={dialogConfig.type}
+          onClose={() => setDialogConfig({...dialogConfig, show: false})}
+          onConfirm={dialogConfig.onConfirm}
+        />
+      )}
 
       {/* Global Aesthetics */}
       <style>{`
@@ -260,7 +410,24 @@ const GlassCard = ({ children, className = "" }) => (
 
 /* --- Views --- */
 
-const SetupView = ({ challenges, students, selectedChallenge, setSelectedChallenge, rounds, setRounds, gameMode, setGameMode, onStart }) => (
+const SetupView = ({ 
+  challenges, students, selectedChallenge, setSelectedChallenge, 
+  rounds, setRounds, questionsPerStudent, setQuestionsPerStudent, 
+  gameMode, setGameMode, challengeType, setChallengeType, 
+  questionsCount, setQuestionsCount, attemptsCount, setAttemptsCount, 
+  onStart, onAssign, assigning,
+  sectionsList, selectedSections, setSelectedSections,
+  selectedStudentIds, setSelectedStudentIds, gradeId, sectionId
+}) => {
+  const toggleStudent = (id) => {
+    setSelectedStudentIds(prev => prev.includes(id) ? prev.filter(sId => sId !== id) : [...prev, id]);
+  };
+
+  const toggleSection = (key) => {
+    setSelectedSections(prev => prev.includes(key) ? prev.filter(sKey => sKey !== key) : [...prev, key]);
+  };
+
+  return (
   <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 animate-slideUp">
     <div className="lg:col-span-3 space-y-6">
       <GlassCard className="p-6 md:p-8 border-indigo-500/20">
@@ -289,54 +456,153 @@ const SetupView = ({ challenges, students, selectedChallenge, setSelectedChallen
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-2 mr-2 uppercase tracking-widest">عدد الجولات</label>
-              <div className="flex items-center gap-3 bg-slate-950/50 border-2 border-slate-800 rounded-2xl p-2 px-3 shadow-inner">
-                <button onClick={() => setRounds(Math.max(1, rounds - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaTimes className="rotate-45 text-xs" /></button>
-                <input 
-                  type="number"
-                  value={rounds}
-                  onChange={(e) => setRounds(parseInt(e.target.value) || 1)}
-                  className="flex-1 bg-transparent text-center font-black text-2xl outline-none"
-                />
-                <button onClick={() => setRounds(rounds + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-2 mr-2 uppercase tracking-widest">نظام الاختيار</label>
-              <div className="flex p-1 bg-slate-950/50 border-2 border-slate-800 rounded-2xl">
-                <button 
-                  onClick={() => setGameMode("random")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-500 ${gameMode === "random" ? "bg-indigo-600 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"}`}
-                >
-                  <FaDice /> عشوائي
-                </button>
-                <button 
-                  onClick={() => setGameMode("manual")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-500 ${gameMode === "manual" ? "bg-indigo-600 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"}`}
-                >
-                  <FaUserFriends /> يدوي
-                </button>
-              </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 mb-2 mr-2 uppercase tracking-widest">نوع التحدي</label>
+            <div className="flex p-1 bg-slate-950/50 border-2 border-slate-800 rounded-2xl">
+              <button 
+                onClick={() => setChallengeType("classroom")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-500 ${challengeType === "classroom" ? "bg-indigo-600 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"}`}
+              >
+                <FaChalkboardTeacher /> تحدي جماعي للفصل
+              </button>
+              <button 
+                onClick={() => setChallengeType("individual")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-500 ${challengeType === "individual" ? "bg-indigo-600 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"}`}
+              >
+                <FaUserFriends /> تكليف فردي للطلاب
+              </button>
             </div>
           </div>
 
-          <button 
-            onClick={onStart}
-            disabled={!selectedChallenge}
-            className="w-full relative group disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl blur opacity-30 group-hover:opacity-100 transition duration-1000 animate-pulse"></div>
-            <div className="relative py-5 bg-indigo-600 rounded-2xl font-black text-xl shadow-2xl flex items-center justify-center gap-3 group-hover:bg-indigo-500 transition-all active:scale-95">
-              <FaPlay /> ابدأ المسابقة الآن
-            </div>
-          </button>
+           {challengeType === "classroom" ? (
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fadeIn">
+               <div>
+                 <label className="block text-xs font-bold text-slate-500 mb-2 mr-2 uppercase tracking-widest">إجمالي الأسئلة (للجميع)</label>
+                 <div className="flex items-center gap-3 bg-slate-950/50 border-2 border-slate-800 rounded-2xl p-2 px-3 shadow-inner">
+                   <button onClick={() => setRounds(Math.max(1, rounds - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaTimes className="rotate-45 text-xs" /></button>
+                   <input 
+                     type="number"
+                     value={rounds}
+                     onChange={(e) => setRounds(parseInt(e.target.value) || 1)}
+                     className="flex-1 bg-transparent text-center font-black text-2xl outline-none"
+                   />
+                   <button onClick={() => setRounds(rounds + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
+                 </div>
+               </div>
+               <div>
+                 <label className="block text-xs font-bold text-slate-500 mb-2 mr-2 uppercase tracking-widest">الأسئلة لكل طالب</label>
+                 <div className="flex items-center gap-3 bg-slate-950/50 border-2 border-slate-800 rounded-2xl p-2 px-3 shadow-inner">
+                   <button onClick={() => setQuestionsPerStudent(Math.max(1, questionsPerStudent - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaTimes className="rotate-45 text-xs" /></button>
+                   <input 
+                     type="number"
+                     value={questionsPerStudent}
+                     onChange={(e) => setQuestionsPerStudent(parseInt(e.target.value) || 1)}
+                     className="flex-1 bg-transparent text-center font-black text-2xl outline-none"
+                   />
+                   <button onClick={() => setQuestionsPerStudent(questionsPerStudent + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
+                 </div>
+               </div>
+               <div>
+                 <label className="block text-xs font-bold text-slate-500 mb-2 mr-2 uppercase tracking-widest">نظام الاختيار</label>
+                 <div className="flex p-1 bg-slate-950/50 border-2 border-slate-800 rounded-2xl h-[56px]">
+                   <button 
+                     onClick={() => setGameMode("random")}
+                     className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-500 ${gameMode === "random" ? "bg-indigo-600 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"}`}
+                   >
+                     <FaDice /> عشوائي
+                   </button>
+                   <button 
+                     onClick={() => setGameMode("manual")}
+                     className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-500 ${gameMode === "manual" ? "bg-indigo-600 text-white shadow-lg" : "text-slate-500 hover:text-slate-300"}`}
+                   >
+                     <FaUserFriends /> يدوي
+                   </button>
+                 </div>
+               </div>
+             </div>
+          ) : (
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn bg-indigo-900/10 p-4 rounded-2xl border border-indigo-500/20">
+                <div>
+                  <label className="block text-xs font-bold text-indigo-300 mb-2 mr-2 uppercase tracking-widest">عدد الأسئلة المطلوبة</label>
+                  <div className="flex items-center gap-3 bg-slate-950/50 border-2 border-indigo-500/30 rounded-2xl p-2 px-3 shadow-inner">
+                    <button onClick={() => setQuestionsCount(Math.max(1, questionsCount - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaTimes className="rotate-45 text-xs" /></button>
+                    <input 
+                      type="number"
+                      value={questionsCount}
+                      onChange={(e) => setQuestionsCount(parseInt(e.target.value) || 1)}
+                      className="flex-1 bg-transparent text-center font-black text-2xl outline-none"
+                    />
+                    <button onClick={() => setQuestionsCount(questionsCount + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-indigo-300 mb-2 mr-2 uppercase tracking-widest">عدد المحاولات المسموحة</label>
+                  <div className="flex items-center gap-3 bg-slate-950/50 border-2 border-indigo-500/30 rounded-2xl p-2 px-3 shadow-inner">
+                    <button onClick={() => setAttemptsCount(Math.max(1, attemptsCount - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaTimes className="rotate-45 text-xs" /></button>
+                    <input 
+                      type="number"
+                      value={attemptsCount}
+                      onChange={(e) => setAttemptsCount(parseInt(e.target.value) || 1)}
+                      className="flex-1 bg-transparent text-center font-black text-2xl outline-none"
+                    />
+                    <button onClick={() => setAttemptsCount(attemptsCount + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
+                  </div>
+                </div>
+             </div>
+          )}
+
+          {challengeType === "classroom" ? (
+             <button 
+               onClick={onStart}
+               disabled={!selectedChallenge}
+               className="w-full relative group disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               <div className="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl blur opacity-30 group-hover:opacity-100 transition duration-1000 animate-pulse"></div>
+               <div className="relative py-5 bg-indigo-600 rounded-2xl font-black text-xl shadow-2xl flex items-center justify-center gap-3 group-hover:bg-indigo-500 transition-all active:scale-95">
+                 <FaPlay /> ابدأ المسابقة الآن
+               </div>
+             </button>
+          ) : (
+             <button 
+               onClick={onAssign}
+               disabled={!selectedChallenge || assigning}
+               className="w-full relative group disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               <div className="absolute -inset-1 bg-gradient-to-r from-teal-500 to-emerald-600 rounded-2xl blur opacity-30 group-hover:opacity-100 transition duration-1000 animate-pulse"></div>
+               <div className="relative py-5 bg-teal-600 rounded-2xl font-black text-xl shadow-2xl flex items-center justify-center gap-3 group-hover:bg-teal-500 transition-all active:scale-95">
+                 {assigning ? <span className="animate-spin">⌛</span> : <FaCheck />}
+                 تكليف جميع طلاب الفصل
+               </div>
+             </button>
+          )}
         </div>
       </GlassCard>
     </div>
 
     <div className="lg:col-span-2 space-y-4">
+      {challengeType === "individual" && sectionsList.length > 1 && (
+         <div className="bg-indigo-900/10 border border-indigo-500/20 rounded-2xl p-4 mb-4">
+           <label className="block text-xs font-bold text-indigo-300 mb-3 mr-2 uppercase tracking-widest">توسيع التكليف للفصول الأخرى</label>
+           <div className="flex flex-wrap gap-2">
+             {sectionsList.map(sec => {
+               const key = `${sec.grade_level}|${sec.section}`;
+               const isSelected = selectedSections.includes(key);
+               const isCurrent = key === `${gradeId}|${sectionId}`;
+               return (
+                 <button
+                   key={key}
+                   disabled={isCurrent} // Always selected
+                   onClick={() => toggleSection(key)}
+                   className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isSelected ? "bg-indigo-600 border-indigo-500 text-white" : "bg-slate-900/50 border-white/10 text-slate-400 hover:border-indigo-500/50"}`}
+                 >
+                   {sec.grade_level} - {sec.section} {isCurrent && "(الفصل الحالي)"}
+                 </button>
+               );
+             })}
+           </div>
+         </div>
+      )}
+
       <div className="flex items-center justify-between mb-6 px-2">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-slate-900 border border-white/10 flex items-center justify-center font-black text-slate-300 shadow-inner">
@@ -346,10 +612,27 @@ const SetupView = ({ challenges, students, selectedChallenge, setSelectedChallen
              الطلاب <FaUserFriends className="text-cyan-400" />
           </h3>
         </div>
+        {challengeType === "individual" && (
+          <button 
+             onClick={() => setSelectedStudentIds(selectedStudentIds.length === students.length ? [] : students.map(s => s.id))}
+             className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors bg-indigo-500/10 px-3 py-1 rounded-md"
+          >
+            {selectedStudentIds.length === students.length ? "إلغاء تحديد الكل" : "تحديد الكل"}
+          </button>
+        )}
       </div>
       <div className="grid grid-cols-1 gap-3 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
         {students.map((s, idx) => (
-          <div key={s.id} className="group flex items-center gap-5 p-4 bg-slate-900/40 border border-white/5 rounded-3xl hover:bg-slate-800/60 hover:border-cyan-500/30 transition-all duration-300 animate-slideDown">
+          <div 
+             key={s.id} 
+             onClick={() => challengeType === "individual" && toggleStudent(s.id)}
+             className={`group flex items-center gap-5 p-4 bg-slate-900/40 border rounded-3xl transition-all duration-300 animate-slideDown ${challengeType === "individual" ? "cursor-pointer hover:bg-slate-800/60" : ""} ${challengeType === "individual" && selectedStudentIds.includes(s.id) ? "border-indigo-500 bg-indigo-900/20" : "border-white/5"}`}
+          >
+            {challengeType === "individual" && (
+               <div className={`w-5 h-5 shrink-0 rounded flex items-center justify-center border transition-colors ${selectedStudentIds.includes(s.id) ? "bg-indigo-600 border-indigo-500" : "bg-slate-800 border-white/20 group-hover:border-indigo-500/50"}`}>
+                 {selectedStudentIds.includes(s.id) && <FaCheck className="text-white text-[10px]" />}
+               </div>
+            )}
             <div className="relative shrink-0">
               <img src={s.image_url || s.photo || s.imageUrl || "/images/1.webp"} className="w-14 h-14 rounded-full object-cover ring-2 ring-white/10 group-hover:ring-cyan-500 transition-all shadow-xl" alt="" />
               <div className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[9px] font-black px-2 py-0.5 rounded-lg border border-white/20 shadow-xl">
@@ -367,9 +650,10 @@ const SetupView = ({ challenges, students, selectedChallenge, setSelectedChallen
       </div>
     </div>
   </div>
-);
+  );
+};
 
-const ManagerView = ({ gradeId, teacherId, onClose, onSwitchToImporter, fetchChallenges, setView, setSelectedChallenge }) => {
+const ManagerView = ({ gradeId, teacherId, onClose, onSwitchToImporter, fetchChallenges, setView, setSelectedChallenge, handleDialog, dialogConfig, setDialogConfig }) => {
   const [challenges, setChallenges] = useState([]);
 
   useEffect(() => {
@@ -385,12 +669,13 @@ const ManagerView = ({ gradeId, teacherId, onClose, onSwitchToImporter, fetchCha
     if (!error) setChallenges(data || []);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("حذف هذه المسابقة وكل أسئلتها؟ هذه الخطوة لا يمكن التراجع عنها.")) {
+  const handleDelete = (id) => {
+    handleDialog("تأكيد الحذف", "حذف هذه المسابقة وكل أسئلتها؟ هذه الخطوة لا يمكن التراجع عنها.", "confirm", async () => {
+      setDialogConfig(prev => ({...prev, show: false}));
       await supabase.from("challenges").delete().eq("id", id);
       refresh();
       fetchChallenges(teacherId);
-    }
+    });
   };
 
   return (
@@ -461,7 +746,7 @@ const ManagerView = ({ gradeId, teacherId, onClose, onSwitchToImporter, fetchCha
   );
 };
 
-const EditorView = ({ challenge, gradeId, teacherId, onClose }) => {
+const EditorView = ({ challenge, gradeId, teacherId, onClose, handleDialog }) => {
   const [subjectName, setSubjectName] = useState(challenge?.subject_name || "");
   const [lessonName, setLessonName] = useState(challenge?.lesson_name || "");
   const [questions, setQuestions] = useState(challenge?.questions || []);
@@ -478,7 +763,7 @@ const EditorView = ({ challenge, gradeId, teacherId, onClose }) => {
 
   const handleSave = async () => {
     if (!subjectName || !lessonName || questions.length === 0) {
-      alert("يرجى إكمال البيانات الأساسية وإضافة سؤال واحد على الأقل");
+      handleDialog("تنبيه", "يرجى إكمال البيانات الأساسية وإضافة سؤال واحد على الأقل", "warning");
       return;
     }
     setIsSaving(true);
@@ -500,9 +785,9 @@ const EditorView = ({ challenge, gradeId, teacherId, onClose }) => {
     }
 
     if (!error) {
-      alert("تم الحفظ بنجاح");
+      handleDialog("نجاح", "تم الحفظ بنجاح", "success");
       onClose();
-    } else alert("حدث خطأ تقني أثناء الحفظ");
+    } else handleDialog("خطأ", "حدث خطأ تقني أثناء الحفظ", "error");
     setIsSaving(false);
   };
 
@@ -670,13 +955,20 @@ const EditorView = ({ challenge, gradeId, teacherId, onClose }) => {
   );
 };
 
-const GameView = ({ challenge, students, rounds, mode, teacherId, sectionId, gradeId, onClose }) => {
+const GameView = ({ challenge, students, rounds, questionsPerStudent, mode, teacherId, sectionId, gradeId, onClose }) => {
   const [currentRound, setCurrentRound] = useState(1);
   const [gameState, setGameState] = useState("picking");
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [scoreHistory, setScoreHistory] = useState([]);
   const [timeLeft, setTimeLeft] = useState(60);
+
+  const studentQuestionCount = scoreHistory.reduce((acc, h) => {
+    acc[h.student.id] = (acc[h.student.id] || 0) + 1;
+    return acc;
+  }, {});
+
+  const eligibleStudents = students.filter(s => (studentQuestionCount[s.id] || 0) < questionsPerStudent);
 
   useEffect(() => {
     let timer;
@@ -782,9 +1074,18 @@ const GameView = ({ challenge, students, rounds, mode, teacherId, sectionId, gra
 
       {gameState === "picking" && (
         <div className="flex-1 flex flex-col items-center justify-center animate-slideUp">
-          {mode === "random" ? (
+          {eligibleStudents.length === 0 ? (
+             <div className="text-center py-20 animate-fadeIn">
+               <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6 ring-4 ring-emerald-500/30">
+                 <FaCheck className="text-5xl text-emerald-500" />
+               </div>
+               <h3 className="text-3xl font-black text-white mb-4">تم اكتمال أسئلة جميع الطلاب!</h3>
+               <p className="text-slate-400 mb-8 font-bold">لقد أجاب كل طالب على الحد الأقصى من الأسئلة المخصصة له.</p>
+               <button onClick={finishGame} className="px-10 py-4 bg-indigo-600 hover:bg-indigo-500 shadow-[0_0_20px_rgba(79,70,229,0.3)] rounded-2xl text-white font-black text-xl transition-all active:scale-95">عرض النتائج الشاملة</button>
+             </div>
+          ) : mode === "random" ? (
             <div className="w-full">
-              <WheelOfFortune students={students} onResult={onStudentSelected} />
+              <WheelOfFortune students={eligibleStudents} onResult={onStudentSelected} />
             </div>
           ) : (
             <div className="w-full space-y-12 py-8">
@@ -793,7 +1094,7 @@ const GameView = ({ challenge, students, rounds, mode, teacherId, sectionId, gra
                  <p className="text-slate-500 text-sm font-bold uppercase tracking-widest opacity-60 line-after">اضغط على صورة الطالب لبدء السؤال</p>
                </div>
                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 px-4">
-                  {students.map((s, i) => (
+                  {eligibleStudents.map((s, i) => (
                     <button 
                       key={s.id} 
                       onClick={() => onStudentSelected(s)}
@@ -964,28 +1265,38 @@ const HistoryView = ({ gradeId, sectionId, teacherId, onClose }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetch = async () => {
+    fetchHistory();
+  }, [gradeId, sectionId, teacherId]);
+
+  const fetchHistory = async () => {
+    setLoading(true);
+    try {
       if (!teacherId || !gradeId) return;
       
-      const { data, error } = await supabase
+      let query = supabase
         .from("challenge_history")
-        .select("*, student:student_id(name, image_url, image, photo, photo_url)")
+        .select("*, student:student_id(name, photo)")
         .eq("grade_id", gradeId)
-        .eq("teacher_id", teacherId)
-        .order("created_at", { ascending: false });
+        .eq("teacher_id", teacherId);
+      
+      if (sectionId) {
+        query = query.eq("section_id", sectionId);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
       
       if (!error && data) {
         const aggregated = {};
         data.forEach(h => {
           const sId = h.student_id;
-          if (!sId) return;
+          if (!sId || !h.student) return;
 
-          // Standardize student info extraction
-          const sName = h.student?.name || "طالب مجهول";
-          const sPhoto = h.student?.image_url || h.student?.photo || h.student?.image || h.student?.photo_url || "/images/1.webp";
+          const sName = h.student.name;
+          const sPhoto = h.student.photo || "/images/1.webp";
 
           if (!aggregated[sId]) {
             aggregated[sId] = { 
+              id: sId,
               name: sName, 
               photo: sPhoto, 
               total: 0, 
@@ -996,98 +1307,360 @@ const HistoryView = ({ gradeId, sectionId, teacherId, onClose }) => {
           if (h.is_correct) aggregated[sId].correct += 1;
         });
         
-        // Convert to array and sort by correct answers
-        const sorted = Object.values(aggregated).sort((a,b) => b.correct - a.correct);
+        const sorted = Object.values(aggregated).sort((a,b) => b.correct - a.correct || a.name.localeCompare(b.name));
         setHistory(sorted);
       } else if (error) {
-        console.error("Hall of Fame fetch error:", error);
+        console.error("Leaderboard fetch error:", error);
       }
-      setLoading(false);
-    };
-    fetch();
-  }, [gradeId, teacherId]);
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  const topThree = history.slice(0, 3);
+  const theRest = history.slice(3);
 
   return (
-    <div className="animate-slideUp space-y-10 pb-12">
-       <div className="flex items-center gap-6 bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 shadow-2xl">
-         <button onClick={onClose} className="w-14 h-14 shrink-0 flex items-center justify-center bg-slate-950 rounded-2xl text-slate-400 hover:text-white transition-all border border-white/5 shadow-xl">
-           <FaArrowRight />
-         </button>
-         <div>
-           <h2 className="text-3xl font-black text-white">لوحة الشرف</h2>
-           <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">أعلى الطلاب أداءً في جميع المسابقات</p>
-         </div>
-       </div>
-
-       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          <div className="lg:col-span-3">
-            <GlassCard className="p-0 border-indigo-500/20 shadow-2xl">
-               <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-right border-collapse min-w-[600px]">
-                   <thead className="bg-[#0f172a] text-slate-600 text-[10px] font-black uppercase tracking-widest border-b border-white/5">
-                      <tr>
-                         <th className="p-8">اسم الطالب</th>
-                         <th className="p-8 text-center">الإجابات</th>
-                         <th className="p-8 text-center">التقدم</th>
-                         <th className="p-8"></th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-white/5 bg-slate-900/30">
-                      {history.map((h, i) => (
-                        <tr key={i} className="group hover:bg-white/[0.02] transition-colors animate-slideUp" style={{animationDelay: `${i * 50}ms`}}>
-                          <td className="p-6">
-                             <div className="flex items-center gap-4">
-                                <div className="relative">
-                                  <img src={h.photo || "/images/1.webp"} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/10" alt="" />
-                                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-950 rounded-md flex items-center justify-center text-[8px] font-black border border-white/5 shadow-lg">
-                                    {i + 1}
-                                  </div>
-                                </div>
-                                <span className="font-bold text-lg group-hover:text-indigo-400 transition-colors uppercase tracking-tight">{h.name}</span>
-                             </div>
-                          </td>
-                          <td className="p-6 text-center text-xl font-black text-emerald-400">{h.correct}</td>
-                          <td className="p-6">
-                             <div className="flex flex-col items-center gap-2">
-                                <div className="w-32 h-2 bg-slate-950 rounded-full overflow-hidden border border-white/10 relative shadow-inner">
-                                   <div className="h-full bg-gradient-to-r from-indigo-600 to-cyan-500 rounded-full" style={{width: `${(h.correct/h.total)*100}%`}}></div>
-                                </div>
-                                <span className="text-[8px] font-black text-indigo-400">{Math.round((h.correct/h.total)*100)}% نجاح</span>
-                             </div>
-                          </td>
-                          <td className="p-6">
-                            <div className="flex justify-center gap-2">
-                              {i === 0 && <span className="text-xl">🏆</span>}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                   </tbody>
-                </table>
-               </div>
-            </GlassCard>
-          </div>
-
-          <div className="space-y-6">
-             <div className="p-8 bg-indigo-600/10 border border-indigo-500/20 rounded-[2.5rem] shadow-2xl">
-                <h4 className="text-md font-black text-indigo-400 mb-4 flex items-center gap-2">
-                  <FaAward /> إحصائيات
-                </h4>
-                <div className="space-y-6">
-                   <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-slate-600 uppercase mb-1">إجمالي الطلاب</span>
-                      <span className="text-2xl font-black text-white">{history.length}</span>
-                   </div>
-                   <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-slate-600 uppercase mb-1">الأداء العام</span>
-                      <span className="text-2xl font-black text-cyan-400">
-                        {history.length > 0 ? Math.round(history.reduce((acc, curr) => acc + (curr.correct/curr.total), 0) / history.length * 100) : 0}%
-                      </span>
-                   </div>
-                </div>
+    <div className="animate-fadeIn space-y-10 pb-20">
+       <div className="flex flex-col md:flex-row justify-between items-center bg-gradient-to-r from-slate-950 to-slate-900 p-8 md:p-10 rounded-[2.5rem] border border-white/10 shadow-2xl backdrop-blur-xl gap-8">
+          <div className="flex items-center gap-6">
+             <div className="w-16 h-16 bg-amber-500/20 rounded-2xl flex items-center justify-center border border-amber-500/30 shadow-inner">
+                <FaAward className="text-3xl text-amber-400" />
+             </div>
+             <div>
+                <h2 className="text-3xl font-black text-white tracking-tight">لوحة الشرف</h2>
+                <p className="text-slate-400 text-sm font-bold mt-1 uppercase tracking-widest">أبطال المسابقات التفاعلية</p>
              </div>
           </div>
+          <button 
+             onClick={onClose}
+             className="group flex items-center gap-3 px-8 py-3.5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl border border-white/10 transition-all font-black text-sm shadow-xl"
+          >
+             <FaArrowRight className="group-hover:-translate-x-1 transition-transform" />
+             عودة للملخص
+          </button>
        </div>
+
+       {loading ? (
+          <div className="flex flex-col items-center justify-center py-32 gap-6">
+             <div className="w-16 h-16 border-4 border-amber-500/10 border-t-amber-500 rounded-full animate-spin"></div>
+             <p className="text-slate-500 font-black tracking-widest animate-pulse uppercase">جاري جلب الأبطال...</p>
+          </div>
+       ) : history.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-40 bg-slate-900/40 rounded-[3rem] border-2 border-dashed border-white/5 opacity-50 text-center">
+             <FaAward className="text-7xl text-slate-700 mb-6" />
+             <p className="text-2xl font-black text-white mb-2">لا يوجد متصدرون حالياً</p>
+          </div>
+       ) : (
+          <div className="space-y-12">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end max-w-5xl mx-auto px-4">
+                {topThree[1] && (
+                   <div className="order-2 md:order-1 animate-slideUp" style={{animationDelay: '100ms'}}>
+                      <PodiumCard student={topThree[1]} rank={2} color="slate-400" bgColor="bg-slate-500/10" borderColor="border-slate-500/30" />
+                   </div>
+                )}
+                
+                {topThree[0] && (
+                   <div className="order-1 md:order-2 scale-110 relative z-10 animate-slideUp" style={{animationDelay: '0ms'}}>
+                      <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                         <FaAward className="text-5xl text-yellow-500 animate-bounce" />
+                      </div>
+                      <PodiumCard student={topThree[0]} rank={1} color="yellow-500" bgColor="bg-amber-500/10" borderColor="border-amber-500/40" />
+                   </div>
+                )}
+
+                {topThree[2] && (
+                   <div className="order-3 animate-slideUp" style={{animationDelay: '200ms'}}>
+                      <PodiumCard student={topThree[2]} rank={3} color="orange-400" bgColor="bg-orange-500/10" borderColor="border-orange-500/30" />
+                   </div>
+                )}
+             </div>
+
+             {theRest.length > 0 && (
+                <div className="animate-fadeIn" style={{animationDelay: '400ms'}}>
+                   <GlassCard className="border-white/5 shadow-2xl overflow-hidden">
+                      <div className="overflow-x-auto custom-scrollbar">
+                         <table className="w-full text-right border-collapse">
+                            <thead className="bg-slate-950/80 text-slate-500 text-[10px] font-black uppercase tracking-widest border-b border-white/5">
+                               <tr>
+                                  <th className="p-8">الترتيب</th>
+                                  <th className="p-8">البطل</th>
+                                  <th className="p-8 text-center">إجابات صحيحة</th>
+                                  <th className="p-8 text-center">نسبة النجاح</th>
+                               </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5 bg-slate-900/20">
+                               {theRest.map((h, i) => (
+                                  <tr key={h.id} className="group hover:bg-white/[0.02] transition-all duration-500">
+                                     <td className="p-8">
+                                        <span className="w-10 h-10 flex items-center justify-center bg-slate-950 rounded-xl border border-white/5 font-black text-slate-500 group-hover:border-indigo-500/30 group-hover:text-indigo-400 transition-all">
+                                           {i + 4}
+                                        </span>
+                                     </td>
+                                     <td className="p-8">
+                                        <div className="flex items-center gap-5">
+                                           <img 
+                                              src={h.photo || "/images/1.webp"} 
+                                              className="w-12 h-12 rounded-2xl object-cover ring-2 ring-white/5 group-hover:ring-indigo-500/30 transition-all" 
+                                              alt={h.name} 
+                                           />
+                                           <span className="text-xl font-black text-white group-hover:text-indigo-400 transition-colors tracking-tight">{h.name}</span>
+                                        </div>
+                                     </td>
+                                     <td className="p-8 text-center">
+                                        <span className="text-2xl font-black text-emerald-400 tabular-nums">{h.correct}</span>
+                                     </td>
+                                     <td className="p-8">
+                                        <div className="flex flex-col items-center gap-2">
+                                           <div className="w-32 h-2 bg-slate-950 rounded-full overflow-hidden border border-white/5 shadow-inner">
+                                              <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400" style={{width: `${(h.correct / h.total) * 100}%`}}></div>
+                                           </div>
+                                           <span className="text-[10px] font-black text-slate-500 uppercase">{Math.round((h.correct / h.total) * 100)}% دقة</span>
+                                        </div>
+                                     </td>
+                                  </tr>
+                               ))}
+                            </tbody>
+                         </table>
+                      </div>
+                   </GlassCard>
+                </div>
+             )}
+          </div>
+       )}
+    </div>
+  );
+};
+
+const PodiumCard = ({ student, rank, color, bgColor, borderColor }) => (
+   <div className={`${bgColor} ${borderColor} border-2 p-8 rounded-[3rem] text-center relative shadow-2xl transition-all duration-700 hover:-translate-y-2`}>
+      <div className={`absolute -top-6 left-1/2 -translate-x-1/2 w-12 h-12 rounded-2xl flex items-center justify-center bg-slate-950 border-2 ${borderColor} shadow-xl z-20`}>
+         <span className={`text-xl font-black text-${color}`}>#{rank}</span>
+      </div>
+      
+      <div className="relative mb-6">
+         <div className={`absolute -inset-2 bg-${color} rounded-[2.5rem] blur-xl opacity-20`}></div>
+         <img 
+            src={student.photo || "/images/1.webp"} 
+            className={`relative w-28 h-28 mx-auto rounded-[2rem] object-cover border-4 ${borderColor} shadow-2xl`} 
+            alt={student.name} 
+         />
+      </div>
+      
+      <h3 className="text-2xl font-black text-white mb-2 truncate px-2">{student.name}</h3>
+      <div className="flex items-center justify-center gap-3">
+         <div className="bg-slate-950/80 px-4 py-2 rounded-2xl border border-white/5">
+            <span className={`block text-2xl font-black text-${color}`}>{student.correct}</span>
+            <span className="block text-[8px] font-black text-slate-500 uppercase tracking-tighter">صح</span>
+         </div>
+         <div className="bg-slate-950/80 px-4 py-2 rounded-2xl border border-white/5">
+            <span className="block text-2xl font-black text-white">{Math.round((student.correct / student.total) * 100)}%</span>
+            <span className="block text-[8px] font-black text-slate-500 uppercase tracking-tighter">دقة</span>
+         </div>
+      </div>
+   </div>
+);
+
+const AssignmentsView = ({ gradeId, teacherId, onClose, handleDialog, dialogConfig, setDialogConfig }) => {
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState(null);
+
+  useEffect(() => {
+    fetchAssignments();
+  }, [gradeId, teacherId]);
+
+  const fetchAssignments = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('id, name, section, photo, grades')
+        .eq('teacher_id', teacherId)
+        .eq('grade_level', gradeId);
+
+      if (!error && data) {
+        const assignmentMap = {};
+
+        data.forEach(student => {
+          const assigned = student.grades?.assigned_challenges || [];
+          assigned.forEach(a => {
+            if (!assignmentMap[a.id]) {
+               assignmentMap[a.id] = {
+                 ...a,
+                 students: []
+               };
+            }
+            assignmentMap[a.id].students.push(student);
+          });
+        });
+
+        setAssignments(Object.values(assignmentMap).sort((a, b) => new Date(b.assigned_at) - new Date(a.assigned_at)));
+      }
+    } catch (err) {
+      console.error("Error fetching assignments:", err);
+    }
+    setLoading(false);
+  };
+
+  const handleDelete = (assignmentId) => {
+    handleDialog("تأكيد الحذف", "حذف هذا التكليف من جميع الطلاب المعينين لهم؟ لا يمكن التراجع عن هذه الخطوة.", "confirm", async () => {
+       setDialogConfig(prev => ({...prev, show: false}));
+       const targetAssignment = assignments.find(a => a.id === assignmentId);
+       if (!targetAssignment) return;
+
+       for (const student of targetAssignment.students) {
+         const { data, error } = await supabase.from('students').select('grades').eq('id', student.id).single();
+         if (!error && data) {
+           const currentGrades = data.grades || {};
+           const assignedChallenges = currentGrades.assigned_challenges || [];
+           const newAssigned = assignedChallenges.filter(a => a.id !== assignmentId);
+           await supabase.from('students').update({ grades: { ...currentGrades, assigned_challenges: newAssigned } }).eq('id', student.id);
+         }
+       }
+       fetchAssignments();
+    });
+  };
+
+  return (
+    <div className="space-y-8 animate-fadeIn pb-24">
+       <div className="flex flex-col md:flex-row justify-between items-center bg-gradient-to-r from-slate-950 to-slate-900 p-8 md:p-10 rounded-[2.5rem] border border-white/10 shadow-2xl backdrop-blur-xl gap-8">
+          <div className="flex items-center gap-6">
+             <div className="w-16 h-16 bg-indigo-600/20 rounded-2xl flex items-center justify-center border border-indigo-500/30 shadow-inner">
+                <FaTasks className="text-3xl text-indigo-400" />
+             </div>
+             <div>
+                <h2 className="text-3xl font-black text-white tracking-tight">إدارة التكاليف</h2>
+                <p className="text-slate-400 text-sm font-bold mt-1">متابعة دقيقة لنتائج الطلاب في التحديات الفردية</p>
+             </div>
+          </div>
+          <button 
+             onClick={onClose}
+             className="group flex items-center gap-3 px-8 py-3.5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl border border-white/10 transition-all font-black text-sm shadow-xl"
+          >
+             <FaArrowRight className="group-hover:-translate-x-1 transition-transform" />
+             عودة للملخص
+          </button>
+       </div>
+
+       {loading ? (
+          <div className="flex flex-col items-center justify-center py-32 gap-6">
+             <div className="w-16 h-16 border-4 border-indigo-500/10 border-t-indigo-500 rounded-full animate-spin"></div>
+             <p className="text-slate-500 font-black tracking-widest animate-pulse">جاري جلب النتائج والبيانات...</p>
+          </div>
+       ) : assignments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-40 bg-slate-900/40 rounded-[3rem] border-2 border-dashed border-white/5 opacity-50 text-center">
+             <FaTasks className="text-7xl text-slate-700 mb-6" />
+             <p className="text-2xl font-black text-white">لا توجد تكاليف حالياً</p>
+          </div>
+       ) : (
+          <div className="grid grid-cols-1 gap-8">
+             {assignments.map((a, idx) => {
+                const completedCount = a.students.filter(s => {
+                   const challenge = s.grades?.assigned_challenges?.find(sc => sc.id === a.id);
+                   return challenge && challenge.attempts_used > 0;
+                }).length;
+
+                return (
+                   <div key={a.id} className={`group bg-slate-900/40 rounded-[2.5rem] border transition-all duration-700 overflow-hidden ${expandedId === a.id ? 'ring-2 ring-indigo-500/50 border-indigo-500/30 bg-slate-900/90 shadow-[0_0_50px_rgba(79,70,229,0.15)]' : 'border-white/5 hover:border-white/10 hover:bg-slate-900/60'}`} style={{animationDelay: `${idx * 100}ms`}}>
+                      <div 
+                         className="p-8 md:p-10 cursor-pointer flex flex-col md:flex-row justify-between items-start md:items-center gap-8"
+                         onClick={() => setExpandedId(expandedId === a.id ? null : a.id)}
+                      >
+                         <div className="flex items-center gap-6">
+                            <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-700 rounded-[2rem] flex items-center justify-center text-white text-3xl shadow-2xl group-hover:rotate-6 transition-transform">
+                               <FaGamepad />
+                            </div>
+                            <div>
+                               <div className="flex items-center gap-3 mb-1">
+                                  <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 text-[10px] font-black rounded-full border border-indigo-500/20 uppercase tracking-tighter">مسابقة تفاعلية</span>
+                                  <span className="text-slate-600 font-bold text-xs">• {a.subject_name}</span>
+                               </div>
+                               <h3 className="text-2xl md:text-3xl font-black text-white group-hover:text-indigo-400 transition-colors">"{a.lesson_name}"</h3>
+                               <div className="flex flex-wrap gap-5 mt-3 text-xs text-slate-500 font-bold">
+                                  <span className="flex items-center gap-2"><FaQuestionCircle className="text-indigo-500 text-sm" /> {a.questions_count} أسئلة</span>
+                                  <span className="flex items-center gap-2"><FaStopwatch className="text-amber-500" /> {a.attempts_allowed} محاولات</span>
+                                  <span className="flex items-center gap-2"><FaHistory className="text-blue-500" /> {new Date(a.assigned_at).toLocaleDateString('ar-SA')}</span>
+                               </div>
+                            </div>
+                         </div>
+
+                         <div className="flex items-center gap-4 self-end md:self-center">
+                            <div className="px-6 py-3 bg-slate-950/50 rounded-2xl border border-white/5 text-center min-w-[120px] shadow-inner">
+                               <span className="block text-[10px] text-slate-500 uppercase font-black mb-1">الإنجاز</span>
+                               <span className="block text-2xl font-black text-indigo-400">{completedCount} / {a.students.length}</span>
+                            </div>
+                            
+                            <button 
+                               onClick={(e) => { e.stopPropagation(); handleDelete(a.id); }}
+                               className="p-4 bg-rose-500/10 text-rose-500 hover:bg-rose-600 hover:text-white rounded-2xl border border-rose-500/20 transition-all shadow-lg active:scale-90"
+                            >
+                               <FaTrash />
+                            </button>
+
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center bg-white/5 border border-white/10 transition-transform duration-500 ${expandedId === a.id ? 'rotate-180 bg-indigo-500/20 border-indigo-500/30' : ''}`}>
+                               <FaArrowLeft className="-rotate-90 text-slate-500" />
+                            </div>
+                         </div>
+                      </div>
+
+                      {expandedId === a.id && (
+                         <div className="border-t border-white/10 bg-slate-950/40 p-8 md:p-12 animate-slideUp">
+                            <div className="mb-10 flex items-center justify-between">
+                               <h4 className="text-xl font-black text-white flex items-center gap-3">
+                                  <div className="w-2 h-8 bg-indigo-500 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>
+                                  نتائج الطلاب التفصيلية
+                               </h4>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                               {a.students.map(student => {
+                                  const challenge = student.grades?.assigned_challenges?.find(sc => sc.id === a.id);
+                                  const bestScore = challenge?.best_score ?? 0;
+                                  const used = challenge?.attempts_used || 0;
+                                  const isComplete = used > 0;
+                                  
+                                  return (
+                                     <div key={student.id} className={`relative bg-slate-900 border border-white/5 p-5 rounded-[2.5rem] flex items-center gap-5 hover:border-indigo-500/40 transition-all duration-500 shadow-xl ${isComplete ? 'ring-1 ring-indigo-500/20 bg-indigo-900/10' : ''}`}>
+                                        <div className="relative flex-shrink-0">
+                                           <img 
+                                              src={student.photo || '/images/1.webp'} 
+                                              alt={student.name} 
+                                              className={`w-16 h-16 rounded-full object-cover border-2 transition-all duration-500 ${isComplete ? 'border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.3)]' : 'border-slate-800 opacity-40 filter grayscale'}`} 
+                                           />
+                                           {isComplete && (
+                                              <div className="absolute -top-1 -right-1 bg-gradient-to-br from-yellow-400 to-amber-600 text-slate-950 text-[10px] font-black w-7 h-7 rounded-full flex items-center justify-center border-2 border-slate-900 shadow-2xl">
+                                                 {bestScore}
+                                              </div>
+                                           )}
+                                        </div>
+                                        <div className="flex-1 truncate text-right">
+                                           <h5 className="text-[14px] font-black text-white truncate mb-2">{student.name}</h5>
+                                           <div className="flex flex-col gap-1">
+                                              <div className="flex justify-between items-center text-[10px] font-bold">
+                                                 <span className="text-slate-500">المحاولات: <span className={used >= a.attempts_allowed ? 'text-rose-400' : 'text-indigo-400'}>{used}/{a.attempts_allowed}</span></span>
+                                                 <span className="text-slate-300">الدرجة: <span className="text-emerald-400">{bestScore}/{a.questions_count}</span></span>
+                                              </div>
+                                              <div className="w-full h-1.5 bg-slate-800 rounded-full mt-1 overflow-hidden shadow-inner">
+                                                 <div 
+                                                    className={`h-full transition-all duration-1000 ${isComplete ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]' : 'bg-slate-700'}`} 
+                                                    style={{width: `${(used / a.attempts_allowed) * 100}%`}}
+                                                 ></div>
+                                              </div>
+                                           </div>
+                                        </div>
+                                     </div>
+                                  );
+                               })}
+                            </div>
+                         </div>
+                      )}
+                   </div>
+                );
+             })}
+          </div>
+       )}
     </div>
   );
 };

@@ -18,6 +18,7 @@ import ReportGenerator from "./pages/ReportGenerator";
 import StudentPortfolio from "./pages/StudentPortfolio";
 import SectionPortfoliosViewer from "./pages/SectionPortfoliosViewer";
 import ChallengePage from "./pages/ChallengePage";
+import StudentChallengeGame from "./pages/StudentChallengeGame";
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -91,6 +92,12 @@ export default function App() {
             <Route 
               path="/student-portfolio/:studentId" 
               element={<StudentPortfolio />} 
+            />
+
+            {/* صفحة تحدي الطالب הפردية */}
+            <Route 
+              path="/student-challenge/:studentId/:assignmentId" 
+              element={<StudentChallengeGame />} 
             />
 
             {/* 2. صفحة المعلم (لعرض الملفات والموافقة على الحذف) */}

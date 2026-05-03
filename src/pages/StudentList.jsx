@@ -1,9 +1,7 @@
-// src/pages/StudentList.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient'; // تم تعديل هذا السطر
 import { FaUserCircle, FaPlus, FaSearch } from 'react-icons/fa';
-
 const StudentList = () => {
     const { gradeId, sectionId } = useParams();
     const [students, setStudents] = useState([]);

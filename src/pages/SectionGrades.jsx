@@ -218,6 +218,7 @@ const SectionGrades = () => {
   
   // === إضافة حالة نافذة المحادثات للمعلم ===
   const [showTeacherChat, setShowTeacherChat] = useState(false);
+  const [totalUnreadMessages, setTotalUnreadMessages] = useState(0);
   
   const gradeName = getGradeNameById(gradeId);
   const sectionName = getSectionNameById(sectionId);
@@ -459,6 +460,57 @@ const SectionGrades = () => {
 
   useEffect(() => {
     fetchDataFromSupabase();
+
+    // Fetch and listen for unread messages
+    let msgSubscription;
+    const setupUnreadListener = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const fetchUnread = async () => {
+        // First get student IDs for this section
+        const { data: sectionStudents } = await supabase
+          .from('students')
+          .select('id')
+          .eq('grade_level', gradeId)
+          .eq('section', sectionId)
+          .eq('teacher_id', user.id);
+        
+        const sIds = sectionStudents?.map(s => s.id) || [];
+        if (sIds.length === 0) {
+            setTotalUnreadMessages(0);
+            return;
+        }
+
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('teacher_id', user.id)
+          .eq('sender_type', 'student')
+          .eq('is_read', false)
+          .in('student_id', sIds);
+        setTotalUnreadMessages(count || 0);
+      };
+
+      fetchUnread();
+
+      msgSubscription = supabase.channel('teacher_unread_notifications')
+        .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'messages', 
+            filter: `teacher_id=eq.${user.id}` 
+        }, () => {
+            fetchUnread();
+        })
+        .subscribe();
+    };
+
+    setupUnreadListener();
+
+    return () => {
+      if (msgSubscription) supabase.removeChannel(msgSubscription);
+    };
   }, [gradeId, sectionId]);
 
   const handleTestCalculationMethodChange = async (method) => { 
@@ -1469,11 +1521,15 @@ const handleExportQRCodes = async () => {
 
 <button
   onClick={() => setShowTeacherChat(true)}
-  className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-blue-800 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md text-xs md:text-sm font-bold border border-blue-600"
+  className="relative flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-blue-800 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md text-xs md:text-sm font-bold border border-blue-600"
 >
   <FaCommentDots /> المحادثات
+  {totalUnreadMessages > 0 && (
+    <span className="absolute -top-2 -left-2 bg-red-600 text-white text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full border-2 border-gray-800 shadow-lg animate-pulse">
+      {totalUnreadMessages}
+    </span>
+  )}
 </button>
-{/* ============================= */}
 
 <button
   onClick={() => navigate(`/challenge/${gradeId}/${sectionId}`)}

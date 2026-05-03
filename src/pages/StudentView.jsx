@@ -31,7 +31,9 @@ import {
   FaDownload,
   FaBoxOpen,
   FaQrcode,
-  FaBriefcase
+  FaBriefcase,
+  FaGamepad,
+  FaPlay
 } from "react-icons/fa";
 
 import {
@@ -108,6 +110,9 @@ function StudentView() {
   const [announcements, setAnnouncements] = useState([]);
   
   const [rewardRequests, setRewardRequests] = useState([]);
+  const [showDailyGoals, setShowDailyGoals] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const [showChallengesPopup, setShowChallengesPopup] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [dialogTitle, setDialogTitle] = useState("");
   const [dialogMessage, setDialogMessage] = useState("");
@@ -180,8 +185,47 @@ function StudentView() {
   // ----------------------------------------------------------------------
   // 🔥🔥🔥 Visits Recording Logic (نظام تسجيل الزيارات) 🔥🔥🔥
   // ----------------------------------------------------------------------
-  useEffect(() => {
-    if (!studentDisplayedData || !studentDisplayedData.id) return;
+    useEffect(() => {
+        refreshStudentData();
+
+        // Listen for unread messages from teacher
+        let msgSub;
+        const setupMsgListener = async () => {
+            if (!studentId) return;
+            
+            const fetchUnread = async () => {
+                const { count } = await supabase
+                    .from('messages')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('student_id', studentId)
+                    .eq('sender_type', 'teacher')
+                    .eq('is_read', false);
+                setUnreadMessages(count || 0);
+            };
+
+            fetchUnread();
+
+            msgSub = supabase.channel(`student_unread_${studentId}`)
+                .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'messages', 
+                    filter: `student_id=eq.${studentId}` 
+                }, () => {
+                    fetchUnread();
+                })
+                .subscribe();
+        };
+
+        setupMsgListener();
+
+        return () => {
+            if (msgSub) supabase.removeChannel(msgSub);
+        };
+    }, [studentId]);
+
+    useEffect(() => {
+        if (!studentDisplayedData || !studentDisplayedData.id) return;
 
     const recordVisit = async () => {
         try {
@@ -678,6 +722,7 @@ function StudentView() {
           quranRecitation: ensureArraySize(periodGrades?.quranRecitation || periodGrades?.quran_recitation, 5),
           quranMemorization: ensureArraySize(periodGrades?.quranMemorization || periodGrades?.quran_memorization, 5),
           weeklyNotes: ensureArraySize(weeklyNotes, 20), 
+          assigned_challenges: student.rawGrades?.assigned_challenges || []
         },
         nationalId: student.national_id,
         parentPhone: student.parent_phone,
@@ -1042,6 +1087,7 @@ function StudentView() {
   const showSolutionsButton = viewConfig?.show_solutions_button !== false;
   const showPortfolioButton = viewConfig?.show_portfolio_button !== false;
   const showChatButton = viewConfig?.show_chat_button !== false;
+  const showChallengesButton = viewConfig?.show_challenges_button !== false;
 
   return (
     <div className="min-h-screen bg-gray-900 p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100 flex justify-center items-start" dir="rtl">
@@ -1548,8 +1594,10 @@ function StudentView() {
                 </div>
             </div>
 
+
+
             {/* 8. بوابة الخدمات والتواصل (حلول الكتاب، ملف الإنجاز، والمحادثة) */}
-            {(showSolutionsButton || showPortfolioButton || showChatButton) && (
+            {(showSolutionsButton || showPortfolioButton || showChatButton || showChallengesButton) && (
                 <div className="w-full mt-8 flex flex-col gap-4 p-6 bg-gray-800/60 rounded-3xl border border-gray-700 shadow-xl relative overflow-hidden">
                     {/* تأثير خلفية خفيف للحاوية */}
                     <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-900/10 via-transparent to-purple-900/10 pointer-events-none"></div>
@@ -1604,12 +1652,39 @@ function StudentView() {
                                 className="w-full p-5 bg-gradient-to-br from-indigo-800 to-indigo-900 rounded-2xl border border-indigo-600/50 shadow-lg hover:shadow-indigo-900/50 hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden flex flex-col items-center text-center gap-3"
                             >
                                 <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-                                <div className="bg-indigo-600/40 p-4 rounded-full border border-indigo-400/30">
+                                <div className="bg-indigo-600/40 p-4 rounded-full border border-indigo-400/30 relative">
                                     <FaCommentDots className="text-3xl text-indigo-200" />
+                                    {unreadMessages > 0 && (
+                                        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-indigo-900 shadow-lg animate-bounce">
+                                            {unreadMessages}
+                                        </span>
+                                    )}
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-bold text-white mb-1">تواصل مع المعلم</h3>
                                     <p className="text-indigo-300 text-xs md:text-sm">أرسل استفساراتك وناقش درجاتك</p>
+                                </div>
+                            </button>
+                        )}
+                        
+                        {/* زر التحديات الفردية */}
+                        {showChallengesButton && (
+                            <button
+                                onClick={() => setShowChallengesPopup(true)}
+                                className="w-full p-5 bg-gradient-to-br from-purple-800 to-purple-900 rounded-2xl border border-purple-600/50 shadow-lg hover:shadow-purple-900/50 hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden flex flex-col items-center text-center gap-3"
+                            >
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                                <div className="bg-purple-600/40 p-4 rounded-full border border-purple-400/30">
+                                    <FaGamepad className="text-3xl text-purple-200" />
+                                    {studentData.grades.assigned_challenges?.length > 0 && (
+                                        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-purple-900 shadow-lg animate-bounce">
+                                            {studentData.grades.assigned_challenges.length}
+                                        </span>
+                                    )}
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white mb-1">التحديات الفردية</h3>
+                                    <p className="text-purple-300 text-xs md:text-sm">خض التحديات المخصصة لك وحقق أفضل النتائج</p>
                                 </div>
                             </button>
                         )}
@@ -1677,7 +1752,116 @@ function StudentView() {
         />
       )}
       
-      {/* نافذة المحادثة */}
+        {/* نافذة التحديات الفردية المنبثقة */}
+        {showChallengesPopup && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn" dir="rtl">
+                <div className="bg-gray-900 border border-indigo-500/30 rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-popIn">
+                    <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-indigo-900/10">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-indigo-600 p-3 rounded-2xl shadow-lg shadow-indigo-600/20">
+                                <FaGamepad className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-black text-white">التحديات الفردية المخصصة</h2>
+                                <p className="text-indigo-400 text-sm">اختبر معلوماتك وحقق أعلى النقاط</p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => setShowChallengesPopup(false)}
+                            className="p-3 bg-gray-800 text-gray-400 hover:text-white rounded-full transition-colors"
+                        >
+                            <FaTimes />
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-6">
+                        {studentData.grades.assigned_challenges?.length > 0 ? (
+                            <>
+                                <div className="bg-indigo-600/5 border border-indigo-500/20 p-4 rounded-2xl flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <FaAward className="text-yellow-500 text-xl" />
+                                        <span className="text-indigo-200 font-bold">إجمالي نقاط التحديات:</span>
+                                    </div>
+                                    <span className="text-2xl font-black text-white">
+                                        {studentData.grades.assigned_challenges.reduce((acc, c) => acc + (c.best_score || 0), 0)} نقطة
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {studentData.grades.assigned_challenges.map((challenge, idx) => (
+                                       <div key={idx} className="bg-gray-800/80 border border-gray-700 hover:border-indigo-500/50 transition-all rounded-3xl p-5 shadow-xl group">
+                                           <div className="flex justify-between items-start mb-4">
+                                               <div>
+                                                  <h5 className="text-lg font-bold text-white mb-1 group-hover:text-indigo-400 transition-colors">{challenge.lesson_name}</h5>
+                                                  <p className="text-sm text-gray-500">{challenge.subject_name}</p>
+                                               </div>
+                                               <div className="bg-indigo-600/20 text-indigo-400 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500/30">
+                                                   {challenge.questions_count} أسئلة
+                                               </div>
+                                           </div>
+
+                                           <div className="space-y-3 mb-5">
+                                               <div className="flex justify-between text-sm">
+                                                   <span className="text-gray-400">المحاولات:</span>
+                                                   <span className={`font-bold ${challenge.attempts_used >= challenge.attempts_allowed ? 'text-rose-400' : 'text-yellow-400'}`}>
+                                                       {challenge.attempts_used} من {challenge.attempts_allowed}
+                                                   </span>
+                                               </div>
+                                               <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                                   <div 
+                                                       className={`h-full transition-all ${challenge.attempts_used >= challenge.attempts_allowed ? 'bg-rose-500' : 'bg-indigo-500'}`}
+                                                       style={{ width: `${Math.min(100, (challenge.attempts_used / challenge.attempts_allowed) * 100)}%` }}
+                                                   ></div>
+                                               </div>
+                                               {challenge.best_score !== null && (
+                                                   <div className="flex justify-between text-sm bg-green-500/10 p-2 rounded-xl border border-green-500/20">
+                                                       <span className="text-green-400">أفضل نتيجة:</span>
+                                                       <span className="text-green-400 font-black">{challenge.best_score} نقطة</span>
+                                                   </div>
+                                               )}
+                                           </div>
+
+                                           <button 
+                                              onClick={() => navigate(`/student-challenge/${studentData.id}/${challenge.id}`)}
+                                              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                           >
+                                              <FaPlay className="text-xs" /> ابدأ التحدي الآن
+                                           </button>
+                                       </div>
+                                    ))}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-500 opacity-50">
+                                <FaGamepad className="text-8xl mb-4" />
+                                <p className="text-xl font-bold">لا توجد تحديات فردية نشطة حالياً</p>
+                                <p className="text-sm mt-2">ترقب التحديات الجديدة التي يضيفها المعلم</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )}
+
+      <style>{`
+        @keyframes shimmer {
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes popIn {
+          0% { transform: scale(0.9); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-popIn { animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+      `}</style>
       {showChat && studentData && (
         <StudentChat
           studentId={studentData.id}

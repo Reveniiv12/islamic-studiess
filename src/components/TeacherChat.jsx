@@ -22,6 +22,17 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
   const [showMobileList, setShowMobileList] = useState(true);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [typingUsers, setTypingUsers] = useState(new Set());
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [lastMessageTimes, setLastMessageTimes] = useState({});
+
+  // Helper for Hijri Date
+  const formatHijriDate = (date) => {
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-uma', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(new Date(date));
+  };
 
   const messagesEndRef = useRef(null);
   const globalChannelRef = useRef(null); // مرجع قناة الاتصال اللحظي
@@ -79,6 +90,53 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
 
   // 2. جلب المحادثة الخاصة بالطالب المحدد والاستماع الفوري
   useEffect(() => {
+    if (!teacherId) return;
+
+    const fetchGlobalChatStats = async () => {
+      // Fetch unread counts
+      const { data: unreadData } = await supabase
+        .from('messages')
+        .select('student_id')
+        .eq('teacher_id', teacherId)
+        .eq('sender_type', 'student')
+        .eq('is_read', false);
+      
+      const counts = {};
+      unreadData?.forEach(m => {
+        counts[m.student_id] = (counts[m.student_id] || 0) + 1;
+      });
+      setUnreadCounts(counts);
+
+      // Fetch last message times for sorting
+      const { data: lastMsgs } = await supabase
+        .from('messages')
+        .select('student_id, created_at')
+        .eq('teacher_id', teacherId)
+        .order('created_at', { ascending: false });
+      
+      const times = {};
+      lastMsgs?.forEach(m => {
+        if (!times[m.student_id]) times[m.student_id] = m.created_at;
+      });
+      setLastMessageTimes(times);
+    };
+
+    fetchGlobalChatStats();
+
+    // Listener for global unread/sorting updates
+    const globalMsgChannel = supabase.channel('global_messages_listener')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `teacher_id=eq.${teacherId}` }, (payload) => {
+          if (payload.new.sender_type === 'student') {
+            setUnreadCounts(prev => ({ ...prev, [payload.new.student_id]: (prev[payload.new.student_id] || 0) + 1 }));
+          }
+          setLastMessageTimes(prev => ({ ...prev, [payload.new.student_id]: payload.new.created_at }));
+      })
+      .subscribe();
+
+    return () => supabase.removeChannel(globalMsgChannel);
+  }, [teacherId]);
+
+  useEffect(() => {
     if (!selectedStudentId || !teacherId) return;
 
     const fetchChatData = async () => {
@@ -118,6 +176,8 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
              .eq('teacher_id', teacherId)
              .eq('sender_type', 'student')
              .eq('is_read', false);
+           
+           setUnreadCounts(prev => ({ ...prev, [selectedStudentId]: 0 }));
         }
       }
       setLoading(false);
@@ -136,6 +196,7 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
           if (payload.new.sender_type === 'student') {
              supabase.from('messages').update({ is_read: true }).eq('id', payload.new.id);
              setSentCount(prev => prev + 1);
+             setUnreadCounts(prev => ({ ...prev, [selectedStudentId]: 0 }));
           }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `student_id=eq.${selectedStudentId}` }, (payload) => {
@@ -345,9 +406,16 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
           )}
 
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
-            {students.map(student => {
+            {[...students]
+              .sort((a, b) => {
+                const timeA = lastMessageTimes[a.id] ? new Date(lastMessageTimes[a.id]).getTime() : 0;
+                const timeB = lastMessageTimes[b.id] ? new Date(lastMessageTimes[b.id]).getTime() : 0;
+                return timeB - timeA;
+              })
+              .map(student => {
               const isOnline = onlineUsers.has(student.id);
               const isTyping = typingUsers.has(student.id);
+              const unreadCount = unreadCounts[student.id] || 0;
               
               const isSelectedForChat = selectedStudentId === student.id && !isSelectionMode;
               const isSelectedForBulk = selectedForBulk.includes(student.id);
@@ -393,11 +461,22 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
                     <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-slate-800 ${isOnline ? 'bg-green-500' : 'bg-slate-500'}`}></div>
                   </div>
                   <div className="flex-1 truncate">
-                    <p className={`text-sm truncate ${nameClass}`}>{student.name}</p>
+                    <div className="flex justify-between items-center mb-0.5">
+                      <p className={`text-sm truncate ${nameClass}`}>{student.name}</p>
+                      {unreadCount > 0 && !isSelectionMode && (
+                        <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[18px] text-center shadow-lg animate-bounce">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </div>
                     {isTyping ? (
                       <p className="text-xs text-green-300 font-bold mt-0.5 animate-pulse">يكتب الآن...</p>
                     ) : (
-                      <p className={`text-xs truncate mt-0.5 ${isSelectionMode && isSelectedForBulk ? 'text-green-400/70' : 'text-slate-400'}`}>{student.nationalId}</p>
+                      <p className={`text-xs truncate mt-0.5 ${isSelectionMode && isSelectedForBulk ? 'text-green-400/70' : 'text-slate-400'}`}>
+                        {lastMessageTimes[student.id] 
+                          ? new Date(lastMessageTimes[student.id]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                          : student.nationalId}
+                      </p>
                     )}
                   </div>
                 </button>
@@ -535,42 +614,57 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
                 لا توجد رسائل سابقة.
               </div>
             ) : (
-              messages.map((msg) => {
+              messages.map((msg, index) => {
                 const isTeacher = msg.sender_type === 'teacher';
-                return (
-                  <div key={msg.id} className={`flex flex-col ${isTeacher ? 'items-end' : 'items-start'}`}>
-                    <div className="flex items-center gap-2 group">
-                      
-                      <button 
-                        onClick={() => handleDeleteMessage(msg.id)}
-                        className={`opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-2 transition-opacity ${msg.isTemp ? 'hidden' : ''}`}
-                        title="حذف الرسالة"
-                      >
-                        <FaTrash className="text-xs" />
-                      </button>
+                
+                // Date grouping logic
+                const currentDate = new Date(msg.created_at).toDateString();
+                const prevDate = index > 0 ? new Date(messages[index - 1].created_at).toDateString() : null;
+                const showDateHeader = currentDate !== prevDate;
 
-                      <div 
-                        className={`max-w-[85%] md:max-w-md p-3.5 rounded-2xl relative shadow-md ${
-                          isTeacher 
-                            ? 'bg-blue-600 text-white rounded-tl-sm' 
-                            : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-tr-sm'
-                        } ${msg.isTemp ? 'opacity-70' : ''}`}
-                      >
-                        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>
-                        <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
-                          <span className="text-[10px]" dir="ltr">
-                            {msg.isTemp ? 'إرسال...' : new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          
-                          {isTeacher && !msg.isTemp && (
-                            <span className="text-[10px] ml-1">
-                              {msg.is_read ? <FaCheckDouble className="text-blue-300" /> : <FaCheck />}
+                return (
+                  <React.Fragment key={msg.id}>
+                    {showDateHeader && (
+                      <div className="flex justify-center my-6">
+                        <div className="bg-slate-800/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-slate-700 text-[10px] font-bold text-slate-400 shadow-lg">
+                          {formatHijriDate(msg.created_at)}
+                        </div>
+                      </div>
+                    )}
+                    <div className={`flex flex-col ${isTeacher ? 'items-end' : 'items-start'}`}>
+                      <div className="flex items-center gap-2 group">
+                        
+                        <button 
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          className={`opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 p-2 transition-opacity ${msg.isTemp ? 'hidden' : ''}`}
+                          title="حذف الرسالة"
+                        >
+                          <FaTrash className="text-xs" />
+                        </button>
+
+                        <div 
+                          className={`max-w-[85%] md:max-w-md p-3.5 rounded-2xl relative shadow-md ${
+                            isTeacher 
+                              ? 'bg-blue-600 text-white rounded-tl-sm' 
+                              : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-tr-sm'
+                          } ${msg.isTemp ? 'opacity-70' : ''}`}
+                        >
+                          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>
+                          <div className="flex items-center justify-end gap-1 mt-1 opacity-70">
+                            <span className="text-[10px]" dir="ltr">
+                              {msg.isTemp ? 'إرسال...' : new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
-                          )}
+                            
+                            {isTeacher && !msg.isTemp && (
+                              <span className="text-[10px] ml-1">
+                                {msg.is_read ? <FaCheckDouble className="text-blue-300" /> : <FaCheck />}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               })
             )}

@@ -31,7 +31,8 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
     show_rewards_button: true, 
     show_solutions_button: true,
     show_portfolio_button: true,
-    show_chat_button: true // الخيار الجديد للمحادثة
+    show_chat_button: true, // الخيار الجديد للمحادثة
+    show_challenges_button: true // الخيار الجديد للتحديات
   });
 
   useEffect(() => {
@@ -60,6 +61,7 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
             show_solutions_button: data.student_view_config.show_solutions_button !== false,
             show_portfolio_button: data.student_view_config.show_portfolio_button !== false,
             show_chat_button: data.student_view_config.show_chat_button !== false, // ضمان القيمة الجديدة
+            show_challenges_button: data.student_view_config.show_challenges_button !== false,
         };
         setConfig(loadedConfig);
       }
@@ -297,6 +299,25 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
                   </div>
                   {config.show_chat_button ? <FaToggleOn className="text-2xl text-green-400"/> : <FaToggleOff className="text-2xl text-gray-500"/>}
               </div>
+                {/* زر عرض/إخفاء التحديات الفردية */}
+                <button 
+                  onClick={() => setConfig({...config, show_challenges_button: !config.show_challenges_button})}
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all w-full
+                    ${config.show_challenges_button 
+                      ? 'bg-indigo-600/20 border-indigo-500/50 hover:bg-indigo-600/30 shadow-[0_0_15px_rgba(79,70,229,0.15)]' 
+                      : 'bg-gray-800/40 border-gray-700 hover:bg-gray-800/60'}`}
+                >
+                  <div className="flex items-center gap-3 mb-2 w-full justify-between">
+                     <div className="flex items-center gap-2">
+                       <div className={`p-2 rounded-lg ${config.show_challenges_button ? 'bg-indigo-500/20 text-indigo-400' : 'bg-gray-700 text-gray-500'}`}>
+                         <FaGamepad className="text-xl" />
+                       </div>
+                       <span className={`font-bold ${config.show_challenges_button ? 'text-indigo-300' : 'text-gray-400'}`}>التحديات الفردية</span>
+                     </div>
+                     {config.show_challenges_button ? <FaToggleOn className="text-2xl text-indigo-400" /> : <FaToggleOff className="text-2xl text-gray-600" />}
+                  </div>
+                  <p className="text-xs text-gray-400 text-right w-full">إظهار أو إخفاء قسم التحديات الفردية المكلف بها الطالب.</p>
+                </button>
            </div>
         </div>
 

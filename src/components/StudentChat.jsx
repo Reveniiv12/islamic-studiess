@@ -13,6 +13,15 @@ const StudentChat = ({ studentId, teacherId, onClose }) => {
   const [sentCount, setSentCount] = useState(0);
   const [teacherName, setTeacherName] = useState("المعلم");
 
+  // Helper for Hijri Date
+  const formatHijriDate = (date) => {
+    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-uma', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    }).format(new Date(date));
+  };
+
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const globalChannelRef = useRef(null);
@@ -226,24 +235,39 @@ const StudentChat = ({ studentId, teacherId, onClose }) => {
               <p className="text-sm font-medium">ابدأ المحادثة الآن</p>
             </div>
           ) : (
-            messages.map((msg) => {
+            messages.map((msg, index) => {
               const isStudent = msg.sender_type === 'student';
+              
+              // Date grouping logic
+              const currentDate = new Date(msg.created_at).toDateString();
+              const prevDate = index > 0 ? new Date(messages[index - 1].created_at).toDateString() : null;
+              const showDateHeader = currentDate !== prevDate;
+
               return (
-                <div key={msg.id} className={`flex ${isStudent ? 'justify-start' : 'justify-end'}`}>
-                  <div 
-                    className={`max-w-[85%] p-3.5 rounded-2xl relative shadow-md ${
-                      isStudent 
-                        ? 'bg-blue-600 text-white rounded-tr-sm' 
-                        : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-tl-sm'
-                    } ${msg.isTemp ? 'opacity-70' : ''}`}
-                  >
-                    <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>
-                    <div className="text-[10px] opacity-60 mt-2 text-left flex justify-end items-center gap-1" dir="ltr">
-                      {msg.isTemp && <span className="text-blue-200 text-[9px]">جاري الإرسال...</span>}
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                <React.Fragment key={msg.id}>
+                  {showDateHeader && (
+                    <div className="flex justify-center my-6">
+                      <div className="bg-slate-800/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-slate-700 text-[10px] font-bold text-slate-400 shadow-lg">
+                        {formatHijriDate(msg.created_at)}
+                      </div>
+                    </div>
+                  )}
+                  <div className={`flex ${isStudent ? 'justify-start' : 'justify-end'}`}>
+                    <div 
+                      className={`max-w-[85%] p-3.5 rounded-2xl relative shadow-md ${
+                        isStudent 
+                          ? 'bg-blue-600 text-white rounded-tr-sm' 
+                          : 'bg-slate-800 text-slate-100 border border-slate-700 rounded-tl-sm'
+                      } ${msg.isTemp ? 'opacity-70' : ''}`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.content}</p>
+                      <div className="text-[10px] opacity-60 mt-2 text-left flex justify-end items-center gap-1" dir="ltr">
+                        {msg.isTemp && <span className="text-blue-200 text-[9px]">جاري الإرسال...</span>}
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </React.Fragment>
               );
             })
           )}
