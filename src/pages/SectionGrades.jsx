@@ -790,17 +790,104 @@ const updateStudentsData = async (updatedStudents) => {
         handleDialog("خطأ", "المكتبة المسؤولة عن الاستيراد غير موجودة", "error");
         return;
       }
+      
       const reader = new FileReader();
       reader.onload = async (evt) => {
-        const bstr = evt.target.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
-        const wsname = wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
-        
-        handleDialog("تنبيه", "هذه الميزة تتطلب مطابقة أسماء الأعمدة في ملف الإكسل.", "info");
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const wb = XLSX.read(data, { type: 'array' });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const jsonData = XLSX.utils.sheet_to_json(ws);
+          
+          if (!jsonData || jsonData.length === 0) {
+            handleDialog("تنبيه", "الملف فارغ أو لا يحتوي على بيانات صحيحة.", "warning");
+            return;
+          }
+
+          // Define required column mappings
+          const nameKeys = ["الاسم", "اسم الطالب", "Name", "Student Name"];
+          const nationalIdKeys = ["السجل المدني", "السجل", "National ID", "ID", "رقم السجل"];
+          const parentPhoneKeys = ["رقم ولي الأمر", "جوال ولي الأمر", "Parent Phone", "رقم الجوال", "الجوال"];
+
+          // Find actual keys in the data
+          const firstRow = jsonData[0];
+          const actualKeys = Object.keys(firstRow);
+          
+          const foundNameKey = actualKeys.find(k => nameKeys.some(nk => k.trim().includes(nk)));
+          const foundIdKey = actualKeys.find(k => nationalIdKeys.some(nk => k.trim().includes(nk)));
+          const foundParentPhoneKey = actualKeys.find(k => parentPhoneKeys.some(nk => k.trim().includes(nk)));
+
+          if (!foundNameKey || !foundIdKey) {
+            handleDialog(
+              "تنبيه", 
+              "لم يتم العثور على أعمدة 'الاسم' و 'السجل المدني'. يرجى التأكد من مطابقة أسماء الأعمدة في ملف الإكسل.", 
+              "warning"
+            );
+            return;
+          }
+
+          const defaultGradesStructure = {
+            semester1: createEmptySemesterStructure(),
+            semester2: createEmptySemesterStructure()
+          };
+
+          const studentsToImport = jsonData.map(row => {
+            const nId = String(row[foundIdKey]).trim();
+            // Check if student already exists in local state to preserve their data
+            const existingStudent = students.find(s => s.nationalId === nId);
+            
+            return {
+              name: String(row[foundNameKey]).trim(),
+              national_id: nId,
+              grade_level: gradeId,
+              section: sectionId,
+              teacher_id: teacherId,
+              parent_phone: foundParentPhoneKey ? String(row[foundParentPhoneKey]).trim() : (existingStudent ? existingStudent.parentPhone : ""),
+              phone: existingStudent ? existingStudent.phone : "",
+              photo: existingStudent ? existingStudent.photo : "/images/1.webp",
+              grades: existingStudent ? existingStudent.fullGradesStructure : defaultGradesStructure,
+              acquired_stars: existingStudent ? existingStudent.acquiredStars : 0,
+              consumed_stars: existingStudent ? existingStudent.consumedStars : 0,
+              recitation_history: existingStudent ? (existingStudent.recitation_history || []) : []
+            };
+          }).filter(s => s.name && s.national_id);
+
+          if (studentsToImport.length === 0) {
+             handleDialog("تنبيه", "لم يتم العثور على بيانات طلاب صالحة للاستيراد.", "warning");
+             return;
+          }
+
+          handleDialog(
+            "تأكيد الاستيراد", 
+            `هل أنت متأكد من استيراد ${studentsToImport.length} طالب؟ سيتم تحديث بيانات الطلاب الموجودين مسبقاً مع الحفاظ على درجاتهم.`, 
+            "confirm",
+            async () => {
+                try {
+                    setIsRefreshing(true);
+                    const { error } = await supabase
+                        .from('students')
+                        .upsert(studentsToImport, { onConflict: 'national_id' });
+
+                    if (error) throw error;
+
+                    await fetchDataFromSupabase();
+                    handleDialog("نجاح", "تم استيراد الطلاب بنجاح", "success");
+                } catch (error) {
+                    console.error("Import Error:", error);
+                    handleDialog("خطأ", "حدث خطأ أثناء حفظ البيانات المستوردة: " + error.message, "error");
+                } finally {
+                    setIsRefreshing(false);
+                }
+            }
+          );
+
+        } catch (err) {
+          console.error("File processing error:", err);
+          handleDialog("خطأ", "حدث خطأ أثناء معالجة ملف الإكسل", "error");
+        }
       };
-      reader.readAsBinaryString(file);
+      reader.readAsArrayBuffer(file);
     } catch (error) {
       console.error("Excel Import Error:", error);
       handleDialog("خطأ", "فشل قراءة الملف", "error");
