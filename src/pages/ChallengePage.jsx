@@ -1476,9 +1476,8 @@ const AssignmentsView = ({ gradeId, teacherId, onClose, handleDialog, dialogConf
     try {
       const { data, error } = await supabase
         .from('students')
-        .select('id, name, section, photo, grades')
-        .eq('teacher_id', teacherId)
-        .eq('grade_level', gradeId);
+        .select('id, name, section, photo, grades, grade_level')
+        .eq('teacher_id', teacherId);
 
       if (!error && data) {
         const assignmentMap = {};
@@ -1510,15 +1509,30 @@ const AssignmentsView = ({ gradeId, teacherId, onClose, handleDialog, dialogConf
        const targetAssignment = assignments.find(a => a.id === assignmentId);
        if (!targetAssignment) return;
 
-       for (const student of targetAssignment.students) {
-         const { data, error } = await supabase.from('students').select('grades').eq('id', student.id).single();
-         if (!error && data) {
+       // Use Promise.allSettled to handle all students in parallel and ensure one failure doesn't stop others
+       const updatePromises = targetAssignment.students.map(async (student) => {
+         try {
+           const { data, error: fetchError } = await supabase.from('students').select('grades').eq('id', student.id).single();
+           if (fetchError || !data) return;
+
            const currentGrades = data.grades || {};
            const assignedChallenges = currentGrades.assigned_challenges || [];
            const newAssigned = assignedChallenges.filter(a => a.id !== assignmentId);
-           await supabase.from('students').update({ grades: { ...currentGrades, assigned_challenges: newAssigned } }).eq('id', student.id);
+           
+           if (assignedChallenges.length === newAssigned.length) return; // Already deleted or not found
+
+           const { error: updateError } = await supabase
+             .from('students')
+             .update({ grades: { ...currentGrades, assigned_challenges: newAssigned } })
+             .eq('id', student.id);
+           
+           if (updateError) throw updateError;
+         } catch (err) {
+           console.error(`Failed to delete assignment for student ${student.id}:`, err);
          }
-       }
+       });
+
+       await Promise.allSettled(updatePromises);
        fetchAssignments();
     });
   };
@@ -1636,7 +1650,8 @@ const AssignmentsView = ({ gradeId, teacherId, onClose, handleDialog, dialogConf
                                            )}
                                         </div>
                                         <div className="flex-1 truncate text-right">
-                                           <h5 className="text-[14px] font-black text-white truncate mb-2">{student.name}</h5>
+                                           <h5 className="text-[14px] font-black text-white truncate mb-0.5">{student.name}</h5>
+                                           <p className="text-[10px] text-slate-500 font-bold mb-1.5">صف: {student.grade_level} - شعبه: {student.section}</p>
                                            <div className="flex flex-col gap-1">
                                               <div className="flex justify-between items-center text-[10px] font-bold">
                                                  <span className="text-slate-500">المحاولات: <span className={used >= a.attempts_allowed ? 'text-rose-400' : 'text-indigo-400'}>{used}/{a.attempts_allowed}</span></span>

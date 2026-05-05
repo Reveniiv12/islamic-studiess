@@ -44,7 +44,7 @@ const ChallengeImporter = ({ gradeId, teacherId, onComplete, onCancel }) => {
 
     lines.forEach((line, index) => {
       // Basic CSV parsing (comma separated)
-      const parts = line.split(",").map(p => p.trim());
+      const parts = line.split(/[,،]/).map(p => p.trim());
       if (parts.length >= 4) {
         const [questionText, optionsStr, answerText, categoryStr] = parts;
         const options = optionsStr.split("|").map(o => o.trim());
