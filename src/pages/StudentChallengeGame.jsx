@@ -19,11 +19,26 @@ export default function StudentChallengeGame() {
   const [questions, setQuestions] = useState([]);
   const [score, setScore] = useState(0);
   const [answers, setAnswers] = useState([]);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [timePerQ, setTimePerQ] = useState(30);
 
   useEffect(() => {
     fetchData();
   }, [studentId, assignmentId]);
+
+  const shuffleOptions = (question) => {
+    if (!question?.options) return question;
+    const indexed = question.options.map((opt, i) => ({ opt, i }));
+    for (let k = indexed.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      [indexed[k], indexed[j]] = [indexed[j], indexed[k]];
+    }
+    return {
+      ...question,
+      options: indexed.map(({ opt }) => opt),
+      correctIndex: indexed.findIndex(({ i }) => i === question.correctIndex),
+    };
+  };
 
   const fetchData = async () => {
     try {
@@ -48,22 +63,27 @@ export default function StudentChallengeGame() {
       setStudent(studentData);
       setAssignment(currentAssignment);
 
-      // Fetch challenge
-      const { data: challengeData, error: challengeError } = await supabase
+      // Set time per question from assignment
+      const tpq = currentAssignment.time_per_question || 30;
+      setTimePerQ(tpq);
+      setTimeLeft(tpq);
+
+      // Fetch all challenges (support multi-challenge assignments)
+      const challengeIds = currentAssignment.challenge_ids || [currentAssignment.challenge_id];
+      const { data: challengesData, error: challengeError } = await supabase
         .from('challenges')
         .select('*')
-        .eq('id', currentAssignment.challenge_id)
-        .single();
+        .in('id', challengeIds);
         
       if (challengeError) throw challengeError;
       
-      setChallenge(challengeData);
+      const firstChallenge = challengesData[0];
+      setChallenge(firstChallenge);
       
-      // Prepare questions
-      let allQuestions = challengeData.questions || [];
-      // Shuffle and pick questionsCount
+      // Combine questions from all challenges, shuffle options, pick requested count
+      let allQuestions = challengesData.flatMap(c => c.questions || []);
       allQuestions = allQuestions.sort(() => 0.5 - Math.random());
-      const selectedQuestions = allQuestions.slice(0, currentAssignment.questions_count);
+      const selectedQuestions = allQuestions.slice(0, currentAssignment.questions_count).map(shuffleOptions);
       setQuestions(selectedQuestions);
 
     } catch (err) {
@@ -85,7 +105,9 @@ export default function StudentChallengeGame() {
   }, [gameState, timeLeft]);
 
   const startGame = () => {
-    if (assignment.attempts_used >= assignment.attempts_allowed) {
+    const isPractice = assignment.is_practice;
+    // For practice: unlimited attempts (attempts_allowed is 999999)
+    if (!isPractice && assignment.attempts_used >= assignment.attempts_allowed) {
       alert("لقد استنفذت جميع المحاولات المسموحة لهذا التحدي.");
       return;
     }
@@ -94,7 +116,7 @@ export default function StudentChallengeGame() {
     setCurrentQuestionIndex(0);
     setScore(0);
     setAnswers([]);
-    setTimeLeft(60);
+    setTimeLeft(timePerQ);
   };
 
   const handleAnswer = (selectedIndex) => {
@@ -107,7 +129,7 @@ export default function StudentChallengeGame() {
     
     if (currentQuestionIndex + 1 < questions.length) {
       setCurrentQuestionIndex(prev => prev + 1);
-      setTimeLeft(60);
+      setTimeLeft(timePerQ);
     } else {
       finishGame(score + (isCorrect ? 1 : 0));
     }
@@ -119,14 +141,21 @@ export default function StudentChallengeGame() {
     try {
       const grades = student.grades || {};
       const assignments = grades.assigned_challenges || [];
+      const isPractice = assignment.is_practice;
       
       const updatedAssignments = assignments.map(a => {
         if (a.id === assignmentId) {
-          return {
+          const newAllScores = [...(a.all_scores || []), finalScore];
+          const updated = {
             ...a,
             attempts_used: (a.attempts_used || 0) + 1,
-            best_score: a.best_score === null ? finalScore : Math.max(a.best_score, finalScore)
+            all_scores: newAllScores,
           };
+          // Only update best_score for non-practice challenges
+          if (!isPractice) {
+            updated.best_score = a.best_score === null ? finalScore : Math.max(a.best_score, finalScore);
+          }
+          return updated;
         }
         return a;
       });

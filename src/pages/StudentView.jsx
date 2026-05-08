@@ -1,4 +1,4 @@
-// src/pages/StudentView.jsx
+﻿// src/pages/StudentView.jsx
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -1802,30 +1802,54 @@ function StudentView() {
 
                                            <div className="space-y-3 mb-5">
                                                <div className="flex justify-between text-sm">
-                                                   <span className="text-gray-400">المحاولات:</span>
-                                                   <span className={`font-bold ${challenge.attempts_used >= challenge.attempts_allowed ? 'text-rose-400' : 'text-yellow-400'}`}>
-                                                       {challenge.attempts_used} من {challenge.attempts_allowed}
+                                                   <span className="text-gray-400">نوع التحدي:</span>
+                                                   <span className={`font-bold px-2 py-0.5 rounded-full text-xs ${challenge.is_practice ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'}`}>
+                                                     {challenge.is_practice ? '🎯 تدريبي' : '🏆 فردي'}
                                                    </span>
                                                </div>
-                                               <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                                   <div 
-                                                       className={`h-full transition-all ${challenge.attempts_used >= challenge.attempts_allowed ? 'bg-rose-500' : 'bg-indigo-500'}`}
-                                                       style={{ width: `${Math.min(100, (challenge.attempts_used / challenge.attempts_allowed) * 100)}%` }}
-                                                   ></div>
+                                               <div className="flex justify-between text-sm">
+                                                   <span className="text-gray-400">المحاولات:</span>
+                                                   {challenge.is_practice ? (
+                                                     <span className="font-bold text-amber-400">{challenge.attempts_used} (غير محدودة)</span>
+                                                   ) : (
+                                                     <span className={`font-bold ${challenge.attempts_used >= challenge.attempts_allowed ? 'text-rose-400' : 'text-yellow-400'}`}>
+                                                         {challenge.attempts_used} من {challenge.attempts_allowed}
+                                                     </span>
+                                                   )}
                                                </div>
-                                               {challenge.best_score !== null && (
+                                               {!challenge.is_practice && (
+                                                 <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                                     <div
+                                                         className={`h-full transition-all ${challenge.attempts_used >= challenge.attempts_allowed ? 'bg-rose-500' : 'bg-indigo-500'}`}
+                                                         style={{ width: `%` }}
+                                                     ></div>
+                                                 </div>
+                                               )}
+                                               {challenge.best_score !== null && !challenge.is_practice && (
                                                    <div className="flex justify-between text-sm bg-green-500/10 p-2 rounded-xl border border-green-500/20">
                                                        <span className="text-green-400">أفضل نتيجة:</span>
                                                        <span className="text-green-400 font-black">{challenge.best_score} نقطة</span>
                                                    </div>
                                                )}
+                                               {challenge.all_scores?.length > 0 && (
+                                                 <div className="bg-gray-900/60 p-3 rounded-xl border border-gray-700">
+                                                   <p className="text-xs font-bold text-gray-400 mb-2">سجل الدرجات ({challenge.all_scores.length} محاولة):</p>
+                                                   <div className="flex flex-wrap gap-1.5">
+                                                     {challenge.all_scores.map((s, i) => (
+                                                       <span key={i} className={`text-xs font-black px-2.5 py-1 rounded-lg border ${s === challenge.best_score && !challenge.is_practice ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-gray-800 text-gray-300 border-gray-600'}`}>
+                                                         {s}
+                                                       </span>
+                                                     ))}
+                                                   </div>
+                                                 </div>
+                                               )}
                                            </div>
 
-                                           <button 
+                                           <button
                                               onClick={() => navigate(`/student-challenge/${studentData.id}/${challenge.id}`)}
-                                              className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                              className={`w-full py-3 ${challenge.is_practice ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20'} text-white rounded-2xl font-bold shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2`}
                                            >
-                                              <FaPlay className="text-xs" /> ابدأ التحدي الآن
+                                              <FaPlay className="text-xs" /> {challenge.is_practice ? 'ابدأ التدريب' : 'ابدأ التحدي الآن'}
                                            </button>
                                        </div>
                                     ))}
