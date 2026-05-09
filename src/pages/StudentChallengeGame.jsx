@@ -21,6 +21,8 @@ export default function StudentChallengeGame() {
   const [answers, setAnswers] = useState([]);
   const [timeLeft, setTimeLeft] = useState(30);
   const [timePerQ, setTimePerQ] = useState(30);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [isChecking, setIsChecking] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -120,19 +122,28 @@ export default function StudentChallengeGame() {
   };
 
   const handleAnswer = (selectedIndex) => {
+    if (isChecking) return; // Prevent double clicks
+    
     const currentQ = questions[currentQuestionIndex];
     const isCorrect = selectedIndex === currentQ.correctIndex;
     
-    if (isCorrect) setScore(prev => prev + 1);
+    setSelectedAnswer(selectedIndex);
+    setIsChecking(true);
     
-    setAnswers([...answers, { question: currentQ.text, isCorrect }]);
-    
-    if (currentQuestionIndex + 1 < questions.length) {
-      setCurrentQuestionIndex(prev => prev + 1);
-      setTimeLeft(timePerQ);
-    } else {
-      finishGame(score + (isCorrect ? 1 : 0));
-    }
+    // Short delay for feedback before moving to next question
+    setTimeout(() => {
+      if (isCorrect) setScore(prev => prev + 1);
+      setAnswers(prev => [...prev, { question: currentQ.text, isCorrect }]);
+      
+      if (currentQuestionIndex + 1 < questions.length) {
+        setCurrentQuestionIndex(prev => prev + 1);
+        setSelectedAnswer(null);
+        setIsChecking(false);
+        setTimeLeft(timePerQ);
+      } else {
+        finishGame(score + (isCorrect ? 1 : 0));
+      }
+    }, 1000); // 1 second feedback
   };
 
   const finishGame = async (finalScore) => {
@@ -244,15 +255,30 @@ export default function StudentChallengeGame() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {questions[currentQuestionIndex].options.map((opt, idx) => (
-                    <button 
-                      key={idx}
-                      onClick={() => handleAnswer(idx)}
-                      className="p-6 bg-gray-700/40 hover:bg-indigo-600/30 border border-gray-600 hover:border-indigo-500 rounded-2xl text-lg font-bold transition-all text-right shadow-md"
-                    >
-                      {opt}
-                    </button>
-                 ))}
+                 {questions[currentQuestionIndex].options.map((opt, idx) => {
+                    const isSelected = selectedAnswer === idx;
+                    const isCorrect = idx === questions[currentQuestionIndex].correctIndex;
+                    
+                    let btnClass = "p-6 border-2 rounded-2xl text-lg font-bold transition-all text-right shadow-md ";
+                    if (isChecking) {
+                       if (isCorrect) btnClass += "bg-green-600/30 border-green-500 text-green-100 shadow-green-500/20";
+                       else if (isSelected) btnClass += "bg-rose-600/30 border-rose-500 text-rose-100 shadow-rose-500/20";
+                       else btnClass += "bg-gray-700/20 border-gray-700 opacity-50";
+                    } else {
+                       btnClass += "bg-gray-700/40 hover:bg-indigo-600/30 border-gray-600 hover:border-indigo-500";
+                    }
+
+                    return (
+                      <button 
+                        key={`${currentQuestionIndex}-${idx}`}
+                        onClick={() => handleAnswer(idx)}
+                        disabled={isChecking}
+                        className={btnClass}
+                      >
+                        {opt}
+                      </button>
+                    );
+                 })}
               </div>
            </div>
         )}
