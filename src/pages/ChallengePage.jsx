@@ -4,6 +4,7 @@ import { supabase } from "../supabaseClient";
 import { 
   FaGamepad, 
   FaPlus, 
+  FaMinus, 
   FaArrowRight, 
   FaTrophy, 
   FaHistory, 
@@ -497,10 +498,10 @@ const SetupView = ({
           {/* Time per question */}
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-2 mr-2 uppercase tracking-widest">⏱ وقت كل سؤال (ثانية)</label>
-            <div className="flex items-center gap-3 bg-slate-950/50 border-2 border-slate-800 rounded-2xl p-2 px-3 shadow-inner">
-              <button onClick={() => setTimePerQuestion(Math.max(5, timePerQuestion - 5))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5"><FaTimes className="rotate-45 text-xs" /></button>
-              <input type="number" value={timePerQuestion} onChange={(e) => setTimePerQuestion(Math.max(5, parseInt(e.target.value) || 5))} className="flex-1 bg-transparent text-center font-black text-2xl outline-none" />
-              <button onClick={() => setTimePerQuestion(timePerQuestion + 5)} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5"><FaPlus className="text-xs" /></button>
+            <div className="flex items-center gap-2 bg-slate-950/50 border-2 border-slate-800 rounded-2xl p-1.5 px-3 shadow-inner">
+              <button onClick={() => setTimePerQuestion(Math.max(5, timePerQuestion - 5))} className="w-9 h-9 shrink-0 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5"><FaMinus className="text-xs" /></button>
+              <input type="number" value={timePerQuestion} onChange={(e) => setTimePerQuestion(Math.max(5, parseInt(e.target.value) || 5))} className="flex-1 min-w-0 bg-transparent text-center font-black text-xl md:text-2xl outline-none" />
+              <button onClick={() => setTimePerQuestion(timePerQuestion + 5)} className="w-9 h-9 shrink-0 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5"><FaPlus className="text-xs" /></button>
             </div>
           </div>
 
@@ -516,11 +517,11 @@ const SetupView = ({
 
           {/* Type-specific settings */}
           {challengeType === "classroom" ? (
-             <div className="grid grid-cols-2 gap-4 animate-fadeIn">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fadeIn">
                <div>
                  <label className="block text-xs font-bold text-slate-500 mb-2 mr-2 uppercase tracking-widest">إجمالي الأسئلة</label>
                  <div className="flex items-center gap-3 bg-slate-950/50 border-2 border-slate-800 rounded-2xl p-2 px-3 shadow-inner">
-                   <button onClick={() => setRounds(Math.max(1, rounds - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaTimes className="rotate-45 text-xs" /></button>
+                   <button onClick={() => setRounds(Math.max(1, rounds - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaMinus className="text-xs" /></button>
                    <input type="number" value={rounds} onChange={(e) => setRounds(parseInt(e.target.value) || 1)} className="flex-1 bg-transparent text-center font-black text-2xl outline-none" />
                    <button onClick={() => setRounds(rounds + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
                  </div>
@@ -534,22 +535,22 @@ const SetupView = ({
                </div>
              </div>
           ) : (
-             <div className={`grid gap-4 animate-fadeIn p-4 rounded-2xl border ${challengeType === 'practice' ? 'bg-amber-900/10 border-amber-500/20 grid-cols-1' : 'bg-indigo-900/10 border-indigo-500/20 grid-cols-2'}`}>
+             <div className={`grid gap-4 animate-fadeIn p-4 rounded-2xl border ${challengeType === 'practice' ? 'bg-amber-900/10 border-amber-500/20 grid-cols-1' : 'bg-indigo-900/10 border-indigo-500/20 grid-cols-1 md:grid-cols-2'}`}>
                 <div>
                   <label className={`block text-xs font-bold mb-2 mr-2 uppercase tracking-widest ${challengeType === 'practice' ? 'text-amber-300' : 'text-indigo-300'}`}>عدد الأسئلة المطلوبة</label>
-                  <div className={`flex items-center gap-3 bg-slate-950/50 border-2 rounded-2xl p-2 px-3 shadow-inner ${challengeType === 'practice' ? 'border-amber-500/30' : 'border-indigo-500/30'}`}>
-                    <button onClick={() => setQuestionsCount(Math.max(1, questionsCount - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaTimes className="rotate-45 text-xs" /></button>
-                    <input type="number" value={questionsCount} onChange={(e) => setQuestionsCount(parseInt(e.target.value) || 1)} className="flex-1 bg-transparent text-center font-black text-2xl outline-none" />
-                    <button onClick={() => setQuestionsCount(questionsCount + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
+                  <div className={`flex items-center gap-2 bg-slate-950/50 border-2 rounded-2xl p-1.5 px-3 shadow-inner ${challengeType === 'practice' ? 'border-amber-500/30' : 'border-indigo-500/30'}`}>
+                    <button onClick={() => setQuestionsCount(Math.max(1, questionsCount - 1))} className="w-9 h-9 shrink-0 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaMinus className="text-xs" /></button>
+                    <input type="number" value={questionsCount} onChange={(e) => setQuestionsCount(parseInt(e.target.value) || 1)} className="flex-1 min-w-0 bg-transparent text-center font-black text-xl md:text-2xl outline-none" />
+                    <button onClick={() => setQuestionsCount(questionsCount + 1)} className="w-9 h-9 shrink-0 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
                   </div>
                 </div>
                 {challengeType === 'individual' ? (
                   <div>
                     <label className="block text-xs font-bold text-indigo-300 mb-2 mr-2 uppercase tracking-widest">عدد المحاولات</label>
-                    <div className="flex items-center gap-3 bg-slate-950/50 border-2 border-indigo-500/30 rounded-2xl p-2 px-3 shadow-inner">
-                      <button onClick={() => setAttemptsCount(Math.max(1, attemptsCount - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaTimes className="rotate-45 text-xs" /></button>
-                      <input type="number" value={attemptsCount} onChange={(e) => setAttemptsCount(parseInt(e.target.value) || 1)} className="flex-1 bg-transparent text-center font-black text-2xl outline-none" />
-                      <button onClick={() => setAttemptsCount(attemptsCount + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
+                    <div className="flex items-center gap-2 bg-slate-950/50 border-2 border-indigo-500/30 rounded-2xl p-1.5 px-3 shadow-inner">
+                      <button onClick={() => setAttemptsCount(Math.max(1, attemptsCount - 1))} className="w-9 h-9 shrink-0 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaMinus className="text-xs" /></button>
+                      <input type="number" value={attemptsCount} onChange={(e) => setAttemptsCount(parseInt(e.target.value) || 1)} className="flex-1 min-w-0 bg-transparent text-center font-black text-xl md:text-2xl outline-none" />
+                      <button onClick={() => setAttemptsCount(attemptsCount + 1)} className="w-9 h-9 shrink-0 flex items-center justify-center bg-slate-900 rounded-xl hover:text-indigo-400 transition border border-white/5 shadow-lg"><FaPlus className="text-xs" /></button>
                     </div>
                   </div>
                 ) : (
