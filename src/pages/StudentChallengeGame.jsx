@@ -106,7 +106,7 @@ export default function StudentChallengeGame() {
     return () => clearInterval(timer);
   }, [gameState, timeLeft]);
 
-  const startGame = () => {
+  const startGame = async () => {
     const isPractice = assignment.is_practice;
     // For practice: unlimited attempts (attempts_allowed is 999999)
     if (!isPractice && assignment.attempts_used >= assignment.attempts_allowed) {
@@ -114,11 +114,46 @@ export default function StudentChallengeGame() {
       return;
     }
     
+    // Deduct attempt immediately for non-practice assignments
+    if (!isPractice) {
+      try {
+        const grades = student.grades || {};
+        const assignments = grades.assigned_challenges || [];
+        const updatedAssignments = assignments.map(a => {
+          if (a.id === assignmentId) {
+            return {
+              ...a,
+              attempts_used: (a.attempts_used || 0) + 1,
+            };
+          }
+          return a;
+        });
+        
+        const newGrades = { ...grades, assigned_challenges: updatedAssignments };
+        
+        // Update local state first for responsiveness
+        const updatedAssignment = updatedAssignments.find(a => a.id === assignmentId);
+        setAssignment(updatedAssignment);
+        setStudent(prev => ({ ...prev, grades: newGrades }));
+
+        // Update database
+        await supabase
+          .from('students')
+          .update({ grades: newGrades })
+          .eq('id', studentId);
+          
+      } catch (err) {
+        console.error("Error deducting attempt:", err);
+      }
+    }
+    
     setGameState('playing');
     setCurrentQuestionIndex(0);
     setScore(0);
     setAnswers([]);
     setTimeLeft(timePerQ);
+    setSelectedAnswer(null);
+    setIsChecking(false);
   };
 
   const handleAnswer = (selectedIndex) => {
@@ -127,18 +162,27 @@ export default function StudentChallengeGame() {
     const currentQ = questions[currentQuestionIndex];
     const isCorrect = selectedIndex === currentQ.correctIndex;
     
+    const selectedText = selectedIndex === -1 ? "انتهى الوقت" : currentQ.options[selectedIndex];
+    const correctText = currentQ.options[currentQ.correctIndex];
+    
     setSelectedAnswer(selectedIndex);
     setIsChecking(true);
     
     // Short delay for feedback before moving to next question
     setTimeout(() => {
       if (isCorrect) setScore(prev => prev + 1);
-      setAnswers(prev => [...prev, { question: currentQ.text, isCorrect }]);
+      setAnswers(prev => [...prev, { 
+        question: currentQ.text, 
+        isCorrect, 
+        selectedText, 
+        correctText 
+      }]);
       
       if (currentQuestionIndex + 1 < questions.length) {
-        setCurrentQuestionIndex(prev => prev + 1);
+        // Reset selection states BEFORE moving to next question to avoid "ghost" selection
         setSelectedAnswer(null);
         setIsChecking(false);
+        setCurrentQuestionIndex(prev => prev + 1);
         setTimeLeft(timePerQ);
       } else {
         finishGame(score + (isCorrect ? 1 : 0));
@@ -159,7 +203,7 @@ export default function StudentChallengeGame() {
           const newAllScores = [...(a.all_scores || []), finalScore];
           const updated = {
             ...a,
-            attempts_used: (a.attempts_used || 0) + 1,
+            // attempt is already incremented in startGame
             all_scores: newAllScores,
           };
           // Only update best_score for non-practice challenges
@@ -240,7 +284,7 @@ export default function StudentChallengeGame() {
         )}
 
         {gameState === 'playing' && questions.length > 0 && (
-           <div className="w-full max-w-2xl animate-slideUp">
+           <div key={currentQuestionIndex} className="w-full max-w-2xl animate-slideUp">
               <div className="flex justify-between items-center mb-8 bg-gray-900/50 p-4 rounded-2xl border border-gray-700">
                  <div className="text-gray-400 font-bold">
                     سؤال <span className="text-white text-xl">{currentQuestionIndex + 1}</span> / {questions.length}
@@ -293,17 +337,33 @@ export default function StudentChallengeGame() {
                  {score} <span className="text-2xl text-gray-400">/ {questions.length}</span>
               </div>
               
-              <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-700 text-right mt-8 max-h-60 overflow-y-auto custom-scrollbar">
-                 <h4 className="font-bold text-gray-300 mb-4 border-b border-gray-700 pb-2">ملخص الإجابات:</h4>
-                 <div className="space-y-3">
+              <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-700 text-right mt-8 max-h-96 overflow-y-auto custom-scrollbar">
+                 <h4 className="font-bold text-xl text-indigo-300 mb-6 border-b border-gray-700 pb-3">ملخص الإجابات التفصيلي:</h4>
+                 <div className="space-y-4">
                    {answers.map((ans, idx) => (
-                      <div key={idx} className="flex justify-between items-center bg-gray-800 p-3 rounded-xl border border-gray-700">
-                         <span className="text-sm truncate w-3/4">{ans.question}</span>
-                         {ans.isCorrect ? (
-                           <FaCheckCircle className="text-green-500 text-xl" />
-                         ) : (
-                           <FaTimesCircle className="text-rose-500 text-xl" />
-                         )}
+                      <div key={idx} className={`p-5 rounded-2xl border-2 transition-all ${ans.isCorrect ? 'bg-green-500/5 border-green-500/30' : 'bg-rose-500/5 border-rose-500/30'}`}>
+                         <div className="flex justify-between items-start gap-4 mb-3">
+                            <h5 className="font-bold text-lg leading-relaxed">{idx + 1}. {ans.question}</h5>
+                            {ans.isCorrect ? (
+                              <FaCheckCircle className="text-green-500 text-2xl flex-shrink-0 mt-1" />
+                            ) : (
+                              <FaTimesCircle className="text-rose-500 text-2xl flex-shrink-0 mt-1" />
+                            )}
+                         </div>
+                         
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                            <div className={`p-3 rounded-xl border ${ans.isCorrect ? 'bg-green-600/10 border-green-500/20' : 'bg-rose-600/10 border-rose-500/20'}`}>
+                               <p className="text-xs text-gray-400 mb-1">إجابتك:</p>
+                               <p className={`font-bold ${ans.isCorrect ? 'text-green-400' : 'text-rose-400'}`}>{ans.selectedText}</p>
+                            </div>
+                            
+                            {!ans.isCorrect && (
+                               <div className="p-3 rounded-xl border bg-cyan-600/10 border-cyan-500/20">
+                                  <p className="text-xs text-gray-400 mb-1">الإجابة الصحيحة:</p>
+                                  <p className="font-bold text-cyan-400">{ans.correctText}</p>
+                               </div>
+                            )}
+                         </div>
                       </div>
                    ))}
                  </div>
