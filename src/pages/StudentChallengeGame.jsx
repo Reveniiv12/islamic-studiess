@@ -98,13 +98,19 @@ export default function StudentChallengeGame() {
 
   useEffect(() => {
     let timer;
-    if (gameState === 'playing' && timeLeft > 0) {
+    if (gameState === 'playing' && timeLeft > 0 && !isChecking) {
       timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-    } else if (timeLeft === 0 && gameState === 'playing') {
+    } else if (timeLeft === 0 && gameState === 'playing' && !isChecking) {
       handleAnswer(-1); // timeout
     }
     return () => clearInterval(timer);
-  }, [gameState, timeLeft]);
+  }, [gameState, timeLeft, isChecking]);
+
+  // Safety reset for selection states whenever question index changes
+  useEffect(() => {
+    setSelectedAnswer(null);
+    setIsChecking(false);
+  }, [currentQuestionIndex]);
 
   const startGame = async () => {
     const isPractice = assignment.is_practice;
@@ -179,7 +185,7 @@ export default function StudentChallengeGame() {
       }]);
       
       if (currentQuestionIndex + 1 < questions.length) {
-        // Reset selection states BEFORE moving to next question to avoid "ghost" selection
+        // Reset states
         setSelectedAnswer(null);
         setIsChecking(false);
         setCurrentQuestionIndex(prev => prev + 1);
@@ -187,7 +193,7 @@ export default function StudentChallengeGame() {
       } else {
         finishGame(score + (isCorrect ? 1 : 0));
       }
-    }, 1000); // 1 second feedback
+    }, 600); // Snappier feedback (0.6s)
   };
 
   const finishGame = async (finalScore) => {
@@ -284,7 +290,8 @@ export default function StudentChallengeGame() {
         )}
 
         {gameState === 'playing' && questions.length > 0 && (
-           <div key={currentQuestionIndex} className="w-full max-w-2xl animate-slideUp">
+           <div className="w-full max-w-2xl">
+              {/* Stable Header (Timer and Question Number) */}
               <div className="flex justify-between items-center mb-8 bg-gray-900/50 p-4 rounded-2xl border border-gray-700">
                  <div className="text-gray-400 font-bold">
                     سؤال <span className="text-white text-xl">{currentQuestionIndex + 1}</span> / {questions.length}
@@ -294,35 +301,38 @@ export default function StudentChallengeGame() {
                  </div>
               </div>
 
-              <div className="mb-10 text-center">
-                 <h3 className="text-2xl font-bold leading-relaxed">{questions[currentQuestionIndex].text}</h3>
-              </div>
+              {/* Animating Question and Options */}
+              <div key={currentQuestionIndex} className="animate-slideUp">
+                  <div className="mb-10 text-center">
+                     <h3 className="text-2xl font-bold leading-relaxed">{questions[currentQuestionIndex].text}</h3>
+                  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {questions[currentQuestionIndex].options.map((opt, idx) => {
-                    const isSelected = selectedAnswer === idx;
-                    const isCorrect = idx === questions[currentQuestionIndex].correctIndex;
-                    
-                    let btnClass = "p-6 border-2 rounded-2xl text-lg font-bold transition-all text-right shadow-md ";
-                    if (isChecking) {
-                       if (isCorrect) btnClass += "bg-green-600/30 border-green-500 text-green-100 shadow-green-500/20";
-                       else if (isSelected) btnClass += "bg-rose-600/30 border-rose-500 text-rose-100 shadow-rose-500/20";
-                       else btnClass += "bg-gray-700/20 border-gray-700 opacity-50";
-                    } else {
-                       btnClass += "bg-gray-700/40 hover:bg-indigo-600/30 border-gray-600 hover:border-indigo-500";
-                    }
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     {questions[currentQuestionIndex].options.map((opt, idx) => {
+                        const isSelected = selectedAnswer === idx;
+                        const isCorrect = idx === questions[currentQuestionIndex].correctIndex;
+                        
+                        let btnClass = "p-6 border-2 rounded-2xl text-lg font-bold transition-all text-right shadow-md ";
+                        if (isChecking) {
+                           if (isCorrect) btnClass += "bg-green-600/30 border-green-500 text-green-100 shadow-green-500/20";
+                           else if (isSelected) btnClass += "bg-rose-600/30 border-rose-500 text-rose-100 shadow-rose-500/20";
+                           else btnClass += "bg-gray-700/20 border-gray-700 opacity-50";
+                        } else {
+                           btnClass += "bg-gray-700/40 hover:bg-indigo-600/30 border-gray-600 hover:border-indigo-500";
+                        }
 
-                    return (
-                      <button 
-                        key={`${currentQuestionIndex}-${idx}`}
-                        onClick={() => handleAnswer(idx)}
-                        disabled={isChecking}
-                        className={btnClass}
-                      >
-                        {opt}
-                      </button>
-                    );
-                 })}
+                        return (
+                          <button 
+                            key={`${currentQuestionIndex}-${idx}`}
+                            onClick={() => handleAnswer(idx)}
+                            disabled={isChecking}
+                            className={btnClass}
+                          >
+                            {opt}
+                          </button>
+                        );
+                     })}
+                  </div>
               </div>
            </div>
         )}
