@@ -312,13 +312,14 @@ export default function StudentChallengeGame() {
                         const isSelected = selectedAnswer === idx;
                         const isCorrect = idx === questions[currentQuestionIndex].correctIndex;
                         
-                        let btnClass = "p-6 border-2 rounded-2xl text-lg font-bold transition-all text-right shadow-md ";
+                        let btnClass = "p-6 border-2 rounded-2xl text-lg font-bold transition-all text-right shadow-md select-none outline-none ";
                         if (isChecking) {
                            if (isCorrect) btnClass += "bg-green-600/30 border-green-500 text-green-100 shadow-green-500/20";
                            else if (isSelected) btnClass += "bg-rose-600/30 border-rose-500 text-rose-100 shadow-rose-500/20";
                            else btnClass += "bg-gray-700/20 border-gray-700 opacity-50";
                         } else {
-                           btnClass += "bg-gray-700/40 hover:bg-indigo-600/30 border-gray-600 hover:border-indigo-500";
+                           // Use md:hover to only show hover on desktop, avoiding sticky hover on mobile
+                           btnClass += "bg-gray-700/40 border-gray-600 md:hover:bg-indigo-600/30 md:hover:border-indigo-500 active:bg-indigo-600/20";
                         }
 
                         return (
