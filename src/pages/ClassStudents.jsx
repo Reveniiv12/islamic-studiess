@@ -7,8 +7,8 @@ import { v4 as uuidv4 } from "uuid"; // تم إضافة هذا السطر لمف
 export default function ClassStudents() {
   const { gradeId, classId } = useParams();
   const navigate = useNavigate();
+  const [teacherId, setTeacherId] = useState(null);
   const [students, setStudents] = useState([]);
-
   const [newStudent, setNewStudent] = useState({
     name: "",
     nationalId: "",
@@ -19,12 +19,17 @@ export default function ClassStudents() {
 
   useEffect(() => {
     async function fetchStudents() {
-      // قراءة البيانات من جدول واحد مع ربطها بالـ gradeId و classId
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setTeacherId(user.id);
+
+      // قراءة البيانات من جدول واحد مع ربطها بالـ gradeId و classId والمعلم
       const { data, error } = await supabase
         .from('students')
         .select('*')
-        .eq('grade_id', gradeId) // استخدام .eq للبحث
-        .eq('class_id', classId);
+        .eq('grade_id', gradeId)
+        .eq('class_id', classId)
+        .eq('teacher_id', user.id);
 
       if (error) {
         console.error("خطأ في جلب بيانات الطلاب:", error);
@@ -47,13 +52,14 @@ export default function ClassStudents() {
       .insert([
         {
           name: newStudent.name,
-          national_id: newStudent.nationalId, // ملاحظة: يفضل snake_case
+          national_id: newStudent.nationalId, 
           phone: newStudent.phone,
           image_url: newStudent.imageUrl,
           view_key: viewKey,
-          grade_id: gradeId, // ربط الطالب بالصف والمرحلة
+          grade_id: gradeId, 
           class_id: classId,
-          grades: {} // إذا كان grades كائنًا
+          teacher_id: teacherId,
+          grades: {} 
         }
       ]);
 

@@ -38,11 +38,14 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
   // --- 1. جلب الأسبوع المحفوظ ---
   useEffect(() => {
     const fetchSavedSettings = async () => {
+      const teacherId = students[0]?.teacher_id;
+      if (!teacherId) return;
+
       try {
         const { data, error } = await supabase
           .from('settings')
           .select('current_week')
-          .eq('id', 'general')
+          .eq('id', teacherId)
           .single();
         
         if (data && data.current_week) {
@@ -56,17 +59,19 @@ const DailyAttendanceModal = ({ students, onClose, onSave, activeSemester }) => 
     };
 
     fetchSavedSettings();
-  }, []);
+  }, [students]);
 
   // --- 2. دالة تغيير الأسبوع وحفظه ---
   const handleWeekChange = async (newWeek) => {
     const weekNum = Number(newWeek);
     setSelectedWeek(weekNum);
+    const teacherId = students[0]?.teacher_id;
+    if (!teacherId) return;
     
     try {
       await supabase
         .from('settings')
-        .upsert({ id: 'general', current_week: weekNum });
+        .upsert({ id: teacherId, current_week: weekNum });
     } catch (err) {
       console.error("Error saving week:", err);
     }

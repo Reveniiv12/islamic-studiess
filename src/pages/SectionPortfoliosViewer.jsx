@@ -152,20 +152,39 @@ const SectionPortfoliosViewer = () => {
       }
   };
 
+  const [teacherId, setTeacherId] = useState(null);
+  
+  useEffect(() => {
+    const getTeacher = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            setTeacherId(user.id);
+            // Initial fetches that need teacherId
+            fetchHiddenSections(user.id);
+            fetchSectionsForGrade(user.id);
+        }
+    };
+    getTeacher();
+  }, [gradeId]);
 
-  const fetchHiddenSections = async () => {
-      const { data } = await supabase.from('section_visibility').select('section_id').eq('grade_id', gradeId).eq('is_hidden', true);
+  const fetchHiddenSections = async (tId) => {
+      const idToUse = tId || teacherId;
+      if (!idToUse) return;
+      const { data } = await supabase.from('section_visibility').select('section_id').eq('grade_id', gradeId).eq('is_hidden', true).eq('teacher_id', idToUse);
       if (data) {
           setHiddenSections(data.map(item => item.section_id));
       }
   };
 
-  const fetchSectionsForGrade = async () => {
+  const fetchSectionsForGrade = async (tId) => {
+      const idToUse = tId || teacherId;
+      if (!idToUse) return;
       try {
           const { data, error } = await supabase
               .from('students')
               .select('section')
-              .eq('grade_level', gradeId);
+              .eq('grade_level', gradeId)
+              .eq('teacher_id', idToUse);
           
           if (!error && data && data.length > 0) {
               const uniqueSectionIds = [...new Set(data.map(item => item.section))];
@@ -184,6 +203,7 @@ const SectionPortfoliosViewer = () => {
   };
 
   const fetchData = async (secId) => {
+    if (!teacherId) return;
     setLoading(true);
     try {
         const { data: studentsData, error: stError } = await supabase
@@ -191,6 +211,7 @@ const SectionPortfoliosViewer = () => {
             .select('*')
             .eq('section', secId)
             .eq('grade_level', gradeId)
+            .eq('teacher_id', teacherId)
             .order('name', { ascending: true });
         if (stError) throw stError;
 
@@ -219,8 +240,9 @@ const SectionPortfoliosViewer = () => {
   };
 
   const fetchAllStudentNotes = async (secId) => {
+    if (!teacherId) return;
     try {
-        const { data: studentsInSec } = await supabase.from('students').select('id').eq('section', secId).eq('grade_level', gradeId);
+        const { data: studentsInSec } = await supabase.from('students').select('id').eq('section', secId).eq('grade_level', gradeId).eq('teacher_id', teacherId);
         if(!studentsInSec) return;
         const ids = studentsInSec.map(s => s.id);
         

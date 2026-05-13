@@ -181,7 +181,7 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, activeSeme
                     teacher_id: teacherId, 
                     recitation: recitation,
                     homework: updatedHomework
-                }, { onConflict: 'grade_id,section_id' });
+                }, { onConflict: 'grade_id,section_id,teacher_id' });
 
             if (error) throw error;
             
@@ -232,7 +232,7 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, activeSeme
                     teacher_id: teacherId,
                     recitation: recitation,
                     homework: updatedHomework,
-                }, { onConflict: 'grade_id,section_id' });
+                }, { onConflict: 'grade_id,section_id,teacher_id' });
 
             if (error) throw error;
             
@@ -276,7 +276,7 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, activeSeme
                     teacher_id: teacherId,
                     recitation: recitation,
                     homework: updatedHomework,
-                }, { onConflict: 'grade_id,section_id' });
+                }, { onConflict: 'grade_id,section_id,teacher_id' });
 
             if (error) throw error;
             

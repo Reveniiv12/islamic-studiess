@@ -1,4 +1,4 @@
-﻿// src/pages/StudentView.jsx
+// src/pages/StudentView.jsx
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -305,24 +305,7 @@ function StudentView() {
   // ----------------------------------------------------------------------
   const refreshStudentData = useCallback(async () => {
       try {
-          const { data: settingsData } = await supabase
-              .from('settings')
-              .select('student_view_config')
-              .eq('id', 'general')
-              .single();
-
-          if (settingsData?.student_view_config) {
-             const config = settingsData.student_view_config;
-             setViewConfig(config);
-             
-             if (config.is_locked) {
-                setIsLocked(true);
-                setLockMessage(config.lock_message);
-             } else {
-                setIsLocked(false);
-             }
-          }
-
+          // 1. جلب بيانات الطالب أولاً لمعرفة المعلم
           const { data: student, error: studentError } = await supabase
               .from('students')
               .select('*, teacher_id, absences(*), book_absences(*)')
@@ -335,6 +318,35 @@ function StudentView() {
           let teacherId = null;
           if (rawTeacherId) {
               teacherId = String(rawTeacherId).trim();
+          }
+
+          // 2. جلب الإعدادات الخاصة بهذا المعلم حصراً
+          let { data: settingsData, error: settingsError } = await supabase
+              .from('settings')
+              .select('student_view_config')
+              .eq('id', teacherId)
+              .single();
+
+          // إذا لم نجد إعدادات خاصة بالمعلم، نجرب البحث في الإعدادات العامة (لضمان التوافق مع الحسابات القديمة)
+          if (!settingsData || settingsError) {
+              const { data: generalData } = await supabase
+                  .from('settings')
+                  .select('student_view_config')
+                  .eq('id', 'general')
+                  .single();
+              if (generalData) settingsData = generalData;
+          }
+
+          if (settingsData?.student_view_config) {
+             const config = settingsData.student_view_config;
+             setViewConfig(config);
+             
+             if (config.is_locked) {
+                setIsLocked(true);
+                setLockMessage(config.lock_message);
+             } else {
+                setIsLocked(false);
+             }
           }
           
           const { data: rData } = await supabase

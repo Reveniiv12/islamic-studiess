@@ -29,8 +29,13 @@ const PortfolioPublic = () => {
           .eq('user_id', userId)
           .order('created_at', { ascending: true });
 
-        // جلب الإعدادات
-        const { data: sData } = await supabase.from('settings').select('*').eq('id', 'general').single();
+        // جلب الإعدادات مع خيار احتياطي
+        let { data: sData, error: sError } = await supabase.from('settings').select('*').eq('id', userId).single();
+        
+        if (!sData || sError) {
+          const { data: gData } = await supabase.from('settings').select('*').eq('id', 'general').single();
+          if (gData) sData = gData;
+        }
 
         setCategories(cData || []);
         setFiles(fData || []);

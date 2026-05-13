@@ -146,6 +146,7 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
         .from('students')
         .select('max_allowed_messages')
         .eq('id', selectedStudentId)
+        .eq('teacher_id', teacherId)
         .single();
         
       if (studentData?.max_allowed_messages !== undefined) {
@@ -257,7 +258,7 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
   const handleDeleteMessage = async (msgId) => {
     if (String(msgId).startsWith('temp')) return;
     if (!window.confirm("هل أنت متأكد من حذف هذه الرسالة؟ لن يراها الطالب بعد الآن.")) return;
-    await supabase.from('messages').delete().eq('id', msgId);
+    await supabase.from('messages').delete().eq('id', msgId).eq('teacher_id', teacherId);
   };
 
   // دالة تحديث الرصيد للطالب الواحد (معالجة الـ 400 Bad Request)
@@ -316,7 +317,7 @@ const TeacherChat = ({ teacherId, students, onClose }) => {
     }
 
     setIsUpdatingMax(true);
-    const { error } = await supabase.from('students').update({ max_allowed_messages: valueToSet }).in('id', selectedForBulk);
+    const { error } = await supabase.from('students').update({ max_allowed_messages: valueToSet }).in('id', selectedForBulk).eq('teacher_id', teacherId);
     setIsUpdatingMax(false);
     
     if (!error) {

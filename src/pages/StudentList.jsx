@@ -15,19 +15,24 @@ const StudentList = () => {
         section: sectionId, // إضافة حقول جديدة
     });
 
+    const [teacherId, setTeacherId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [message, setMessage] = useState('');
     const [activeStudent, setActiveStudent] = useState(null);
     const [transferClass, setTransferClass] = useState('');
 
     // دالة لجلب الطلاب من Supabase
-    const fetchStudents = async () => {
+    const fetchStudents = async (tId) => {
+        const idToUse = tId || teacherId;
+        if (!idToUse) return;
+        
         setLoading(true);
         const { data, error } = await supabase
             .from('students')
             .select('*')
             .eq('grade_id', gradeId)
             .eq('section', sectionId)
+            .eq('teacher_id', idToUse)
             .order('name', { ascending: true }); // ترتيب حسب الاسم
 
         if (error) {
@@ -39,34 +44,44 @@ const StudentList = () => {
     };
 
     useEffect(() => {
-        // جلب الطلاب عند تحميل المكون لأول مرة
-        fetchStudents();
-        
-        // الاشتراك في التغييرات اللحظية
-        const channel = supabase
-            .channel('students_changes')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'students',
-                    filter: `grade_id=eq.${gradeId}&section=eq.${sectionId}`
-                },
-                () => {
-                    fetchStudents();
-                }
-            )
-            .subscribe();
+        const setup = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                setTeacherId(user.id);
+                fetchStudents(user.id);
+                
+                // الاشتراك في التغييرات اللحظية الخاصة بهذا المعلم فقط
+                const channel = supabase
+                    .channel('students_changes')
+                    .on(
+                        'postgres_changes',
+                        {
+                            event: '*',
+                            schema: 'public',
+                            table: 'students',
+                            filter: `teacher_id=eq.${user.id}`
+                        },
+                        () => {
+                            fetchStudents(user.id);
+                        }
+                    )
+                    .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
+                return () => {
+                    supabase.removeChannel(channel);
+                };
+            }
         };
+        setup();
     }, [gradeId, sectionId]);
 
     const handleAddStudent = async () => {
         if (!newStudent.name || !newStudent.id) {
             setMessage("الرجاء إدخال اسم ورقم السجل المدني.");
+            return;
+        }
+        if (!teacherId) {
+            setMessage("فشل التحقق من هوية المعلم.");
             return;
         }
 
@@ -79,7 +94,8 @@ const StudentList = () => {
                     phone: newStudent.phone,
                     image_url: newStudent.imageUrl,
                     grade_id: gradeId,
-                    section: sectionId
+                    section: sectionId,
+                    teacher_id: teacherId
                 });
 
             if (error) {
@@ -96,11 +112,13 @@ const StudentList = () => {
     };
     
     const handleDeleteStudent = async (studentId) => {
+        if (!teacherId) return;
         try {
           const { error } = await supabase
             .from('students')
             .delete()
-            .eq('id', studentId);
+            .eq('id', studentId)
+            .eq('teacher_id', teacherId);
             
             if (error) {
                 console.error("Error deleting student:", error);

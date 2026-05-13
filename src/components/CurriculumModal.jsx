@@ -152,7 +152,7 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, activeSemester, on
                 teacher_id: teacherId,
                 recitation: updatedRecitation, 
                 homework: homework, // الحفاظ على الواجبات كما هي
-            }, { onConflict: 'grade_id,section_id' });
+            }, { onConflict: 'grade_id,section_id,teacher_id' });
 
         if (error) throw error;
         return true;

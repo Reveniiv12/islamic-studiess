@@ -123,7 +123,7 @@ export const resetStudentData = async (students, teacherId, handleDialog, refres
     
     const { error: curriculumUpdateError } = await supabase
       .from('curriculum')
-      .upsert([curriculumUpdate], { onConflict: 'grade_id,section_id' });
+      .upsert([curriculumUpdate], { onConflict: 'grade_id,section_id,teacher_id' });
 
     if (curriculumUpdateError) {
       throw curriculumUpdateError;

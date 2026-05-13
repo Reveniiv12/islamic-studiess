@@ -297,7 +297,7 @@ const SectionGrades = () => {
       const { data: settingsData } = await supabase
         .from('settings')
         .select('*')
-        .eq('id', 'general')
+        .eq('id', user.id)
         .single();
       
       let savedPeriod = 'period1';
@@ -522,7 +522,7 @@ const SectionGrades = () => {
       const { error } = await supabase
         .from('settings')
         .upsert({
-          id: 'general',
+          id: teacherId,
           test_method: method
         }, { onConflict: 'id' });
 
@@ -570,7 +570,7 @@ const SectionGrades = () => {
       const { error } = await supabase
         .from('settings')
         .upsert({
-          id: 'general',
+          id: teacherId,
           current_period: period 
         }, { onConflict: 'id' });
 

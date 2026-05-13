@@ -40,15 +40,16 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
   }, [show]);
 
   const fetchSettings = async () => {
+    if (!teacherId) return;
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('settings')
         .select('student_view_config')
-        .eq('id', 'general')
+        .eq('id', teacherId)
         .single();
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') throw error;
 
       if (data && data.student_view_config) {
         const loadedConfig = {
@@ -83,7 +84,7 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
       const { error } = await supabase
         .from('settings')
         .upsert({
-          id: 'general',
+          id: teacherId,
           student_view_config: config
         }, { onConflict: 'id' });
 

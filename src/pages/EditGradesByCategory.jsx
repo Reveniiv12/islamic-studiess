@@ -8,17 +8,23 @@ const EditGradesByCategory = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState("");
-
+  const [teacherId, setTeacherId] = useState(null);
+  
   useEffect(() => {
     const fetchStudents = async () => {
       setLoading(true);
       try {
-        // قراءة الطلاب من جدول واحد مع ربطهم بـ grade و classNumber
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        setTeacherId(user.id);
+
+        // قراءة الطلاب من جدول واحد مع ربطهم بـ grade و classNumber والمعلم
         const { data, error } = await supabase
           .from("students")
-          .select("id, name, grades") // جلب فقط الأعمدة التي تحتاجها
-          .eq("grade_id", grade) // البحث بناءً على grade_id
-          .eq("class_id", classNumber); // البحث بناءً على class_id
+          .select("id, name, grades") 
+          .eq("grade_id", grade)
+          .eq("class_id", classNumber)
+          .eq("teacher_id", user.id);
 
         if (error) {
           console.error("Error fetching students:", error);
@@ -43,6 +49,7 @@ const EditGradesByCategory = () => {
         .from('students')
         .select('grades')
         .eq('id', id)
+        .eq('teacher_id', teacherId)
         .single();
 
       if (fetchError || !currentStudent) {
@@ -60,7 +67,8 @@ const EditGradesByCategory = () => {
       const { error: updateError } = await supabase
         .from('students')
         .update({ grades: updatedGrades })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('teacher_id', teacherId);
 
       if (updateError) {
         console.error("Error updating grades:", updateError);

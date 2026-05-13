@@ -328,7 +328,12 @@ const Portfolio = () => {
     
     const { data: fData } = await supabase.from('files').select('*').eq('user_id', user.id).order('order_index', { ascending: true }).order('created_at', { ascending: true });
     
-    const { data: sData } = await supabase.from('settings').select('*').eq('id', 'general').single();
+    let { data: sData, error: sError } = await supabase.from('settings').select('*').eq('id', user.id).single();
+    
+    if (!sData || sError) {
+      const { data: gData } = await supabase.from('settings').select('*').eq('id', 'general').single();
+      if (gData) sData = gData;
+    }
     
     setCategories(cData || []);
     setFiles(fData || []);

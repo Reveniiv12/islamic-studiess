@@ -4,20 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { gradesData } from "../data/mockData";
 import Navbar from "../components/Navbar";
 import { 
-  FaUserGraduate, 
-  FaBars, 
-  FaTimes, 
-  FaCog, 
-  FaRedo, 
-  FaDownload, 
-  FaTrash, 
-  FaFolderOpen, 
-  FaChartBar,
-  FaFileAlt,
-  FaExchangeAlt, // أيقونة التبديل
-  FaCalendarCheck
-} from "react-icons/fa";
+  FaUserGraduate, FaChalkboardTeacher, FaCalendarAlt, FaFileAlt, FaSignOutAlt, 
+  FaBars, FaTimes, FaCog, FaHistory, FaShieldAlt, FaCloud, FaDownload, 
+  FaDesktop, FaFileDownload, FaRedo, FaExchangeAlt, FaFolderOpen, FaEye, FaTrash, FaLock
+} from 'react-icons/fa';
 import { supabase } from "../supabaseClient";
+import BackupPreviewer from "../components/BackupPreviewer";
 
 const TeacherDashboard = () => {
   const navigate = useNavigate();
@@ -55,6 +47,8 @@ const TeacherDashboard = () => {
   const [selectedBackupKey, setSelectedBackupKey] = useState(null);
   
   const [backupTitle, setBackupTitle] = useState("");
+  const [isBackupCenterOpen, setIsBackupCenterOpen] = useState(false);
+  const [backupProgress, setBackupProgress] = useState(0);
 
   // حالة جديدة لإدارة نافذة الحوار المخصصة
   const [customDialogState, setCustomDialogState] = useState({
@@ -65,6 +59,10 @@ const TeacherDashboard = () => {
     onConfirm: () => {},
     onCancel: () => {},
   });
+
+  // --- حالات المستعرض الجديدة ---
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
   
   const setCustomDialog = (dialogProps) => {
     setCustomDialogState(dialogProps);
@@ -85,6 +83,73 @@ const TeacherDashboard = () => {
       console.error("Failed to load backups:", err);
       setBackups([]);
     }
+  };
+
+  const collectAllTeacherData = async () => {
+    setBackupProgress(0);
+    const tables = [
+      'students', 'grades', 'absences', 'book_absences',
+      'curriculum', 'announcements',
+      'challenges', 'challenge_sessions', 'challenge_history',
+      'messages', 'page_visits', 'student_visits',
+      'class_materials', 'course_folders', 'portfolio_files',
+      'files', 'folder_assignments', 'folder_contents', 'library_files',
+      'sections', 'section_visibility', 'grade_types', 'categories',
+      'teacher_info', 'teacher_photos', 'prizes', 'reward_requests',
+      'activity_log', 'supervisor_visits', 'supervisor_student_notes', 'note_templates'
+    ];
+
+    const results = {};
+    let completed = 0;
+
+    const fetchTable = async (table, filter = true) => {
+      let query = supabase.from(table).select('*');
+      if (filter) query = query.eq('teacher_id', teacherId);
+      const { data } = await query;
+      
+      completed++;
+      setBackupProgress(Math.round((completed / tables.length) * 100));
+      return data || [];
+    };
+
+    results.students = await fetchTable('students');
+    results.grades = await fetchTable('grades');
+    results.absences = await fetchTable('absences');
+    results.book_absences = await fetchTable('book_absences');
+    results.curriculum = await fetchTable('curriculum');
+    results.announcements = await fetchTable('announcements');
+    results.challenges = await fetchTable('challenges');
+    results.challenge_sessions = await fetchTable('challenge_sessions');
+    results.challenge_history = await fetchTable('challenge_history');
+    results.messages = await fetchTable('messages');
+    results.page_visits = await fetchTable('page_visits');
+    results.student_visits = await fetchTable('student_visits');
+    results.class_materials = await fetchTable('class_materials');
+    results.course_folders = await fetchTable('course_folders');
+    results.portfolio_files = await supabase.from('portfolio_files').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    results.files = await supabase.from('files').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    results.folder_assignments = await supabase.from('folder_assignments').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    results.folder_contents = await supabase.from('folder_contents').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    results.library_files = await supabase.from('library_files').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    results.sections = await fetchTable('sections');
+    results.section_visibility = await fetchTable('section_visibility');
+    results.grade_types = await supabase.from('grade_types').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    results.categories = await supabase.from('categories').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    results.settings = await supabase.from('settings').select('*').eq('id', teacherId);
+    results.teacher_info = await fetchTable('teacher_info');
+    results.teacher_photos = await fetchTable('teacher_photos');
+    results.prizes = await fetchTable('prizes');
+    results.reward_requests = await supabase.from('reward_requests').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    results.activity_log = await fetchTable('activity_log');
+    results.supervisor_visits = await fetchTable('supervisor_visits');
+    results.supervisor_student_notes = await fetchTable('supervisor_student_notes');
+    results.note_templates = await supabase.from('note_templates').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+
+    return {
+      ...results,
+      version: "3.0",
+      backup_date: new Date().toISOString()
+    };
   };
 
   useEffect(() => {
@@ -147,24 +212,24 @@ const TeacherDashboard = () => {
     const fetchSettings = async () => {
       if (!teacherId) return;
       try {
-        const { data, error } = await supabase
+        const { data: settingsData, error } = await supabase
           .from('settings')
           .select('*')
-          .eq('id', 'general')
+          .eq('id', teacherId)
           .single();
 
         if (error && error.code !== 'PGRST205' && error.code !== 'PGRST116') throw error;
 
-        if (data) {
-          setTeacherName(data.teacher_name || "اسم المعلم");
-          setSchoolName(data.school_name || "اسم المدرسة");
-          setCurrentSemester(data.current_semester || "الفصل الدراسي الأول");
-          setTeacherPhoto(data.teacher_photo || "/images/default_teacher.png");
+        if (settingsData) {
+          setTeacherName(settingsData.teacher_name || "اسم المعلم");
+          setSchoolName(settingsData.school_name || "اسم المدرسة");
+          setCurrentSemester(settingsData.current_semester || "الفصل الدراسي الأول");
+          setTeacherPhoto(settingsData.teacher_photo || "/images/default_teacher.png");
           // جلب الفصل النشط (semester1 او semester2)
-          setActiveSemesterKey(data.active_semester_key || "semester1");
+          setActiveSemesterKey(settingsData.active_semester_key || "semester1");
         } else {
           // إنشاء إعدادات افتراضية
-          await supabase.from('settings').insert([{ id: 'general', active_semester_key: 'semester1' }]);
+          await supabase.from('settings').insert([{ id: teacherId, active_semester_key: 'semester1' }]);
         }
       } catch (err) {
         console.error("Failed to fetch settings", err);
@@ -197,7 +262,7 @@ const TeacherDashboard = () => {
                 const { error } = await supabase
                     .from('settings')
                     .upsert({
-                        id: 'general',
+                        id: teacherId,
                         active_semester_key: newSemesterKey,
                         current_semester: newSemesterName // تحديث الاسم أيضاً للعرض
                     });
@@ -242,7 +307,7 @@ const TeacherDashboard = () => {
               school_name: inputs.schoolName,
               teacher_photo: inputs.teacherPhoto,
             })
-            .eq('id', 'general');
+            .eq('id', teacherId);
 
           if (error) throw error;
 
@@ -308,48 +373,74 @@ const TeacherDashboard = () => {
   };
   
   const performBackup = async () => {
-    setModalMessage("جاري حفظ النسخة الاحتياطية...");
+    setModalMessage("جاري إنشاء نسخة احتياطية سحابية شاملة (v3.0)...");
     setModalError("");
 
     try {
-      const title = backupTitle || `نسخة احتياطية بتاريخ: ${new Date().toLocaleString('ar-EG')}`;
-
-      const { data: studentsData } = await supabase.from('students').select('*').eq('teacher_id', teacherId);
-      const { data: gradesData } = await supabase.from('grades').select('*').eq('teacher_id', teacherId);
-      const { data: curriculumData } = await supabase.from('curriculum').select('*').eq('teacher_id', teacherId);
-      const { data: announcementsData } = await supabase.from('announcements').select('*').eq('teacher_id', teacherId);
-      const { data: prizesData } = await supabase.from('prizes').select('*').eq('teacher_id', teacherId);
-      const { data: absencesData } = await supabase.from('absences').select('*').eq('teacher_id', teacherId);
-      const { data: bookAbsencesData } = await supabase.from('book_absences').select('*').eq('teacher_id', teacherId);
-      const { data: sectionsData } = await supabase.from('sections').select('*').eq('teacher_id', teacherId);
-      const { data: settingsData } = await supabase.from('settings').select('*').eq('id', 'general');
-
-      const backupData = {
-        students: studentsData,
-        grades: gradesData,
-        curriculum: curriculumData,
-        announcements: announcementsData,
-        prizes: prizesData,
-        absences: absencesData,
-        book_absences: bookAbsencesData,
-        sections: sectionsData,
-        settings: settingsData
-      };
+      const title = backupTitle || `نسخة احتياطية شاملة بتاريخ: ${new Date().toLocaleString('ar-EG')}`;
+      const fullData = await collectAllTeacherData();
 
       const { error: insertError } = await supabase
         .from('backups')
-        .insert([{ teacher_id: teacherId, title: title, data: backupData }]);
+        .insert([{ teacher_id: teacherId, title: title, data: fullData }]);
 
       if (insertError) throw insertError;
       
-      await loadBackups();
-      setModalMessage("تم حفظ النسخة الاحتياطية بنجاح.");
+      setModalMessage("تم الحفظ السحابي بنجاح (v3.0)");
+      loadBackups();
+      setTimeout(() => {
+        setModalMessage("");
+        setBackupProgress(0);
+      }, 2000);
       return true;
 
     } catch (err) {
-      setModalError("فشل حفظ النسخة الاحتياطية.");
+      setModalError("فشل حفظ النسخة السحابية.");
       console.error("Error creating backup:", err);
       return false;
+    }
+  };
+
+  const handleDirectDownload = async () => {
+    setModalMessage("جاري تحضير ملف JSON الشامل (v3.0)...");
+    try {
+      const fullData = await collectAllTeacherData();
+      const jsonString = JSON.stringify(fullData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Full_Backup_v3_${new Date().toLocaleDateString('ar-EG')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setModalMessage("تم تحميل النسخة الكاملة على جهازك بنجاح.");
+      setTimeout(() => {
+        setModalMessage("");
+        setBackupProgress(0);
+      }, 2000);
+    } catch (err) {
+      console.error("Download error:", err);
+      setModalError("فشل التحميل.");
+    }
+  };
+
+  const handleFileImport = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          setPreviewData(json);
+          setIsPreviewOpen(true);
+          setModalMessage("تم تحميل الملف بنجاح للمعاينة.");
+          setTimeout(() => setModalMessage(""), 2000);
+        } catch (err) {
+          alert("الملف غير صالح.");
+        }
+      };
+      reader.readAsText(file);
     }
   };
 
@@ -411,24 +502,209 @@ const TeacherDashboard = () => {
         await supabase.from('absences').delete().eq('teacher_id', teacherId);
         await supabase.from('book_absences').delete().eq('teacher_id', teacherId);
         await supabase.from('sections').delete().eq('teacher_id', teacherId);
-        await supabase.from('settings').delete().eq('id', 'general');
+        await supabase.from('settings').delete().eq('id', teacherId);
 
         const parsedBackup = backupData.data;
-        await supabase.from('settings').insert(parsedBackup.settings);
-        await supabase.from('sections').insert(parsedBackup.sections);
-        await supabase.from('curriculum').insert(parsedBackup.curriculum);
-        await supabase.from('announcements').insert(parsedBackup.announcements);
-        await supabase.from('prizes').insert(parsedBackup.prizes);
-        await supabase.from('students').insert(parsedBackup.students);
-        await supabase.from('grades').insert(parsedBackup.grades);
-        await supabase.from('absences').insert(parsedBackup.absences);
-        await supabase.from('book_absences').insert(parsedBackup.book_absences);
+        const fixData = (items) => (items || []).map(({ id, ...rest }) => ({ ...rest, teacher_id: teacherId }));
+
+        if (parsedBackup.settings && parsedBackup.settings.length > 0) {
+            const { id, ...settingsRest } = Array.isArray(parsedBackup.settings) ? parsedBackup.settings[0] : parsedBackup.settings;
+            await supabase.from('settings').insert({ ...settingsRest, id: teacherId });
+        }
+        
+        if (parsedBackup.sections) await supabase.from('sections').insert(fixData(parsedBackup.sections));
+        if (parsedBackup.curriculum) await supabase.from('curriculum').insert(fixData(parsedBackup.curriculum));
+        if (parsedBackup.announcements) await supabase.from('announcements').insert(fixData(parsedBackup.announcements));
+        if (parsedBackup.prizes) await supabase.from('prizes').insert(fixData(parsedBackup.prizes));
+        if (parsedBackup.students) await supabase.from('students').insert(fixData(parsedBackup.students));
+        if (parsedBackup.grades) await supabase.from('grades').insert(fixData(parsedBackup.grades));
+        if (parsedBackup.absences) await supabase.from('absences').insert(fixData(parsedBackup.absences));
+        if (parsedBackup.book_absences) await supabase.from('book_absences').insert(fixData(parsedBackup.book_absences));
 
         setModalMessage("تم استعادة البيانات بنجاح.");
         setTimeout(() => { window.location.reload(); }, 2000);
       } catch (err) {
         setModalError("حدث خطأ أثناء الاستعادة.");
       }
+    }
+  };
+
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [confirmType, setConfirmType] = useState('restore'); // 'restore', 'backup', 'download', 'snapshot'
+    const [passwordInput, setPasswordInput] = useState('');
+    const [pendingAction, setPendingAction] = useState(null);
+
+    const handleStartLocalRestore = () => {
+        setIsPreviewOpen(false);
+        setConfirmType('restore');
+        setPendingAction(() => async () => {
+            setModalMessage("جاري استعادة البيانات من الملف (v3.0)...");
+            setBackupProgress(10);
+            await executeRestoreLogic();
+        });
+        setIsConfirmModalOpen(true);
+    };
+
+    const handleConfirmPassword = async () => {
+      if (!teacherId || !passwordInput) return;
+
+      setModalError(null);
+      // التحقق من كلمة المرور
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: passwordInput,
+      });
+
+      if (authError) {
+        setModalError("كلمة المرور غير صحيحة. تم رفض العملية.");
+        return;
+      }
+
+      setIsConfirmModalOpen(false);
+      setPasswordInput(''); // مسح كلمة المرور للأمان
+
+      if (pendingAction) {
+          await pendingAction();
+          setPendingAction(null);
+      }
+    };
+
+    const executeRestoreLogic = async () => {
+      if (!previewData) return;
+      try {
+        // 1. مسح البيانات الحالية
+        const tables = ['grades', 'students', 'curriculum', 'announcements', 'prizes', 'absences', 'book_absences', 'sections'];
+      for (let i = 0; i < tables.length; i++) {
+        await supabase.from(tables[i]).delete().eq('teacher_id', teacherId);
+        setBackupProgress(10 + (i + 1) * 5);
+      }
+      await supabase.from('settings').delete().eq('id', teacherId);
+
+      // 2. تجهيز البيانات الجديدة والتحقق من المالك الأصلي
+      const data = { ...previewData };
+      const firstStudent = data.students?.[0];
+      const isSameTeacher = firstStudent && firstStudent.teacher_id === teacherId;
+
+      const fixData = (items) => (items || []).map(item => {
+        if (isSameTeacher) return { ...item, teacher_id: teacherId };
+        const { id, ...rest } = item;
+        return { ...rest, teacher_id: teacherId };
+      });
+
+      // 3. الإدخال التدريجي مع معالجة التعارضات (Safe Import Mode)
+      console.log("Starting Safe Smart Restore... isSameTeacher:", isSameTeacher);
+      const sectionMap = new Map();
+      const studentMap = new Map();
+
+      // أ. إدخال الإعدادات
+      if (data.settings && data.settings.length > 0) {
+          const sToImport = Array.isArray(data.settings) ? data.settings[0] : data.settings;
+          const { id, ...sRest } = sToImport;
+          await supabase.from('settings').upsert({ ...sRest, id: teacherId }, { onConflict: 'id' });
+      }
+      
+      // ب. معالجة الفصول (وإنشاؤها إذا كانت مفقودة لضمان الظهور)
+      let sectionsToProcess = data.sections || [];
+      if (!isSameTeacher && sectionsToProcess.length === 0 && data.students) {
+          // استخراج الفصول الفريدة من الطلاب إذا لم توجد فصول في الملف
+          const uniqueSections = [...new Set(data.students.map(s => s.section || s.section_id))].filter(Boolean);
+          sectionsToProcess = uniqueSections.map(sId => ({ name: `فصل ${sId}`, id: sId }));
+          console.log("Auto-generating sections from students data:", sectionsToProcess.length);
+      }
+
+      if (sectionsToProcess.length > 0) {
+          for (const section of sectionsToProcess) {
+              const { id: oldId, ...sectionRest } = section;
+              // محاولة إدخال بسيطة بدون select أولاً إذا فشل
+              try {
+                const { data: newS, error: err } = await supabase.from('sections').insert({ 
+                    name: sectionRest.name || `فصل ${oldId}`, 
+                    teacher_id: teacherId 
+                }).select();
+                
+                if (newS && newS[0]) {
+                    sectionMap.set(String(oldId), String(newS[0].id));
+                } else {
+                    console.warn(`Could not get new ID for section ${oldId}, attempting fallback...`);
+                }
+              } catch (e) {
+                console.error("Section insert exception:", e);
+              }
+          }
+      }
+      console.log("Section Mapping Ready:", sectionMap.size);
+      setBackupProgress(70);
+
+      // دالة معالجة البيانات مع حل تعارض الهوية الوطنية
+      const processData = (items, type = 'general') => {
+          if (!items || !Array.isArray(items)) return [];
+          return items.map(item => {
+              if (isSameTeacher) return { ...item, teacher_id: teacherId };
+              
+              const { id, ...rest } = item;
+              const newItem = { ...rest, teacher_id: teacherId };
+              
+              // حل تعارض الهوية الوطنية: إضافة رمز تمييز
+              if (type === 'student' && newItem.national_id) {
+                  newItem.national_id = `${newItem.national_id}_${teacherId.substring(0,4)}`;
+              }
+
+              if (item.section_id && sectionMap.has(String(item.section_id))) newItem.section_id = sectionMap.get(String(item.section_id));
+              if (item.section && sectionMap.has(String(item.section))) newItem.section = sectionMap.get(String(item.section));
+              
+              return newItem;
+          });
+      };
+
+      // ج. إدخال بقية البيانات
+      if (data.curriculum) {
+          const processed = processData(data.curriculum);
+          const uniqueCur = []; const seen = new Set();
+          processed.forEach(c => {
+              const key = `${c.grade_id}-${c.section_id}`;
+              if(!seen.has(key)) { seen.add(key); uniqueCur.push(c); }
+          });
+          // نستخدم الـ insert ونصطاد الخطأ إذا حدث تعارض في المنهج لتستمر العملية
+          try { await supabase.from('curriculum').insert(uniqueCur); } catch(e) {}
+      }
+
+      if (data.announcements) await supabase.from('announcements').insert(processData(data.announcements));
+      if (data.prizes) await supabase.from('prizes').insert(processData(data.prizes));
+      
+      if (data.students) {
+          console.log("Inserting students into new sections...");
+          const processedStudents = processData(data.students, 'student');
+          const { data: newStudents, error: sErr } = await supabase.from('students').insert(processedStudents).select();
+          
+          if (newStudents && data.grades) {
+              if (!isSameTeacher) {
+                  data.students.forEach((oldS, idx) => {
+                      if (newStudents[idx]) studentMap.set(String(oldS.id), String(newStudents[idx].id));
+                  });
+              }
+
+              const fixStudentLinks = (items) => (items || []).map(item => {
+                  if (isSameTeacher) return { ...item, teacher_id: teacherId };
+                  const { id, ...rest } = item;
+                  const newItem = { ...rest, teacher_id: teacherId };
+                  if (item.student_id && studentMap.has(String(item.student_id))) newItem.student_id = studentMap.get(String(item.student_id));
+                  return newItem;
+              });
+
+              await supabase.from('grades').insert(fixStudentLinks(data.grades));
+              if (data.absences) await supabase.from('absences').insert(fixStudentLinks(data.absences));
+              if (data.book_absences) await supabase.from('book_absences').insert(fixStudentLinks(data.book_absences));
+          }
+      }
+      console.log("Safe Restore process completed.");
+      
+      setBackupProgress(100);
+      setModalMessage("تمت الاستعادة من الملف بنجاح! سيتم إعادة تحميل الصفحة...");
+      setTimeout(() => { window.location.reload(); }, 2000);
+    } catch (err) {
+      console.error("Local restore error:", err);
+      setModalError("فشل استعادة البيانات من الملف.");
+      setBackupProgress(0);
     }
   };
 
@@ -564,14 +840,14 @@ const TeacherDashboard = () => {
             <button onClick={() => navigate("/portfolio")} className="w-full py-3 bg-blue-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-blue-700 transition">
               <FaFolderOpen /> ملف الإنجاز
             </button>
-            <button onClick={handleResetData} className="w-full py-3 bg-red-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-red-700 transition">
-              <FaRedo /> إعادة تعيين
-            </button>
-            <button onClick={handleRestoreData} className="w-full py-3 bg-green-600 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-green-700 transition">
-              <FaDownload /> استرداد
-            </button>
-            <button onClick={handleStandaloneBackup} className="w-full py-3 bg-gray-700 text-white rounded-lg flex items-center justify-center gap-3 hover:bg-gray-600 transition">
-              <FaDownload /> حفظ نسخة احتياطية
+            <button 
+              onClick={() => {
+                setIsMenuOpen(false);
+                setIsBackupCenterOpen(true);
+              }} 
+              className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl flex items-center justify-center gap-3 hover:from-blue-500 hover:to-indigo-500 transition shadow-xl font-black border border-white/10"
+            >
+              <FaShieldAlt /> مركز النسخ الاحتياطي
             </button>
           </div>
         </div>
@@ -579,7 +855,23 @@ const TeacherDashboard = () => {
 
       {isMenuOpen && <div onClick={toggleMenu} className="fixed inset-0 bg-black opacity-50 z-30"></div>}
       
-      {modalMessage && <div className="fixed top-4 right-4 z-[200] bg-green-500 text-white px-4 py-2 rounded shadow-lg">{modalMessage}</div>}
+      {modalMessage && (
+        <div className="fixed top-4 right-4 z-[200] bg-gray-900 border border-blue-500/30 text-white p-6 rounded-[2rem] shadow-2xl min-w-[350px] animate-slideUp overflow-hidden">
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black text-blue-400 uppercase tracking-widest">جاري معالجة البيانات v3.0</span>
+              <span className="text-sm font-black text-white">{backupProgress}%</span>
+            </div>
+            <p className="text-sm font-bold">{modalMessage}</p>
+            <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-blue-600 transition-all duration-300 shadow-[0_0_10px_rgba(37,99,235,0.5)]" 
+                style={{ width: `${backupProgress}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      )}
       {modalError && <div className="fixed top-4 right-4 z-[200] bg-red-500 text-white px-4 py-2 rounded shadow-lg">{modalError}</div>}
 
       {/* Restore Modal */}
@@ -592,18 +884,45 @@ const TeacherDashboard = () => {
               <input type="password" placeholder="كلمة المرور" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-2 bg-gray-700 text-white rounded focus:ring-2 focus:ring-blue-500" />
               <ul className="text-right space-y-2 mb-6 max-h-60 overflow-y-auto">
                 {backups.map((backup) => (
-                  <li key={backup.id} className={`flex justify-between items-center p-3 rounded-lg cursor-pointer ${selectedBackupKey === backup.id ? 'bg-blue-600' : 'bg-gray-700'}`} onClick={() => setSelectedBackupKey(backup.id)}>
-                    <div>
-                        <span className="font-semibold block">{backup.title}</span>
-                        <span className="text-xs text-gray-400">{new Date(backup.created_at).toLocaleDateString()}</span>
+                  <li key={backup.id} className={`flex flex-col p-3 rounded-lg cursor-pointer transition ${selectedBackupKey === backup.id ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'}`} onClick={() => setSelectedBackupKey(backup.id)}>
+                    <div className="flex justify-between items-center w-full">
+                        <div className="flex flex-col text-right">
+                            <span className="font-semibold block text-sm">{backup.title}</span>
+                            <span className="text-[10px] text-gray-400">{new Date(backup.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex gap-2 mr-auto">
+                            <button 
+                                type="button"
+                                onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    setPreviewData(backup.data);
+                                    setIsPreviewOpen(true);
+                                }} 
+                                className="p-2 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500 hover:text-white transition"
+                                title="معاينة النسخة"
+                            >
+                                <FaEye size={14} />
+                            </button>
+                            <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteBackup(backup.id); }} className="p-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500 hover:text-white transition">
+                                <FaTrash size={14} />
+                            </button>
+                        </div>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteBackup(backup.id); }} className="text-red-400"><FaTrash /></button>
                   </li>
                 ))}
               </ul>
-              <div className="flex justify-between">
-                 <button type="button" onClick={() => setIsRestoreModalOpen(false)} className="px-6 py-2 bg-gray-600 rounded text-white">إلغاء</button>
-                 <button type="submit" disabled={!selectedBackupKey} className="px-6 py-2 bg-green-600 rounded text-white">استرداد</button>
+              <div className="flex flex-col gap-3 py-4 border-t border-white/5">
+                 <p className="text-[10px] text-gray-500 font-bold">أو استعرض ملفاً من جهازك:</p>
+                 <div className="relative group">
+                    <input type="file" accept=".json" onChange={handleFileImport} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                    <button type="button" className="w-full py-3 bg-indigo-600/20 text-indigo-400 rounded-xl font-bold border border-indigo-500/10 group-hover:bg-indigo-600 group-hover:text-white transition-all flex items-center justify-center gap-3">
+                       <FaDesktop /> اختيار ملف JSON ومعاينته
+                    </button>
+                 </div>
+              </div>
+              <div className="flex justify-between mt-4">
+                 <button type="button" onClick={() => setIsRestoreModalOpen(false)} className="px-6 py-2 bg-gray-600 rounded text-white font-bold">إغلاق</button>
+                 <button type="submit" disabled={!selectedBackupKey} className="px-6 py-2 bg-green-600 rounded text-white font-black shadow-lg">تأكيد الاسترداد</button>
               </div>
             </form>
           </div>
@@ -671,6 +990,183 @@ const TeacherDashboard = () => {
           ))}
         </div>
       </div>
+      {/* مركز إدارة النسخ الاحتياطي (النافذة الجديدة) */}
+      {isBackupCenterOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" dir="rtl">
+          <div className="bg-gray-900 border border-white/10 w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-slideUp">
+            <div className="p-8 border-b border-white/5 flex justify-between items-center bg-blue-600/10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/20">
+                  <FaShieldAlt className="text-white text-xl" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white">مركز إدارة النسخ الاحتياطية</h3>
+                  <p className="text-xs text-gray-500 font-bold">إدارة الملفات، الاسترداد، واللقطات المرجعية</p>
+                </div>
+              </div>
+              <button onClick={() => setIsBackupCenterOpen(false)} className="text-gray-500 hover:text-white transition p-2"><FaTimes size={24} /></button>
+            </div>
+
+            <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* قسم السحابة */}
+              <div className="col-span-full mb-2">
+                <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest mb-4">العمليات السحابية (Supabase)</p>
+              </div>
+              
+              <button 
+                onClick={() => { 
+                  setIsBackupCenterOpen(false); 
+                  setPendingAction(() => handleStandaloneBackup);
+                  setConfirmType('backup');
+                  setIsConfirmModalOpen(true); 
+                }} 
+                className="flex items-center gap-4 p-5 bg-blue-600/10 border border-blue-500/20 rounded-3xl hover:bg-blue-600 hover:text-white transition group"
+              >
+                <FaCloud className="text-2xl text-blue-500 group-hover:text-white" />
+                <div className="text-right">
+                  <p className="font-bold text-sm">حفظ نسخة سحابية</p>
+                  <p className="text-[9px] opacity-60">تخزين آمن على قواعد البيانات</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => {
+                  setIsBackupCenterOpen(false);
+                  setPendingAction(() => async () => {
+                      setBackupTitle(`نقطة مرجعية - ${new Date().toLocaleString('ar-EG')}`);
+                      await performBackup();
+                  });
+                  setConfirmType('snapshot');
+                  setIsConfirmModalOpen(true);
+                }} 
+                className="flex items-center gap-4 p-5 bg-amber-600/10 border border-amber-500/20 rounded-3xl hover:bg-amber-600 hover:text-white transition group"
+              >
+                <FaHistory className="text-2xl text-amber-500 group-hover:text-white" />
+                <div className="text-right">
+                  <p className="font-bold text-sm">نقطة مرجعية (Snapshot)</p>
+                  <p className="text-[9px] opacity-60">حفظ الحالة الحالية فوراً</p>
+                </div>
+              </button>
+
+              <button onClick={() => { setIsBackupCenterOpen(false); handleRestoreData(); }} className="flex items-center gap-4 p-5 bg-green-600/10 border border-green-500/20 rounded-3xl hover:bg-green-600 hover:text-white transition group">
+                <FaDownload className="text-2xl text-green-500 group-hover:text-white" />
+                <div className="text-right">
+                  <p className="font-bold text-sm">استرداد ومعاينة</p>
+                  <p className="text-[9px] opacity-60">استرجاع من النسخ السحابية</p>
+                </div>
+              </button>
+
+              {/* قسم المحلي */}
+              <div className="col-span-full mt-4 mb-2">
+                <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest mb-4">العمليات المحلية والملفات</p>
+              </div>
+
+              <button 
+                onClick={() => { 
+                  setIsBackupCenterOpen(false); 
+                  setPendingAction(() => handleDirectDownload);
+                  setConfirmType('download');
+                  setIsConfirmModalOpen(true);
+                }} 
+                className="flex items-center gap-4 p-5 bg-indigo-600/10 border border-indigo-500/20 rounded-3xl hover:bg-indigo-600 hover:text-white transition group"
+              >
+                <FaDesktop className="text-2xl text-indigo-500 group-hover:text-white" />
+                <div className="text-right">
+                  <p className="font-bold text-sm">تحميل ملف JSON شامل</p>
+                  <p className="text-[9px] opacity-60">حفظ نسخة كاملة على جهازك</p>
+                </div>
+              </button>
+
+              <div className="relative group">
+                <input type="file" accept=".json" onChange={(e) => { setIsBackupCenterOpen(false); handleFileImport(e); }} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                <div className="flex items-center gap-4 p-5 bg-slate-800 border border-white/5 rounded-3xl group-hover:bg-gray-700 transition">
+                  <FaFileDownload className="text-2xl text-gray-400" />
+                  <div className="text-right">
+                    <p className="font-bold text-sm text-white">معاينة ملف خارجي</p>
+                    <p className="text-[9px] text-gray-500">عرض محتويات ملف من جهازك</p>
+                  </div>
+                </div>
+              </div>
+
+              <button onClick={() => { setIsBackupCenterOpen(false); handleResetData(); }} className="flex items-center gap-4 p-5 bg-red-600/10 border border-red-500/20 rounded-3xl hover:bg-red-600 hover:text-white transition group">
+                <FaRedo className="text-2xl text-red-500 group-hover:text-white" />
+                <div className="text-right">
+                  <p className="font-bold text-sm text-red-500 group-hover:text-white">إعادة تعيين النظام</p>
+                  <p className="text-[9px] opacity-60">حذف كافة البيانات الحالية</p>
+                </div>
+              </button>
+            </div>
+            
+            <div className="p-6 bg-gray-950/50 text-center">
+              <p className="text-[10px] text-gray-500 font-bold">إصدار نظام النسخ الاحتياطي: v3.0 الشامل</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* المستعرض الشامل */}
+      {isPreviewOpen && (
+        <BackupPreviewer 
+          data={previewData} 
+          onConfirm={handleStartLocalRestore}
+          onCancel={() => setIsPreviewOpen(false)}
+        />
+      )}
+
+      {/* مودال التأكيد النهائي بكلمة المرور */}
+      {isConfirmModalOpen && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-[250] p-4">
+          <div className={`bg-gray-900 border ${confirmType === 'restore' ? 'border-red-500/30' : 'border-blue-500/30'} rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden animate-zoomIn`}>
+            <div className="p-8 text-center">
+              <div className={`w-20 h-20 ${confirmType === 'restore' ? 'bg-red-500/10 text-red-500 shadow-red-500/5' : 'bg-blue-500/10 text-blue-500 shadow-blue-500/5'} rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg`}>
+                {confirmType === 'restore' ? <FaShieldAlt size={40} /> : <FaLock size={40} />}
+              </div>
+              
+              <h3 className="text-2xl font-black text-white mb-2">
+                {confirmType === 'restore' ? 'تأكيد الاستعادة النهائية' : 
+                 confirmType === 'backup' ? 'تأكيد الحفظ السحابي' : 
+                 confirmType === 'snapshot' ? 'تأكيد إنشاء نقطة مرجعية' : 'تأكيد تصدير البيانات'}
+              </h3>
+              
+              <p className="text-gray-400 text-sm mb-8 font-bold leading-relaxed">
+                {confirmType === 'restore' ? 'تنبيه: سيتم مسح كافة البيانات الحالية واستبدالها بمحتويات الملف. هذه العملية لا يمكن التراجع عنها.' : 
+                 'يرجى إدخال كلمة مرور حسابك لتأكيد هويتك وإتمام عملية معالجة البيانات بأمان.'}
+              </p>
+              
+              <div className="space-y-4">
+                <div className="relative">
+                  <input 
+                    type="password" 
+                    placeholder="كلمة مرور الحساب" 
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 text-white p-4 rounded-2xl text-center font-bold focus:border-blue-500 outline-none transition-all placeholder:text-gray-600"
+                  />
+                </div>
+                
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    onClick={handleConfirmPassword}
+                    className={`flex-1 py-4 ${confirmType === 'restore' ? 'bg-red-600 hover:bg-red-500 shadow-red-600/20' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/20'} text-white rounded-2xl font-black shadow-lg transition-all active:scale-95`}
+                  >
+                    تأكيد العملية
+                  </button>
+                  <button 
+                    onClick={() => {
+                        setIsConfirmModalOpen(false);
+                        setPasswordInput('');
+                        setPendingAction(null);
+                    }}
+                    className="flex-1 py-4 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-2xl font-bold transition-all"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
