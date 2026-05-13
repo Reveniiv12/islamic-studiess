@@ -385,6 +385,7 @@ const SectionGrades = () => {
              };
 
              semesterGrades = {
+                 ...rawGrades,
                  semester1: {
                      period1: p1,
                      period2: period2Data,
@@ -395,6 +396,7 @@ const SectionGrades = () => {
              };
         } else {
             semesterGrades = {
+                ...rawGrades,
                 semester1: rawGrades.semester1 || createEmptySemesterStructure(),
                 semester2: rawGrades.semester2 || createEmptySemesterStructure()
             };
