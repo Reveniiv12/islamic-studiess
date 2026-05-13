@@ -102,9 +102,9 @@ const TeacherDashboard = () => {
     const results = {};
     let completed = 0;
 
-    const fetchTable = async (table, filter = true) => {
+    const fetchTable = async (table, filterCol = 'teacher_id') => {
       let query = supabase.from(table).select('*');
-      if (filter) query = query.eq('teacher_id', teacherId);
+      if (filterCol) query = query.eq(filterCol, teacherId);
       const { data } = await query;
       
       completed++;
@@ -126,15 +126,25 @@ const TeacherDashboard = () => {
     results.student_visits = await fetchTable('student_visits');
     results.class_materials = await fetchTable('class_materials');
     results.course_folders = await fetchTable('course_folders');
-    results.portfolio_files = await supabase.from('portfolio_files').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
-    results.files = await supabase.from('files').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    
+    // جلب ملفات إنجاز الطلاب: عبر معرفات الطلاب الموجودين
+    const studentIds = results.students.map(s => s.id);
+    if (studentIds.length > 0) {
+        const { data: pFiles } = await supabase.from('portfolio_files').select('*').in('student_id', studentIds);
+        results.portfolio_files = pFiles || [];
+    } else {
+        results.portfolio_files = [];
+    }
+    completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+
+    results.files = await fetchTable('files', 'user_id'); // ملفات إنجاز المعلم تستخدم user_id
     results.folder_assignments = await supabase.from('folder_assignments').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
     results.folder_contents = await supabase.from('folder_contents').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
     results.library_files = await supabase.from('library_files').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
     results.sections = await fetchTable('sections');
     results.section_visibility = await fetchTable('section_visibility');
     results.grade_types = await supabase.from('grade_types').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
-    results.categories = await supabase.from('categories').select('*'); completed++; setBackupProgress(Math.round((completed / tables.length) * 100));
+    results.categories = await fetchTable('categories', 'user_id'); // تصنيفات ملف الإنجاز تستخدم user_id
     results.settings = await supabase.from('settings').select('*').eq('id', teacherId);
     results.teacher_info = await fetchTable('teacher_info');
     results.teacher_photos = await fetchTable('teacher_photos');
