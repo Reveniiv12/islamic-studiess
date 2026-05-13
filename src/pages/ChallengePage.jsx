@@ -1542,35 +1542,42 @@ const AssignmentsView = ({ gradeId, sectionId, teacherId, onClose, handleDialog,
 
   const handleDelete = (assignmentId) => {
     handleDialog("تأكيد الحذف", "حذف هذا التكليف من جميع الطلاب المعينين لهم؟ لا يمكن التراجع عن هذه الخطوة.", "confirm", async () => {
-       setDialogConfig(prev => ({...prev, show: false}));
-       const targetAssignment = assignments.find(a => a.id === assignmentId);
-       if (!targetAssignment) return;
+       // Close the confirmation dialog and show a loading state
+       setDialogConfig({ show: true, title: "جاري الحذف", message: "يتم الآن حذف التكليف من جميع السجلات...", type: "info", onConfirm: null });
+       
+       try {
+         // Find all students for this teacher who might have this assignment
+         // This ensures it's deleted even if it was assigned to multiple sections
+         const { data: allStudents, error: fetchError } = await supabase
+           .from('students')
+           .select('id, grades')
+           .eq('teacher_id', teacherId);
 
-       // Use Promise.allSettled to handle all students in parallel and ensure one failure doesn't stop others
-       const updatePromises = targetAssignment.students.map(async (student) => {
-         try {
-           const { data, error: fetchError } = await supabase.from('students').select('grades').eq('id', student.id).single();
-           if (fetchError || !data) return;
+         if (fetchError) throw fetchError;
 
-           const currentGrades = data.grades || {};
+         const updatePromises = allStudents.map(async (student) => {
+           const currentGrades = student.grades || {};
            const assignedChallenges = currentGrades.assigned_challenges || [];
            const newAssigned = assignedChallenges.filter(a => a.id !== assignmentId);
            
-           if (assignedChallenges.length === newAssigned.length) return; // Already deleted or not found
+           if (assignedChallenges.length === newAssigned.length) return;
 
            const { error: updateError } = await supabase
              .from('students')
              .update({ grades: { ...currentGrades, assigned_challenges: newAssigned } })
              .eq('id', student.id);
            
-           if (updateError) throw updateError;
-         } catch (err) {
-           console.error(`Failed to delete assignment for student ${student.id}:`, err);
-         }
-       });
+           if (updateError) console.error(`Failed for student ${student.id}:`, updateError);
+         });
 
-       await Promise.allSettled(updatePromises);
-       fetchAssignments();
+         await Promise.allSettled(updatePromises);
+         
+         handleDialog("نجاح", "تم حذف التكليف بنجاح من جميع الطلاب.", "success");
+         fetchAssignments();
+       } catch (err) {
+         console.error("Error deleting assignment:", err);
+         handleDialog("خطأ", "حدث خطأ أثناء محاولة حذف التكليف.", "error");
+       }
     });
   };
 

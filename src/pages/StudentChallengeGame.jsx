@@ -84,8 +84,11 @@ export default function StudentChallengeGame() {
       
       // Combine questions from all challenges, shuffle options, pick requested count
       let allQuestions = challengesData.flatMap(c => c.questions || []);
+      console.log('[Challenge] Raw questions from DB:', allQuestions.length, 'challenges:', challengesData.length);
       allQuestions = allQuestions.sort(() => 0.5 - Math.random());
-      const selectedQuestions = allQuestions.slice(0, currentAssignment.questions_count).map(shuffleOptions);
+      const count = currentAssignment.questions_count || allQuestions.length;
+      const selectedQuestions = allQuestions.slice(0, count).map(shuffleOptions);
+      console.log('[Challenge] Selected questions:', selectedQuestions.length);
       setQuestions(selectedQuestions);
 
     } catch (err) {
@@ -98,13 +101,13 @@ export default function StudentChallengeGame() {
 
   useEffect(() => {
     let timer;
-    if (gameState === 'playing' && timeLeft > 0 && !isChecking) {
+    if (gameState === 'playing' && questions.length > 0 && timeLeft > 0 && !isChecking) {
       timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-    } else if (timeLeft === 0 && gameState === 'playing' && !isChecking) {
+    } else if (timeLeft === 0 && gameState === 'playing' && questions.length > 0 && !isChecking) {
       handleAnswer(-1); // timeout
     }
     return () => clearInterval(timer);
-  }, [gameState, timeLeft, isChecking]);
+  }, [gameState, timeLeft, isChecking, questions.length]);
 
   // Safety reset for selection states whenever question index changes
   useEffect(() => {
@@ -153,6 +156,11 @@ export default function StudentChallengeGame() {
       }
     }
     
+    if (questions.length === 0) {
+      alert('لا توجد أسئلة في هذا التحدي. يرجى التواصل مع المعلم.');
+      return;
+    }
+    
     setGameState('playing');
     setCurrentQuestionIndex(0);
     setScore(0);
@@ -166,10 +174,12 @@ export default function StudentChallengeGame() {
     if (isChecking) return; // Prevent double clicks
     
     const currentQ = questions[currentQuestionIndex];
-    const isCorrect = selectedIndex === currentQ.correctIndex;
+    if (!currentQ) return; // Guard: questions not loaded yet
     
-    const selectedText = selectedIndex === -1 ? "انتهى الوقت" : currentQ.options[selectedIndex];
-    const correctText = currentQ.options[currentQ.correctIndex];
+    const isCorrect = selectedIndex !== -1 && selectedIndex === currentQ.correctIndex;
+    
+    const selectedText = selectedIndex === -1 ? "انتهى الوقت" : (currentQ.options?.[selectedIndex] ?? '');
+    const correctText = currentQ.options?.[currentQ.correctIndex] ?? '';
     
     setSelectedAnswer(selectedIndex);
     setIsChecking(true);
@@ -193,7 +203,7 @@ export default function StudentChallengeGame() {
       } else {
         finishGame(score + (isCorrect ? 1 : 0));
       }
-    }, 600); // Snappier feedback (0.6s)
+    }, 600);
   };
 
   const finishGame = async (finalScore) => {
@@ -286,6 +296,16 @@ export default function StudentChallengeGame() {
                    <FaPlay /> ابدأ التحدي الآن
                  </button>
               )}
+           </div>
+        )}
+
+        {gameState === 'playing' && questions.length === 0 && (
+           <div className="text-center space-y-4">
+             <p className="text-xl font-bold text-rose-400">⚠️ لا توجد أسئلة في هذا التحدي</p>
+             <p className="text-gray-400 text-sm">يرجى التواصل مع المعلم لإضافة أسئلة.</p>
+             <button onClick={() => setGameState('intro')} className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-xl font-bold transition-all">
+               العودة
+             </button>
            </div>
         )}
 

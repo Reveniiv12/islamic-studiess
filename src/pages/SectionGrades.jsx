@@ -230,7 +230,6 @@ const SectionGrades = () => {
   const [notesModalConfig, setNotesModalConfig] = useState(null);
 
   const handleOpenNotes = (studentId, tabName) => {
-      setSelectedStudent(null); 
       setNotesModalConfig({ selectedIds: [studentId], activeTab: tabName }); 
       setShowNotesModal(true); 
   };
@@ -1924,9 +1923,11 @@ const handleExportQRCodes = async () => {
             onSave={handleSaveChanges}
             curriculum={curriculum}
             homeworkCurriculum={homeworkCurriculum}
-            currentPeriod={currentPeriod}
-            checkCurriculumExists={checkCurriculumExists}
-            getInputStyle={getInputStyle}
+            gradeLabel={gradeName}
+            classLabel={sectionName}
+            semesterLabel={currentSemesterName}
+            periodLabel={currentPeriod === 'period1' ? 'الأولى' : 'الثانية'}
+            onOpenNotes={handleOpenNotes}
         />
       )}
 
