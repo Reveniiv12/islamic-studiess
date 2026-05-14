@@ -147,12 +147,13 @@ const CurriculumModal = ({ gradeId, sectionId, currentPeriod, activeSemester, on
         const { error } = await supabase
             .from('curriculum')
             .upsert({
+                id: existingCurriculum?.id, // استخدام المعرف للتحديث بدلاً من الاعتماد على القيد الفريد المركب
                 grade_id: gradeId,
                 section_id: sectionId,
                 teacher_id: teacherId,
                 recitation: updatedRecitation, 
                 homework: homework, // الحفاظ على الواجبات كما هي
-            }, { onConflict: 'grade_id,section_id,teacher_id' });
+            });
 
         if (error) throw error;
         return true;

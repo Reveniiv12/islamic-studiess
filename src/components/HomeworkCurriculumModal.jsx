@@ -176,12 +176,13 @@ const HomeworkCurriculumModal = ({ gradeId, sectionId, currentPeriod, activeSeme
             const { error } = await supabase
                 .from('curriculum')
                 .upsert({
+                    id: existingCurriculum?.id,
                     grade_id: gradeId,
                     section_id: sectionId,
                     teacher_id: teacherId, 
                     recitation: recitation,
                     homework: updatedHomework
-                }, { onConflict: 'grade_id,section_id,teacher_id' });
+                });
 
             if (error) throw error;
             

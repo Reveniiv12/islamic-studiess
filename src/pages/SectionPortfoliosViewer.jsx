@@ -22,6 +22,7 @@ const SectionPortfoliosViewer = () => {
   
   // --- States ---
   const [loading, setLoading] = useState(true);
+  const [teacherId, setTeacherId] = useState(null);
   
   // Settings (Semester & Period)
   const [activeSemester, setActiveSemester] = useState('semester1');
@@ -90,27 +91,44 @@ const SectionPortfoliosViewer = () => {
 
   useEffect(() => {
     const initPage = async () => {
-        setLoading(true);
-        await fetchSettingsAndTeacherInfo();
-        await fetchHiddenSections();
+        try {
+            setLoading(true);
+            
+            let currentTeacherId = teacherId;
+            if (!currentTeacherId) {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    currentTeacherId = user.id;
+                    setTeacherId(user.id);
+                }
+            }
 
-        if (isSupervisor && !activeSectionId) {
-            await fetchSectionsForGrade();
-        }
-        
-        if (activeSectionId) {
-            if (!isSupervisor) await fetchSectionsForGrade();
-            await fetchData(activeSectionId);
-            await fetchVisitsLog(activeSectionId);
-            await fetchAllStudentNotes(activeSectionId);
-        }
+            await fetchSettingsAndTeacherInfo();
+            
+            if (currentTeacherId) {
+                await fetchHiddenSections(currentTeacherId);
+                if (!isSupervisor) {
+                     await fetchSectionsForGrade(currentTeacherId);
+                } else if (!activeSectionId) {
+                     await fetchSectionsForGrade(currentTeacherId);
+                }
+            }
 
-        if (isSupervisor && !activeSectionId) {
-            setLoading(false);
+            if (activeSectionId && currentTeacherId) {
+                await fetchData(activeSectionId, currentTeacherId);
+                await fetchVisitsLog(activeSectionId);
+                await fetchAllStudentNotes(activeSectionId, currentTeacherId);
+            }
+        } catch (error) {
+            console.error("Error in initPage:", error);
+        } finally {
+            if (activeSectionId || (isSupervisor && !activeSectionId)) {
+                setLoading(false);
+            }
         }
     };
     initPage();
-  }, [gradeId, activeSectionId, isSupervisor]);
+  }, [gradeId, activeSectionId, isSupervisor, teacherId]);
 
   // --- Fetching Functions ---
 
@@ -152,27 +170,35 @@ const SectionPortfoliosViewer = () => {
       }
   };
 
-  const [teacherId, setTeacherId] = useState(null);
-  
-  useEffect(() => {
-    const getTeacher = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            setTeacherId(user.id);
-            // Initial fetches that need teacherId
-            fetchHiddenSections(user.id);
-            fetchSectionsForGrade(user.id);
-        }
-    };
-    getTeacher();
-  }, [gradeId]);
-
   const fetchHiddenSections = async (tId) => {
       const idToUse = tId || teacherId;
       if (!idToUse) return;
-      const { data } = await supabase.from('section_visibility').select('section_id').eq('grade_id', gradeId).eq('is_hidden', true).eq('teacher_id', idToUse);
-      if (data) {
-          setHiddenSections(data.map(item => item.section_id));
+      try {
+          // محاولة الجلب مع فلتر teacher_id
+          const { data, error } = await supabase
+            .from('section_visibility')
+            .select('section_id')
+            .eq('grade_id', gradeId)
+            .eq('is_hidden', true)
+            .eq('teacher_id', idToUse);
+            
+          if (error) {
+              // إذا كان الخطأ بسبب عدم وجود العمود، نجرب بدون الفلتر
+              if (error.code === '42703') {
+                  const { data: fallbackData } = await supabase
+                    .from('section_visibility')
+                    .select('section_id')
+                    .eq('grade_id', gradeId)
+                    .eq('is_hidden', true);
+                  if (fallbackData) setHiddenSections(fallbackData.map(item => item.section_id));
+              } else {
+                  throw error;
+              }
+          } else if (data) {
+              setHiddenSections(data.map(item => item.section_id));
+          }
+      } catch (err) {
+          console.error("Failed to fetch hidden sections", err);
       }
   };
 
@@ -202,8 +228,9 @@ const SectionPortfoliosViewer = () => {
       }
   };
 
-  const fetchData = async (secId) => {
-    if (!teacherId) return;
+  const fetchData = async (secId, currentTeacherId) => {
+    const tId = currentTeacherId || teacherId;
+    if (!tId) return;
     setLoading(true);
     try {
         const { data: studentsData, error: stError } = await supabase
@@ -211,7 +238,7 @@ const SectionPortfoliosViewer = () => {
             .select('*')
             .eq('section', secId)
             .eq('grade_level', gradeId)
-            .eq('teacher_id', teacherId)
+            .eq('teacher_id', tId)
             .order('name', { ascending: true });
         if (stError) throw stError;
 
@@ -239,10 +266,11 @@ const SectionPortfoliosViewer = () => {
     }
   };
 
-  const fetchAllStudentNotes = async (secId) => {
-    if (!teacherId) return;
+  const fetchAllStudentNotes = async (secId, currentTeacherId) => {
+    const tId = currentTeacherId || teacherId;
+    if (!tId) return;
     try {
-        const { data: studentsInSec } = await supabase.from('students').select('id').eq('section', secId).eq('grade_level', gradeId).eq('teacher_id', teacherId);
+        const { data: studentsInSec } = await supabase.from('students').select('id').eq('section', secId).eq('grade_level', gradeId).eq('teacher_id', tId);
         if(!studentsInSec) return;
         const ids = studentsInSec.map(s => s.id);
         
@@ -489,14 +517,32 @@ const SectionPortfoliosViewer = () => {
           setHiddenSections(hiddenSections.filter(id => id !== secId));
       }
       try {
+          // نجلب السجل الحالي إذا وجد للحصول على الـ id
+          const { data: existing } = await supabase
+            .from('section_visibility')
+            .select('id')
+            .eq('grade_id', gradeId)
+            .eq('section_id', secId)
+            .eq('teacher_id', teacherId)
+            .maybeSingle();
+
           const { error } = await supabase
             .from('section_visibility')
             .upsert({ 
+                id: existing?.id,
                 grade_id: gradeId, 
                 section_id: secId, 
-                is_hidden: newStatus 
-            }, { onConflict: 'grade_id, section_id' });
-          if (error) console.error("Failed to update visibility", error);
+                is_hidden: newStatus,
+                teacher_id: teacherId
+            });
+          if (error) {
+              // محاولة أخيرة بدون teacher_id إذا فشل (في حال لم يتم تحديث الجدول بعد)
+              await supabase.from('section_visibility').upsert({
+                  grade_id: gradeId,
+                  section_id: secId,
+                  is_hidden: newStatus
+              }, { onConflict: 'grade_id, section_id' });
+          }
       } catch (err) { console.error(err); }
   };
 
