@@ -42,7 +42,7 @@ const ReportGenerator = () => {
   ];
 
   const targetAudienceOptions = [
-    "طلاب", "معلمون", "أولياء أمور", "إداريون", "المجتمع المحلي", "فئات موجهة"
+    "طلاب", "معلمون", "أولياء أمور", "إداريون", "المجتمع المحلي", "فئات موجهة", "مخصص"
   ];
 
   const [formData, setFormData] = useState({
@@ -61,7 +61,10 @@ const ReportGenerator = () => {
     supervisorName: "أ. ",
     showSupervisor: false,
     showExtraText: false,
-    extraText: ""
+    extraText: "",
+    customTargetAudience: "",
+    customDuration: "",
+    customLocation: ""
   });
 
   const [images, setImages] = useState([]);
@@ -288,27 +291,59 @@ const ReportGenerator = () => {
                   <option key={idx} value={opt}>{opt}</option>
                 ))}
               </select>
+              {formData.targetAudience === "مخصص" && (
+                <input
+                  type="text"
+                  name="customTargetAudience"
+                  value={formData.customTargetAudience}
+                  onChange={handleChange}
+                  placeholder="اكتب الفئة المستهدفة هنا..."
+                  className="w-full mt-2 bg-gray-700 border-gray-600 rounded-lg p-2 text-white outline-none focus:ring-2 ring-emerald-500 text-sm"
+                />
+              )}
             </div>
 
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-1">المدة</label>
-              <select name="duration" value={formData.duration} onChange={handleChange} className="w-full bg-gray-700 border-gray-600 rounded-lg p-2 text-white outline-none">
+              <select name="duration" value={formData.duration} onChange={handleChange} className="w-full bg-gray-700 border-gray-600 rounded-lg p-2 text-white outline-none focus:ring-2 ring-emerald-500">
                 <option>حصة دراسية</option>
                 <option>نصف ساعة</option>
                 <option>ساعة</option>
                 <option>ساعتان</option>
+                <option value="مخصص">مخصص...</option>
               </select>
+              {formData.duration === "مخصص" && (
+                <input
+                  type="text"
+                  name="customDuration"
+                  value={formData.customDuration}
+                  onChange={handleChange}
+                  placeholder="اكتب المدة هنا..."
+                  className="w-full mt-2 bg-gray-700 border-gray-600 rounded-lg p-2 text-white outline-none focus:ring-2 ring-emerald-500 text-sm"
+                />
+              )}
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-1">مكان التنفيذ</label>
-              <select name="location" value={formData.location} onChange={handleChange} className="w-full bg-gray-700 border-gray-600 rounded-lg p-2 text-white outline-none">
+              <select name="location" value={formData.location} onChange={handleChange} className="w-full bg-gray-700 border-gray-600 rounded-lg p-2 text-white outline-none focus:ring-2 ring-emerald-500">
                 <option>الفصل</option>
                 <option>مركز مصادر التعلم</option>
                 <option>المختبر</option>
                 <option>الساحة الداخلية</option>
                 <option>الساحة الخارجية</option>
                 <option>قاعة التدريب</option>
+                <option value="مخصص">مخصص...</option>
               </select>
+              {formData.location === "مخصص" && (
+                <input
+                  type="text"
+                  name="customLocation"
+                  value={formData.customLocation}
+                  onChange={handleChange}
+                  placeholder="اكتب مكان التنفيذ هنا..."
+                  className="w-full mt-2 bg-gray-700 border-gray-600 rounded-lg p-2 text-white outline-none focus:ring-2 ring-emerald-500 text-sm"
+                />
+              )}
             </div>
 
             <div className="md:col-span-2">
@@ -395,8 +430,8 @@ const ReportGenerator = () => {
                   <div className="flex items-baseline gap-2"><span className="font-bold text-[14px]">التاريخ:</span><span className="font-black text-[16px]">{formData.date}</span></div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-right">
-                  <div className="flex items-baseline gap-2"><span className="font-bold text-[14px]">المدة:</span><span className="font-black text-[16px]">{formData.duration}</span></div>
-                  <div className="flex items-baseline gap-2"><span className="font-bold text-[14px]">المكان:</span><span className="font-black text-[16px]">{formData.location}</span></div>
+                  <div className="flex items-baseline gap-2"><span className="font-bold text-[14px]">المدة:</span><span className="font-black text-[16px]">{formData.duration === "مخصص" ? formData.customDuration : formData.duration}</span></div>
+                  <div className="flex items-baseline gap-2"><span className="font-bold text-[14px]">المكان:</span><span className="font-black text-[16px]">{formData.location === "مخصص" ? formData.customLocation : formData.location}</span></div>
                   <div className="flex items-baseline gap-2"><span className="font-bold text-[14px]">العدد:</span><span className="font-black text-[16px]">{formData.beneficiariesCount}</span></div>
                 </div>
               </div>
@@ -405,7 +440,7 @@ const ReportGenerator = () => {
             <div className="px-10 mt-6">
               <div style={{ backgroundColor: "#3eb3a3", minHeight: "520px", borderRadius: "80px 0 0 0", padding: "30px 40px" }}>
                 <div className="border-b border-black/20 pb-4 mb-4 text-right">
-                  <p className="font-bold text-sm" style={{ lineHeight: "1.2" }}>الفئة المستهدفة: <span className="font-black text-md">{formData.targetAudience}</span></p>
+                  <p className="font-bold text-sm" style={{ lineHeight: "1.2" }}>الفئة المستهدفة: <span className="font-black text-md">{formData.targetAudience === "مخصص" ? formData.customTargetAudience : formData.targetAudience}</span></p>
                   <p className="font-bold text-sm mt-2" style={{ lineHeight: "1.2" }}>الاستراتيجيات: <span className="font-black text-md">{formData.selectedStrategies.join(" - ") || "لم تحدد"}</span></p>
                 </div>
 
