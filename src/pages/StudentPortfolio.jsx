@@ -66,7 +66,7 @@ const StudentPortfolio = () => {
       .channel('portfolio-realtime-sync')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'settings', filter: 'id=eq.general' },
+        { event: '*', schema: 'public', table: 'settings' },
         () => fetchData()
       )
       .subscribe();
@@ -80,12 +80,37 @@ const StudentPortfolio = () => {
     try {
       setLoading(true);
 
-      // جلب اسم المدرسة وإعدادات العرض
-      const { data: settingsData } = await supabase
-        .from('settings')
-        .select('school_name, student_view_config')
-        .eq('id', 'general')
+      // جلب بيانات الطالب
+      const { data: student, error } = await supabase
+        .from("students")
+        .select("*")
+        .eq("id", studentId)
         .single();
+
+      if (error) throw error;
+      setStudentData(student);
+
+      const teacherId = student.teacher_id;
+
+      // جلب اسم المدرسة وإعدادات العرض
+      let settingsData = null;
+      if (teacherId) {
+        const { data } = await supabase
+          .from('settings')
+          .select('school_name, student_view_config')
+          .eq('id', teacherId)
+          .maybeSingle();
+        settingsData = data;
+      }
+
+      if (!settingsData) {
+        const { data } = await supabase
+          .from('settings')
+          .select('school_name, student_view_config')
+          .eq('id', 'general')
+          .single();
+        settingsData = data;
+      }
 
       if (settingsData) {
         setSchoolName(settingsData.school_name || "المدرسة الافتراضية");
@@ -106,18 +131,7 @@ const StudentPortfolio = () => {
             setIsLocked(false);
           }
         }
-
       }
-
-      // جلب بيانات الطالب
-      const { data: student, error } = await supabase
-        .from("students")
-        .select("*")
-        .eq("id", studentId)
-        .single();
-
-      if (error) throw error;
-      setStudentData(student);
 
       // جلب اسم المعلم
       if (student.teacher_id) {

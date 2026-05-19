@@ -398,7 +398,7 @@ function StudentView() {
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'settings', filter: 'id=eq.general' },
+        { event: '*', schema: 'public', table: 'settings' },
         () => refreshStudentData()
       )
       .on(
@@ -462,11 +462,24 @@ function StudentView() {
         const gradeId = student.grade_level;
         const sectionId = student.section;
         
-        const { data: settingsData } = await supabase
-          .from('settings')
-          .select('teacher_name, school_name, student_view_config')
-          .eq('id', 'general')
-          .single();
+        let settingsData = null;
+        if (teacherId) {
+          const { data } = await supabase
+            .from('settings')
+            .select('teacher_name, school_name, student_view_config')
+            .eq('id', teacherId)
+            .maybeSingle();
+          settingsData = data;
+        }
+
+        if (!settingsData) {
+          const { data } = await supabase
+            .from('settings')
+            .select('teacher_name, school_name, student_view_config')
+            .eq('id', 'general')
+            .single();
+          settingsData = data;
+        }
 
         if (settingsData?.student_view_config) {
             const config = settingsData.student_view_config;
@@ -596,14 +609,27 @@ function StudentView() {
   const verifyAndProceed = async (type, value) => {
       setVerifying(true); 
       try {
-          const { data: settingsData, error } = await supabase
-              .from('settings')
-              .select('student_view_config')
-              .eq('id', 'general')
-              .single();
+          const teacherId = studentBaseData?.teacher_id;
+          let settingsData = null;
+          if (teacherId) {
+              const { data } = await supabase
+                  .from('settings')
+                  .select('student_view_config')
+                  .eq('id', teacherId)
+                  .maybeSingle();
+              settingsData = data;
+          }
 
-          if (error) throw error;
-          
+          if (!settingsData) {
+              const { data, error } = await supabase
+                  .from('settings')
+                  .select('student_view_config')
+                  .eq('id', 'general')
+                  .single();
+              if (error) throw error;
+              settingsData = data;
+          }
+
           const config = settingsData?.student_view_config;
           
           if (config?.is_locked) {

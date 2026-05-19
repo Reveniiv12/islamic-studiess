@@ -103,7 +103,7 @@ const SectionPortfoliosViewer = () => {
                 }
             }
 
-            await fetchSettingsAndTeacherInfo();
+            await fetchSettingsAndTeacherInfo(currentTeacherId);
             
             if (currentTeacherId) {
                 await fetchHiddenSections(currentTeacherId);
@@ -132,18 +132,29 @@ const SectionPortfoliosViewer = () => {
 
   // --- Fetching Functions ---
 
-  const fetchSettingsAndTeacherInfo = async () => {
+  const fetchSettingsAndTeacherInfo = async (currentTeacherId) => {
+      const tId = currentTeacherId || teacherId;
       try {
-        const { data } = await supabase.from('settings').select('*').eq('id', 'general').single();
-        if (data) {
+        const { data: generalData } = await supabase.from('settings').select('*').eq('id', 'general').single();
+        let teacherSettings = null;
+        if (tId) {
+            const { data } = await supabase.from('settings').select('*').eq('id', tId).maybeSingle();
+            teacherSettings = data;
+        }
+
+        if (generalData) {
             setTeacherInfo({
-                name: data.teacher_name || "المعلم",
-                school: data.school_name || "المدرسة",
-                photo: data.teacher_photo || "/default-avatar.png"
+                name: generalData.teacher_name || "المعلم",
+                school: generalData.school_name || "المدرسة",
+                photo: generalData.teacher_photo || "/default-avatar.png"
             });
-            if (data.active_semester_key) setActiveSemester(data.active_semester_key);
-            if (data.current_period) setActivePeriod(data.current_period);
-            if (data.student_view_config) setStudentViewConfig(data.student_view_config);
+            if (generalData.active_semester_key) setActiveSemester(generalData.active_semester_key);
+            if (generalData.current_period) setActivePeriod(generalData.current_period);
+            
+            const config = (teacherSettings && teacherSettings.student_view_config) 
+                ? teacherSettings.student_view_config 
+                : (generalData.student_view_config || {});
+            setStudentViewConfig(config);
         }
       } catch (error) { console.error("Error fetching settings:", error); }
   };
@@ -158,8 +169,10 @@ const SectionPortfoliosViewer = () => {
       try {
           const { error } = await supabase
             .from('settings')
-            .update({ student_view_config: newConfig })
-            .eq('id', 'general');
+            .upsert({
+                id: teacherId || 'general',
+                student_view_config: newConfig
+            }, { onConflict: 'id' });
           
           if (error) throw error;
       } catch (err) {
