@@ -713,11 +713,20 @@ const updateStudentsData = async (updatedStudents) => {
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
       
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Limit avatar size to 300x300 pixels
+      const size = 300;
+      canvas.width = size;
+      canvas.height = size;
       
-      const photoData = canvas.toDataURL('image/jpeg');
+      // Center-crop to a square
+      const minDimension = Math.min(video.videoWidth, video.videoHeight);
+      const sx = (video.videoWidth - minDimension) / 2;
+      const sy = (video.videoHeight - minDimension) / 2;
+      
+      context.drawImage(video, sx, sy, minDimension, minDimension, 0, 0, size, size);
+      
+      // Compress to 70% quality JPEG to save database storage and egress
+      const photoData = canvas.toDataURL('image/jpeg', 0.7);
       
       if (showAddStudentModal) {
         setNewStudent(prev => ({ ...prev, photo: photoData }));
@@ -734,8 +743,8 @@ const updateStudentsData = async (updatedStudents) => {
     if (file) {
       try {
         const options = {
-          maxSizeMB: 1,
-          maxWidthOrHeight: 1920,
+          maxSizeMB: 0.05, // 50KB target size is perfect for profile avatars
+          maxWidthOrHeight: 300, // 300px width/height is ideal for grid lists
           useWebWorker: true,
         };
 

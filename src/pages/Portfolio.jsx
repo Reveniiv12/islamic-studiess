@@ -16,6 +16,7 @@ import { pdfjs } from 'react-pdf';
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf'; 
+import imageCompression from 'browser-image-compression';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -489,8 +490,22 @@ const Portfolio = () => {
     const currentMaxIndex = files.filter(f => f.category_id === categoryId).length;
 
     for (let i = 0; i < uploadedFiles.length; i++) {
-        const file = uploadedFiles[i];
+        let file = uploadedFiles[i];
         setUploadStatus(prev => ({ ...prev, current: i + 1 }));
+
+        // Compress image files locally in the browser to save space and bandwidth
+        if (file.type.startsWith('image/')) {
+            try {
+                const options = {
+                    maxSizeMB: 0.8, // Target size: under 800KB
+                    maxWidthOrHeight: 1600, // Maximum dimensions
+                    useWebWorker: true,
+                };
+                file = await imageCompression(file, options);
+            } catch (compressError) {
+                console.error("Error compressing image, using original file:", compressError);
+            }
+        }
         
         if (file.size > MAX_SIZE_BYTES) {
             setErrorMessage(`الملف ${file.name} أكبر من ${maxFileSizeMB}MB`);
@@ -501,7 +516,9 @@ const Portfolio = () => {
         const fileId = uuidv4();
         const fileExt = file.name.split('.').pop();
         const filePath = `${user.id}/${fileId}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('portfolio-files').upload(filePath, file);
+        const { error: uploadError } = await supabase.storage
+            .from('portfolio-files')
+            .upload(filePath, file, { cacheControl: '31536000', upsert: true });
         if (uploadError) continue;
         const { data: { publicUrl: fileUrl } } = supabase.storage.from('portfolio-files').getPublicUrl(filePath);
         let thumbnailUrl = null;
@@ -509,7 +526,9 @@ const Portfolio = () => {
              const blob = await createPdfThumbnail(file);
              if (blob) {
                  const tPath = `${user.id}/${fileId}_thumb.jpg`;
-                 await supabase.storage.from('portfolio-files').upload(tPath, blob);
+                 await supabase.storage
+                     .from('portfolio-files')
+                     .upload(tPath, blob, { cacheControl: '31536000', upsert: true });
                  const { data: { publicUrl } } = supabase.storage.from('portfolio-files').getPublicUrl(tPath);
                  thumbnailUrl = publicUrl;
              }

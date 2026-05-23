@@ -136,7 +136,7 @@ const ReportGenerator = () => {
       // رفع الملف إلى Storage
       const { error: uploadError } = await supabase.storage
         .from('portfolio-files')
-        .upload(filePath, blob, { contentType: 'image/png', upsert: true });
+        .upload(filePath, blob, { contentType: 'image/png', upsert: true, cacheControl: '31536000' });
 
       if (uploadError) throw uploadError;
 

@@ -903,10 +903,24 @@ const TeacherDashboard = () => {
                         <div className="flex gap-2 mr-auto">
                             <button 
                                 type="button"
-                                onClick={(e) => { 
+                                onClick={async (e) => { 
                                     e.stopPropagation(); 
-                                    setPreviewData(backup.data);
-                                    setIsPreviewOpen(true);
+                                    try {
+                                        setModalMessage("جاري تحميل بيانات النسخة للمعاينة...");
+                                        const { data: backupRow, error } = await supabase
+                                            .from('backups')
+                                            .select('data')
+                                            .eq('id', backup.id)
+                                            .single();
+                                        if (error) throw error;
+                                        setPreviewData(backupRow.data);
+                                        setIsPreviewOpen(true);
+                                    } catch (err) {
+                                        console.error("Error loading backup preview:", err);
+                                        alert("فشل تحميل النسخة الاحتياطية للمعاينة.");
+                                    } finally {
+                                        setModalMessage("");
+                                    }
                                 }} 
                                 className="p-2 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500 hover:text-white transition"
                                 title="معاينة النسخة"

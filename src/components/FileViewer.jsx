@@ -133,7 +133,16 @@ const FileViewer = ({ files, currentIndex, onClose, onPrev, onNext }) => {
           </div>
 
           <div className="w-full h-full flex items-center justify-center">
-            {isPDF ? (
+            {fileId ? (
+              <iframe
+                src={`https://drive.google.com/file/d/${fileId}/preview`}
+                className="w-full h-full bg-[#0a0f1d] rounded-none sm:rounded-lg shadow-inner"
+                loading="lazy"
+                title="File Preview"
+                frameBorder="0"
+                allowFullScreen
+              />
+            ) : isPDF ? (
               <div className="h-full w-full custom-viewer-theme">
                 {/* استخدام Worker المتوافق */}
                 <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js">

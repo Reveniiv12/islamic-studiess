@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fa';
 import StudentPortfolioFileViewer from '../components/StudentPortfolioFileViewer';
 import { getGradeNameById, getSectionNameById } from "../utils/gradeUtils";
+import imageCompression from 'browser-image-compression';
 
 const StudentPortfolio = () => {
   const { studentId } = useParams();
@@ -281,6 +282,22 @@ const StudentPortfolio = () => {
     setUploadProgress(0);
 
     try {
+      let fileToUpload = file;
+
+      // Compress image files locally in the browser to save space, bandwidth and ensure faster uploads
+      if (file.type.startsWith('image/')) {
+        try {
+          const options = {
+            maxSizeMB: 0.8, // Target size: under 800KB
+            maxWidthOrHeight: 1600, // Maximum dimensions
+            useWebWorker: true,
+          };
+          fileToUpload = await imageCompression(file, options);
+        } catch (compressError) {
+          console.error("Error compressing image, using original file:", compressError);
+        }
+      }
+
       // 1. محاولة جلب الجلسة (اختياري الآن)
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -298,7 +315,7 @@ const StudentPortfolio = () => {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.setRequestHeader('Accept', 'application/json'); 
         xhr.setRequestHeader('x-student-id', studentId);
-        xhr.setRequestHeader('x-file-name', encodeURIComponent(file.name));
+        xhr.setRequestHeader('x-file-name', encodeURIComponent(fileToUpload.name));
         
         // تتبع التقدم
         xhr.upload.onprogress = (event) => {
@@ -329,16 +346,16 @@ const StudentPortfolio = () => {
 
         xhr.onerror = () => reject(new Error("فشل الاتصال بالشبكة، تحقق من الإنترنت."));
         
-        xhr.send(file);
+        xhr.send(fileToUpload);
       });
 
       // 3. الحفظ في قاعدة البيانات
       const { error: dbError } = await supabase.from('portfolio_files').insert({
         student_id: studentId,
         file_url: result.url,
-        file_name: file.name,
-        file_type: file.type,
-        file_size: file.size,
+        file_name: fileToUpload.name,
+        file_type: fileToUpload.type,
+        file_size: fileToUpload.size,
         category: targetCategory,
         status: 'active'
       });
