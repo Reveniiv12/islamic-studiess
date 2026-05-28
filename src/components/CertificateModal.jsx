@@ -152,9 +152,9 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
   };
 
   const getStatusColor = (status) => {
-    if (status === "ناجح") return "text-green-600 bg-green-50 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/30";
-    if (status === "راسب") return "text-red-600 bg-red-50 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/30";
-    return "text-amber-600 bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800/30";
+    if (status === "ناجح") return "text-green-800 bg-green-100 border-green-400 font-extrabold shadow-sm";
+    if (status === "راسب") return "text-red-800 bg-red-100 border-red-400 font-extrabold shadow-sm";
+    return "text-amber-800 bg-amber-100 border-amber-400 font-extrabold shadow-sm";
   };
 
   const s1Status = getStatusText(s1Active, s1Average);
@@ -482,8 +482,8 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
 
               {/* Final Annual Result Box */}
               <div className="border-2 border-yellow-600 bg-gradient-to-r from-yellow-50/60 to-yellow-100/40 rounded-2xl p-6 mb-4 flex flex-row items-center justify-between gap-6 shadow-md">
-                <div className="text-right w-3/5">
-                  <h3 className="font-black text-yellow-900 text-base mb-2 flex items-center gap-2 tracking-wide">
+                <div className="text-right flex-grow">
+                  <h3 className="font-black text-yellow-900 text-base mb-2 flex items-center gap-2 tracking-wide whitespace-nowrap">
                     🏆 <b>النتيجة النهائية لمادة القرآن الكريم والدراسات الإسلامية</b>
                   </h3>
                   <p className="text-xs text-gray-700 font-bold leading-relaxed">
@@ -505,13 +505,13 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
 
                   <div className="text-center">
                     <span className="block text-[11px] text-gray-400 font-bold mb-1">النتيجة النهائية</span>
-                    <span className={`px-6 py-3 rounded-xl border-2 font-black text-base print-badge flex items-center gap-2 shadow-sm ${getStatusColor(finalStatus)}`}>
-                      {finalStatus === "ناجح" && <FaCheckCircle className="text-green-500 shrink-0 text-lg" />}
-                      {finalStatus === "راسب" && <FaTimesCircle className="text-red-500 shrink-0 text-lg" />}
+                    <span className={`px-6 py-3 rounded-xl border-2 font-black text-lg print-badge flex items-center gap-2 shadow-sm ${getStatusColor(finalStatus)}`}>
+                      {finalStatus === "ناجح" && <FaCheckCircle className="text-green-800 shrink-0 text-xl" />}
+                      {finalStatus === "راسب" && <FaTimesCircle className="text-red-800 shrink-0 text-xl" />}
                       {finalStatus}
                     </span>
                     {finalStatus === "راسب" && (
-                      <span className="block text-xs text-red-600 font-black mt-2 text-center animate-pulse">
+                      <span className="block text-xs text-red-700 font-extrabold mt-2 text-center">
                         * يوجد دور ثاني ولابد من الاستعداد {failedSemInfo.pronoun2}
                       </span>
                     )}
