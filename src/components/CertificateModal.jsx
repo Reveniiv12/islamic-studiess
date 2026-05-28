@@ -221,62 +221,52 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
       {/* Print Stylesheet injection for beautiful physical A4 prints */}
       <style dangerouslySetInnerHTML={{__html: `
         @media print {
-          body * {
-            visibility: hidden;
-            background: white !important;
-            color: black !important;
-          }
-          #print-area, #print-area * {
-            visibility: visible;
-          }
-          #print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100% !important;
-            max-width: 100% !important;
-            height: auto !important;
+          body, html {
             margin: 0 !important;
-            padding: 20px !important;
-            border: none !important;
-            box-shadow: none !important;
-            background: white !important;
-            color: black !important;
-            transform: none !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-          /* Ensure custom borders and details are printable */
-          .print-border {
-            border: 8px double #d4af37 !important;
-            padding: 15px !important;
-          }
-          table {
-            border-collapse: collapse !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            height: 100% !important;
             width: 100% !important;
+            background: white !important;
           }
-          th, td {
-            border: 1px solid #4a5568 !important;
-            padding: 6px !important;
-            font-size: 11px !important;
-            color: black !important;
+          body * {
+            visibility: hidden !important;
           }
-          th {
-            background-color: #f7fafc !important;
+          #print-image-container, #print-image-container * {
+            visibility: visible !important;
           }
-          .print-badge {
-            border: 1px solid #4a5568 !important;
-            padding: 2px 8px !important;
-            border-radius: 4px !important;
+          #print-image-container {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+          }
+          .print-fit-image {
+            max-width: 95% !important;
+            max-height: 95% !important;
+            width: auto !important;
+            height: auto !important;
+            object-fit: contain !important;
+          }
+          .no-print, #print-area, .offscreen-container {
+            display: none !important;
+            visibility: hidden !important;
           }
         }
       `}} />
 
-      <div className="w-full max-w-4xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] animate-fadeIn text-right no-print overflow-hidden">
+      <div className="w-full max-w-4xl bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] animate-fadeIn text-right overflow-hidden">
         
         {/* Modal Header */}
-        <div className="flex justify-between items-center px-6 py-4 bg-gray-800 border-b border-gray-700">
+        <div className="flex justify-between items-center px-6 py-4 bg-gray-800 border-b border-gray-700 no-print">
           <div className="flex items-center gap-2">
             <FaAward className="text-yellow-500 text-xl" />
             <h3 className="text-lg font-bold text-white">الشهادة الأكاديمية وكشف الدرجات</h3>
@@ -290,10 +280,11 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
         </div>
 
         {/* Modal Actions */}
-        <div className="bg-gray-850 px-6 py-3 border-b border-gray-700 flex flex-wrap gap-3 justify-center sm:justify-start">
+        <div className="bg-gray-850 px-6 py-3 border-b border-gray-700 flex flex-wrap gap-3 justify-center sm:justify-start no-print">
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold shadow-lg transition-transform hover:scale-102 text-sm"
+            disabled={generatingImage || !imageUrl}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold shadow-lg transition-transform hover:scale-102 disabled:opacity-50 text-sm"
           >
             <FaPrint /> طباعة الشهادة (PDF)
           </button>
@@ -312,13 +303,13 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
           
           {/* Display beautiful responsive pre-rendered image */}
           {generatingImage ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400 gap-4">
+            <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400 gap-4 no-print">
               <div className="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
               <p className="font-extrabold text-sm md:text-base animate-pulse">جاري تجهيز وثيقة النتيجة بصورة عالية الدقة...</p>
               <p className="text-xs text-gray-500">فضلاً انتظر لحظة واحدة...</p>
             </div>
           ) : imageUrl ? (
-            <div className="w-full max-w-[800px] flex flex-col items-center">
+            <div className="w-full max-w-[800px] flex flex-col items-center no-print">
               <img 
                 src={imageUrl} 
                 alt="إشعار النتيجة" 
@@ -326,7 +317,7 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
               />
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center text-red-400 gap-3">
+            <div className="flex flex-col items-center justify-center py-20 text-center text-red-400 gap-3 no-print">
               <span>⚠️ فشل في تحميل النسخة المصورة للشهادة.</span>
               <p className="text-xs text-gray-500">يمكنك استخدام خيار الطباعة مباشرة أو محاولة فتح النافذة مجدداً.</p>
             </div>
@@ -368,7 +359,7 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
                     />
                   </div>
                   <h2 className="text-lg font-extrabold text-yellow-700 tracking-wide">إشعار بنتيجة مادة القرآن الكريم والدراسات الإسلامية</h2>
-                  <p className="text-[10px] text-gray-500 font-bold mt-1">العام الدراسي: ١٤٤٧ هـ / ٢٠٢٦ م</p>
+                  <p className="text-[10px] text-gray-500 font-bold mt-1">العام الدراسي: 1447 هـ / 2026 م</p>
                 </div>
 
                 <div className="text-left text-[11px] font-semibold text-gray-700 leading-relaxed">
@@ -430,8 +421,8 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
                     ))}
                     {/* Sum/Total Row */}
                     <tr className="bg-yellow-50 font-extrabold border-t-2 border-yellow-500 text-[13px]">
-                      <td className="p-3 border border-gray-300 text-right text-yellow-850">مجموع درجات الفترة (من ١٠٠)</td>
-                      <td className="p-3 border border-gray-300 bg-yellow-100/70 text-yellow-900">١٠٠</td>
+                      <td className="p-3 border border-gray-300 text-right text-yellow-850">مجموع درجات الفترة (من 100)</td>
+                      <td className="p-3 border border-gray-300 bg-yellow-100/70 text-yellow-900">100</td>
                       {/* Semester 1 Totals */}
                       <td className="p-3 border border-gray-300 font-mono text-blue-900">{s1Active ? s1p1Scores.total.toFixed(2) : "-"}</td>
                       <td className="p-3 border border-gray-300 font-mono text-blue-900">{s1Active ? s1p2Scores.total.toFixed(2) : "-"}</td>
@@ -452,7 +443,7 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
                   </h4>
                   <div className="flex justify-between items-center text-sm font-bold">
                     <span className="text-gray-600">متوسط درجات الفصل:</span>
-                    <span className="font-black text-blue-900 font-mono text-base">{s1Active ? `${s1Average} / ١٠٠` : "لم يُرصد"}</span>
+                    <span className="font-black text-blue-900 font-mono text-base">{s1Active ? `${s1Average} / 100` : "لم يُرصد"}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm font-bold">
                     <span className="text-gray-600">حالة النتيجة:</span>
@@ -469,7 +460,7 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
                   </h4>
                   <div className="flex justify-between items-center text-sm font-bold">
                     <span className="text-gray-600">متوسط درجات الفصل:</span>
-                    <span className="font-black text-teal-900 font-mono text-base">{s2Active ? `${s2Average} / ١٠٠` : "تحت الرصد"}</span>
+                    <span className="font-black text-teal-900 font-mono text-base">{s2Active ? `${s2Average} / 100` : "تحت الرصد"}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm font-bold">
                     <span className="text-gray-600">حالة النتيجة:</span>
@@ -481,42 +472,57 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
               </div>
 
               {/* Final Annual Result Box */}
-              <div className="border-2 border-yellow-600 bg-gradient-to-r from-yellow-50/60 to-yellow-100/40 rounded-2xl p-6 mb-4 flex flex-row items-center justify-between gap-6 shadow-md">
-                <div className="text-right flex-grow">
-                  <h3 className="font-black text-yellow-900 text-base mb-2 flex items-center gap-2 tracking-wide whitespace-nowrap">
-                    🏆 <b>النتيجة النهائية لمادة القرآن الكريم والدراسات الإسلامية</b>
-                  </h3>
-                  <p className="text-xs text-gray-700 font-bold leading-relaxed">
-                    {finalStatus === "راسب" ? (
-                      <span className="text-red-650 font-black block bg-red-50 p-3 rounded-lg border-2 border-red-200 mt-1 shadow-sm leading-relaxed animate-pulse">
-                        ⚠️ تنبيه: لم يحقق الطالب درجة الاجتياز المطلوبة (٥٠٪) في {failedSemInfo.semesters}، لذا يتقرر دخوله اختبار الدور الثاني {failedSemInfo.pronoun} ولابد من الجد والاستعداد الجيد {failedSemInfo.pronoun2}.
-                      </span>
-                    ) : (
-                      "يتم احتساب النتيجة النهائية بناءً على متوسط تحصيل الفصول الدراسية وتعد درجة النجاح من ٥٠٪."
-                    )}
-                  </p>
-                </div>
-                
-                <div className="flex flex-row items-center gap-4 flex-shrink-0 justify-end">
-                  <div className="text-center bg-white px-6 py-3 border-2 border-yellow-300 rounded-xl shadow-sm">
-                    <span className="block text-[11px] text-gray-400 font-bold mb-0.5">المعدل العام</span>
-                    <span className="text-3xl font-black text-yellow-700 font-mono">{s1Active ? `${yearAverage}` : "-"}</span>
+              <div className="border-2 border-yellow-600 bg-gradient-to-r from-yellow-50/60 to-yellow-100/40 rounded-2xl p-6 mb-4 shadow-md flex flex-col gap-3">
+                {/* Title at the very top (full width) */}
+                <h3 className="font-black text-yellow-900 text-base flex items-center gap-2 tracking-wide border-b border-yellow-200 pb-2">
+                  🏆 <b>النتيجة النهائية لمادة القرآن الكريم والدراسات الإسلامية</b>
+                </h3>
+
+                {/* Content row (Warning box on right, two small boxes on left) */}
+                <div className="flex flex-row items-center justify-between gap-6">
+                  {/* Warning Box */}
+                  <div className="text-right flex-grow">
+                    <p className="text-xs text-gray-700 font-bold leading-relaxed">
+                      {finalStatus === "راسب" ? (
+                        <span className="text-red-650 font-black block bg-red-50 p-3 rounded-lg border-2 border-red-200 shadow-sm leading-relaxed">
+                          ⚠️ تنبيه: لم يحقق الطالب درجة الاجتياز المطلوبة (50%) في {failedSemInfo.semesters}، لذا يتقرر دخوله اختبار الدور الثاني {failedSemInfo.pronoun} ولابد من الجد والاستعداد الجيد {failedSemInfo.pronoun2}.
+                        </span>
+                      ) : (
+                        <span className="block bg-yellow-50/50 p-3 rounded-lg border border-yellow-200 shadow-sm">
+                          يتم احتساب النتيجة النهائية بناءً على متوسط تحصيل الفصول الدراسية وتعد درجة النجاح من 50%.
+                        </span>
+                      )}
+                    </p>
                   </div>
 
-                  <div className="text-center">
-                    <span className="block text-[11px] text-gray-400 font-bold mb-1">النتيجة النهائية</span>
-                    <span className={`px-6 py-3 rounded-xl border-2 font-black text-lg print-badge flex items-center gap-2 shadow-sm ${getStatusColor(finalStatus)}`}>
-                      {finalStatus === "ناجح" && <FaCheckCircle className="text-green-800 shrink-0 text-xl" />}
-                      {finalStatus === "راسب" && <FaTimesCircle className="text-red-800 shrink-0 text-xl" />}
-                      {finalStatus}
-                    </span>
-                    {finalStatus === "راسب" && (
-                      <span className="block text-xs text-red-700 font-extrabold mt-2 text-center">
-                        * يوجد دور ثاني ولابد من الاستعداد {failedSemInfo.pronoun2}
+                  {/* Two small boxes */}
+                  <div className="flex flex-row items-center gap-4 flex-shrink-0">
+                    {/* المعدل العام */}
+                    <div className="text-center bg-white px-6 py-3 border-2 border-yellow-300 rounded-xl shadow-sm flex flex-col justify-center items-center gap-1.5 h-[76px] w-[130px]">
+                      <span className="block text-[11px] text-gray-400 font-bold mb-0.5 leading-none">المعدل العام</span>
+                      <span className="text-3xl font-black text-yellow-700 font-mono leading-none mt-1">{s1Active ? `${yearAverage}` : "-"}</span>
+                    </div>
+
+                    {/* النتيجة النهائية */}
+                    <div className={`px-6 py-3 rounded-xl border-2 font-black text-lg print-badge flex flex-col justify-center items-center gap-1.5 shadow-sm h-[76px] w-[150px] ${getStatusColor(finalStatus)}`}>
+                      <span className="block text-[11px] font-bold opacity-80 leading-none">النتيجة النهائية</span>
+                      <span className="flex items-center gap-2 font-black leading-none mt-1">
+                        {finalStatus === "ناجح" && <FaCheckCircle className="text-green-800 shrink-0 text-xl" />}
+                        {finalStatus === "راسب" && <FaTimesCircle className="text-red-800 shrink-0 text-xl" />}
+                        {finalStatus}
                       </span>
-                    )}
+                    </div>
                   </div>
                 </div>
+
+                {/* Subtext under the boxes (perfectly aligned below the two boxes on the far left) */}
+                {finalStatus === "راسب" && (
+                  <div className="flex justify-end -mt-2">
+                    <span className="text-xs text-red-700 font-extrabold w-[296px] text-center">
+                      * يوجد دور ثاني ولابد من الاستعداد {failedSemInfo.pronoun2}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -549,7 +555,7 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
   </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 bg-gray-800 border-t border-gray-700 flex justify-end">
+        <div className="px-6 py-4 bg-gray-800 border-t border-gray-700 flex justify-end no-print">
           <button 
             onClick={onClose}
             className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 hover:text-white rounded-xl font-bold transition-colors text-sm"
@@ -559,6 +565,12 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
         </div>
 
       </div>
+      {/* Dedicated print container for the pre-rendered high-res PNG image */}
+      {imageUrl && (
+        <div id="print-image-container" style={{ display: "none" }}>
+          <img src={imageUrl} alt="شهادة الطالب" className="print-fit-image" />
+        </div>
+      )}
     </div>
   );
 }
