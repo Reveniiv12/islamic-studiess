@@ -161,6 +161,34 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
   const s2Status = getStatusText(s2Active, s2Average);
   const finalStatus = s1Active ? getStatusText(true, yearAverage) : "تحت الرصد";
 
+  const getFailedSemestersDetails = () => {
+    const failedList = [];
+    if (s1Active && s1Average < 50) failedList.push("الأول");
+    if (s2Active && s2Average < 50) failedList.push("الثاني");
+    
+    if (failedList.length === 2) {
+      return {
+        semesters: "الفصلين الدراسيين الأول والثاني",
+        pronoun: "فيهما",
+        pronoun2: "لهما"
+      };
+    } else if (failedList.length === 1) {
+      const semText = failedList[0] === "الأول" ? "الفصل الدراسي الأول" : "الفصل الدراسي الثاني";
+      return {
+        semesters: semText,
+        pronoun: "فيه",
+        pronoun2: "له"
+      };
+    }
+    return {
+      semesters: "الفصل الدراسي",
+      pronoun: "فيه",
+      pronoun2: "له"
+    };
+  };
+
+  const failedSemInfo = getFailedSemestersDetails();
+
   const gradeName = getGradeNameById(student?.grade_level || student?.grade);
   const sectionName = getSectionNameById(student?.section);
 
@@ -460,8 +488,8 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
                   </h3>
                   <p className="text-xs text-gray-700 font-bold leading-relaxed">
                     {finalStatus === "راسب" ? (
-                      <span className="text-red-650 font-black block bg-red-50 p-3 rounded-lg border-2 border-red-200 mt-1 shadow-sm leading-relaxed">
-                        ⚠️ تنبيه: لم يحقق الطالب درجة الاجتياز المطلوبة (٥٠٪)، لذا يتقرر دخوله اختبار الدور الثاني ولابد من الجد والاستعداد الجيد له.
+                      <span className="text-red-650 font-black block bg-red-50 p-3 rounded-lg border-2 border-red-200 mt-1 shadow-sm leading-relaxed animate-pulse">
+                        ⚠️ تنبيه: لم يحقق الطالب درجة الاجتياز المطلوبة (٥٠٪) في {failedSemInfo.semesters}، لذا يتقرر دخوله اختبار الدور الثاني {failedSemInfo.pronoun} ولابد من الجد والاستعداد الجيد {failedSemInfo.pronoun2}.
                       </span>
                     ) : (
                       "يتم احتساب النتيجة النهائية بناءً على متوسط تحصيل الفصول الدراسية وتعد درجة النجاح من ٥٠٪."
@@ -484,7 +512,7 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
                     </span>
                     {finalStatus === "راسب" && (
                       <span className="block text-xs text-red-600 font-black mt-2 text-center animate-pulse">
-                        * يوجد دور ثاني ولابد من الاستعداد له
+                        * يوجد دور ثاني ولابد من الاستعداد {failedSemInfo.pronoun2}
                       </span>
                     )}
                   </div>

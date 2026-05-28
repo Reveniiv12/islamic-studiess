@@ -1958,6 +1958,7 @@ function StudentView() {
           student={studentBaseData}
           teacherName={teacherName}
           schoolName={schoolName}
+          principalName={viewConfig?.principal_name}
           onClose={() => setShowCertificate(false)}
         />
       )}

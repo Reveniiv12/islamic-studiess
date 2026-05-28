@@ -140,7 +140,8 @@ const StudentGradesPopup = ({
   semesterLabel,
   periodLabel,
   teacherName,
-  schoolName
+  schoolName,
+  principalName
 }) => {
   const [localStudent, setLocalStudent] = useState(JSON.parse(JSON.stringify(student)));
   const [errorDialog, setErrorDialog] = useState({ show: false, message: "" });
@@ -582,6 +583,7 @@ const StudentGradesPopup = ({
           student={localStudent}
           teacherName={teacherName}
           schoolName={schoolName}
+          principalName={principalName}
           onClose={() => setShowCertificate(false)}
         />
       )}

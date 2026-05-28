@@ -154,9 +154,30 @@ const SectionGrades = () => {
   const [schoolName, setSchoolName] = useState("مدرسة متوسطة الطرف");
   const [currentSemesterName, setCurrentSemesterName] = useState("الفصل الدراسي الأول");
   const [principalName, setPrincipalNameState] = useState(() => localStorage.getItem('principalName') || '');
-  const setPrincipalName = (val) => {
+  const setPrincipalName = async (val) => {
     setPrincipalNameState(val);
     localStorage.setItem('principalName', val);
+    
+    if (!teacherId) return;
+    try {
+      const { data: settingsData } = await supabase
+        .from('settings')
+        .select('student_view_config')
+        .eq('id', teacherId)
+        .single();
+      
+      const currentConfig = settingsData?.student_view_config || {};
+      const newConfig = { ...currentConfig, principal_name: val };
+      
+      await supabase
+        .from('settings')
+        .upsert({
+          id: teacherId,
+          student_view_config: newConfig
+        }, { onConflict: 'id' });
+    } catch (err) {
+      console.error("Failed to save principal name to database", err);
+    }
   };
   
   // ==========================================================
@@ -318,6 +339,12 @@ const SectionGrades = () => {
         setTestCalculationMethod(settingsData.test_method || 'average');
         savedPeriod = settingsData.current_period || 'period1';
         currentSemesterKey = settingsData.active_semester_key || "semester1";
+        
+        if (settingsData.student_view_config?.principal_name) {
+          setPrincipalNameState(settingsData.student_view_config.principal_name);
+        } else {
+          setPrincipalNameState(localStorage.getItem('principalName') || '');
+        }
         
         if (settingsData.current_period) {
             periodSelected = true;
@@ -2119,6 +2146,7 @@ const handleExportQRCodes = async () => {
             onOpenNotes={handleOpenNotes}
             teacherName={teacherName}
             schoolName={schoolName}
+            principalName={principalName}
         />
       )}
 
@@ -2398,6 +2426,7 @@ const handleExportQRCodes = async () => {
             onOpenNotes={handleOpenNotes}
             teacherName={teacherName}
             schoolName={schoolName}
+            principalName={principalName}
         />
       )}
 
