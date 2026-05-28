@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import * as htmlToImage from "html-to-image";
 import {
   FaPrint,
@@ -71,6 +71,22 @@ const hasRecordedGrades = (pGrades1, pGrades2) => {
 export default function CertificateModal({ student, teacherName, schoolName, principalName: propPrincipalName, onClose }) {
   const certificateRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 840) {
+        const newScale = Math.min((window.innerWidth - 32) / 800, 1);
+        setScale(newScale);
+      } else {
+        setScale(1);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const principalName = propPrincipalName || localStorage.getItem('principalName') || '';
 
@@ -285,14 +301,14 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
         </div>
 
         {/* Modal Scrollable Container */}
-        <div className="flex-grow p-6 overflow-y-auto bg-gray-950 flex justify-center">
+        <div className="flex-grow p-2 sm:p-6 overflow-y-auto bg-gray-950 flex justify-center">
           
           {/* Certificate Container */}
           <div 
             ref={certificateRef}
             id="print-area"
-            className="w-full max-w-[800px] bg-white text-gray-900 p-8 rounded-xl shadow-xl relative border-[12px] border-double border-yellow-600 print-border flex flex-col justify-between"
-            style={{ direction: "rtl", minHeight: "1050px" }}
+            className="bg-white text-gray-900 p-8 rounded-xl shadow-xl relative border-[12px] border-double border-yellow-600 print-border flex flex-col justify-between shrink-0"
+            style={{ direction: "rtl", width: "800px", minWidth: "800px", minHeight: "1050px", zoom: scale, WebkitZoom: scale, transformOrigin: "top center" }}
           >
             {/* Islamic Corner Decorations (Hidden on print or simplified) */}
             <div className="absolute top-2 right-2 w-16 h-16 border-t-2 border-r-2 border-yellow-600/30 rounded-tr-md no-print"></div>
