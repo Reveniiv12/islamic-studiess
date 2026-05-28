@@ -18,7 +18,8 @@ import {
   FaBriefcase,
   FaBookOpen,
   FaGift,
-  FaCommentDots
+  FaCommentDots,
+  FaAward
 } from 'react-icons/fa';
 
 const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
@@ -32,7 +33,8 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
     show_solutions_button: true,
     show_portfolio_button: true,
     show_chat_button: true, // الخيار الجديد للمحادثة
-    show_challenges_button: true // الخيار الجديد للتحديات
+    show_challenges_button: true, // الخيار الجديد للتحديات
+    show_certificate_button: true
   });
 
   useEffect(() => {
@@ -63,6 +65,7 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
             show_portfolio_button: data.student_view_config.show_portfolio_button !== false,
             show_chat_button: data.student_view_config.show_chat_button !== false, // ضمان القيمة الجديدة
             show_challenges_button: data.student_view_config.show_challenges_button !== false,
+            show_certificate_button: data.student_view_config.show_certificate_button !== false,
         };
         setConfig(loadedConfig);
       }
@@ -299,6 +302,18 @@ const StudentControlPanel = ({ show, onClose, handleDialog, teacherId }) => {
                       <span className="text-sm font-bold">المحادثة</span>
                   </div>
                   {config.show_chat_button ? <FaToggleOn className="text-2xl text-green-400"/> : <FaToggleOff className="text-2xl text-gray-500"/>}
+              </div>
+
+              {/* زر قفل/فتح الشهادات */}
+              <div 
+                 onClick={() => toggleFeature('show_certificate_button')}
+                 className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${config.show_certificate_button ? 'bg-amber-900/30 border-amber-500/50' : 'bg-gray-800 border-gray-700'}`}
+              >
+                  <div className="flex items-center gap-2 text-white">
+                      <FaAward className="text-amber-400 animate-pulse"/>
+                      <span className="text-sm font-bold">الشهادات</span>
+                  </div>
+                  {config.show_certificate_button ? <FaToggleOn className="text-2xl text-green-400"/> : <FaToggleOff className="text-2xl text-gray-500"/>}
               </div>
                 {/* زر عرض/إخفاء التحديات الفردية */}
                 <button 

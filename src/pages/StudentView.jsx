@@ -48,6 +48,7 @@ import CustomDialog from "../components/CustomDialog";
 
 // إضافة استيراد مكون المحادثة الجديد
 import StudentChat from '../components/StudentChat';
+import CertificateModal from '../components/CertificateModal';
 
 const ensureArraySize = (array, size) => {
     const newArray = Array(size).fill(null);
@@ -97,6 +98,7 @@ function StudentView() {
   
   // حالة لفتح وإغلاق نافذة المحادثة
   const [showChat, setShowChat] = useState(false);
+  const [showCertificate, setShowCertificate] = useState(false);
 
   const [curriculum, setCurriculum] = useState([]); 
   const [homeworkCurriculum, setHomeworkCurriculum] = useState([]); 
@@ -1126,6 +1128,7 @@ function StudentView() {
   const showPortfolioButton = viewConfig?.show_portfolio_button !== false;
   const showChatButton = viewConfig?.show_chat_button !== false;
   const showChallengesButton = viewConfig?.show_challenges_button !== false;
+  const showCertificateButton = !viewConfig || viewConfig.show_certificate_button !== false;
 
   return (
     <div className="min-h-screen bg-gray-900 p-4 md:p-8 font-['Noto_Sans_Arabic',sans-serif] text-right text-gray-100 flex justify-center items-start" dir="rtl">
@@ -1148,12 +1151,14 @@ function StudentView() {
                 </div>
             </div>
 
-            <button
-                  onClick={handleBackToMenu}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-xl border border-gray-600 transition-all shadow-md flex items-center gap-2 text-sm font-bold whitespace-nowrap"
-            >
-                  <FaHistory className="text-blue-300"/> تغيير الفصل/الفترة
-            </button>
+            <div className="flex flex-wrap gap-2 justify-center items-center">
+                <button
+                      onClick={handleBackToMenu}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-xl border border-gray-600 transition-all shadow-md flex items-center gap-2 text-sm font-bold whitespace-nowrap"
+                >
+                      <FaHistory className="text-blue-300"/> تغيير الفصل/الفترة
+                </button>
+            </div>
         </div>
 
         {/* === Body === */}
@@ -1635,7 +1640,7 @@ function StudentView() {
 
 
             {/* 8. بوابة الخدمات والتواصل (حلول الكتاب، ملف الإنجاز، والمحادثة) */}
-            {(showSolutionsButton || showPortfolioButton || showChatButton || showChallengesButton) && (
+            {(showSolutionsButton || showPortfolioButton || showChatButton || showChallengesButton || showCertificateButton) && (
                 <div className="w-full mt-8 flex flex-col gap-4 p-6 bg-gray-800/60 rounded-3xl border border-gray-700 shadow-xl relative overflow-hidden">
                     {/* تأثير خلفية خفيف للحاوية */}
                     <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-blue-900/10 via-transparent to-purple-900/10 pointer-events-none"></div>
@@ -1723,6 +1728,23 @@ function StudentView() {
                                 <div>
                                     <h3 className="text-lg font-bold text-white mb-1">التحديات الفردية</h3>
                                     <p className="text-purple-300 text-xs md:text-sm">خض التحديات المخصصة لك وحقق أفضل النتائج</p>
+                                </div>
+                            </button>
+                        )}
+
+                        {/* زر الشهادة لمادة الدراسات الإسلامية والقرآن الكريم */}
+                        {showCertificateButton && (
+                            <button
+                                onClick={() => setShowCertificate(true)}
+                                className="w-full p-5 bg-gradient-to-br from-amber-700 via-amber-800 to-yellow-900 rounded-2xl border border-yellow-500/50 shadow-lg hover:shadow-yellow-950 hover:-translate-y-1 transition-all duration-300 group relative overflow-hidden flex flex-col items-center text-center gap-3 animate-fadeIn"
+                            >
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                                <div className="bg-amber-600/40 p-4 rounded-full border border-yellow-400/30">
+                                    <FaAward className="text-3xl text-yellow-200 animate-pulse" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white mb-1">الشهادة لمادة الدراسات الإسلامية والقرآن الكريم</h3>
+                                    <p className="text-yellow-200 text-xs md:text-sm font-semibold">استعراض، طباعة وتنزيل وثيقة درجات المادة الشاملة</p>
                                 </div>
                             </button>
                         )}
@@ -1929,6 +1951,14 @@ function StudentView() {
           studentId={studentData.id}
           teacherId={studentData.teacher_id}
           onClose={() => setShowChat(false)}
+        />
+      )}
+      {showCertificate && studentBaseData && (
+        <CertificateModal
+          student={studentBaseData}
+          teacherName={teacherName}
+          schoolName={schoolName}
+          onClose={() => setShowCertificate(false)}
         />
       )}
     </div>

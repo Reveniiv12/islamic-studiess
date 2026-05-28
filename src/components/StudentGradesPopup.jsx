@@ -21,6 +21,7 @@ import {
   FaPaperPlane, // تمت الإضافة
   FaHistory     // تمت الإضافة
 } from "react-icons/fa";
+import CertificateModal from "./CertificateModal";
 
 // استيراد دوال الحساب والحالة من ملف الأدوات
 import { 
@@ -137,11 +138,14 @@ const StudentGradesPopup = ({
   gradeLabel,
   classLabel,
   semesterLabel,
-  periodLabel
+  periodLabel,
+  teacherName,
+  schoolName
 }) => {
   const [localStudent, setLocalStudent] = useState(JSON.parse(JSON.stringify(student)));
   const [errorDialog, setErrorDialog] = useState({ show: false, message: "" });
   const [isSaving, setIsSaving] = useState(false);
+  const [showCertificate, setShowCertificate] = useState(false);
   
   const [isDesktop] = useState(() => window.innerWidth > 768);
 
@@ -534,13 +538,21 @@ const StudentGradesPopup = ({
         </div>
 
         {/* === Footer (Actions) === */}
-        <div className="p-4 bg-gray-900 border-t border-gray-700 rounded-b-2xl flex justify-between items-center gap-4 z-10">
+        <div className="p-4 bg-gray-900 border-t border-gray-700 rounded-b-2xl flex flex-wrap sm:flex-nowrap justify-between items-center gap-3 z-10">
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold transition-all border border-gray-600 hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold transition-all border border-gray-600 hover:border-gray-500 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             إلغاء
+          </button>
+          
+          <button
+            type="button"
+            onClick={() => setShowCertificate(true)}
+            className="w-full sm:flex-1 py-3 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 text-white rounded-xl font-bold transition-all shadow-md flex justify-center items-center gap-2 text-sm transform hover:scale-102"
+          >
+            <FaAward className="text-yellow-100 animate-pulse" /> عرض الشهادة والدرجات
           </button>
           
           <button
@@ -565,6 +577,14 @@ const StudentGradesPopup = ({
         </div>
 
       </div>
+      {showCertificate && (
+        <CertificateModal
+          student={localStudent}
+          teacherName={teacherName}
+          schoolName={schoolName}
+          onClose={() => setShowCertificate(false)}
+        />
+      )}
     </div>
   );
 };

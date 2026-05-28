@@ -25,6 +25,7 @@ import StudentControlPanel from '../components/StudentControlPanel';
 import FilterGradesModal from "../components/FilterGradesModal";
 import StudentGradesPopup from "../components/StudentGradesPopup"; 
 import ClassMaterialsManager from '../components/ClassMaterialsManager'; 
+import CertificateModal from '../components/CertificateModal';
 
 // === إضـــافـــة جـــديـــدة ===
 import TeacherChat from '../components/TeacherChat'; 
@@ -152,6 +153,11 @@ const SectionGrades = () => {
   const [teacherName, setTeacherName] = useState("المعلم الافتراضي");
   const [schoolName, setSchoolName] = useState("مدرسة متوسطة الطرف");
   const [currentSemesterName, setCurrentSemesterName] = useState("الفصل الدراسي الأول");
+  const [principalName, setPrincipalNameState] = useState(() => localStorage.getItem('principalName') || '');
+  const setPrincipalName = (val) => {
+    setPrincipalNameState(val);
+    localStorage.setItem('principalName', val);
+  };
   
   // ==========================================================
   const [currentPeriod, setCurrentPeriod] = useState("period1"); 
@@ -187,6 +193,8 @@ const SectionGrades = () => {
   const [showTransferDeleteModal, setShowTransferDeleteModal] = useState(false);
   const [showGradeSheet, setShowGradeSheet] = useState(false);
   const [showBriefSheet, setShowBriefSheet] = useState(false);
+  const [showCertificatesView, setShowCertificatesView] = useState(false);
+  const [selectedStudentForCertificate, setSelectedStudentForCertificate] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showQrList, setShowQrList] = useState(false);
@@ -1635,6 +1643,19 @@ const handleExportQRCodes = async () => {
   <FaGamepad /> التحدي
 </button>
 
+<button
+  onClick={() => {
+    setShowCertificatesView(true);
+    setShowGradeSheet(false);
+    setShowBriefSheet(false);
+    setSelectedStudent(null);
+    setShowQrList(false);
+  }}
+  className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-gradient-to-r from-amber-600 to-yellow-600 text-white rounded-lg hover:from-amber-500 hover:to-yellow-500 transition-all shadow-lg text-xs md:text-sm font-bold border border-yellow-500 transform hover:scale-105"
+>
+  <FaAward /> صفحة الشهادات
+</button>
+
         </div>
       </div>
 
@@ -1668,6 +1689,7 @@ const handleExportQRCodes = async () => {
             onClick={() => {
               setShowGradeSheet(!showGradeSheet);
               setShowBriefSheet(false);
+              setShowCertificatesView(false);
               setSelectedStudent(null);
               setShowQrList(false);
             }}
@@ -1679,6 +1701,7 @@ const handleExportQRCodes = async () => {
             onClick={() => {
               setShowBriefSheet(!showBriefSheet);
               setShowGradeSheet(false);
+              setShowCertificatesView(false);
               setSelectedStudent(null);
               setShowQrList(false);
             }}
@@ -1873,7 +1896,7 @@ const handleExportQRCodes = async () => {
         </div>
       )}
 
-      {!showGradeSheet && !showBriefSheet && !showQrList && (
+      {!showGradeSheet && !showBriefSheet && !showQrList && !showCertificatesView && (
         <div className="bg-gray-800 p-4 md:p-6 rounded-xl shadow-lg mb-4 md:mb-8 border border-gray-700">
           <h3 className="text-xl md:text-2xl font-bold text-blue-400 text-right mb-4">
             الطلاب في {gradeName} - {sectionName} ({currentSemesterName} - الفترة {currentPeriod === 'period1' ? 'الأولى' : 'الثانية'})
@@ -1927,6 +1950,161 @@ const handleExportQRCodes = async () => {
         </div>
       )}
 
+      {showCertificatesView && (
+        <CustomModal 
+          title="الشهادات والتحصيل الدراسي للطلاب" 
+          onClose={() => setShowCertificatesView(false)}
+          className="max-w-6xl"
+        >
+          <div className="flex flex-col gap-4 text-right font-['Noto_Sans_Arabic',sans-serif] max-h-[80vh] overflow-y-auto p-1 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent" dir="rtl">
+            <p className="text-gray-400 text-sm font-medium mb-2">
+              استعراض، تصدير، وطباعة الشهادات والدرجات الشاملة لجميع طلاب الصف: {gradeName} / {sectionName}
+            </p>
+
+            {/* Search bar inside certificates view */}
+            <div className="mb-4 flex flex-col md:flex-row gap-4 items-center justify-between bg-gray-900/40 p-4 rounded-xl border border-gray-700">
+              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-center">
+                <div className="relative flex items-center w-full sm:w-64">
+                  <FaSearch className="absolute right-3 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="ابحث عن طالب..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full p-2 pr-10 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-right text-sm"
+                  />
+                </div>
+                
+                <div className="relative flex items-center w-full sm:w-64">
+                  <span className="text-xs text-gray-400 absolute right-3 pointer-events-none font-bold">قائد المدرسة:</span>
+                  <input
+                    type="text"
+                    placeholder="اكتب اسم قائد المدرسة..."
+                    value={principalName}
+                    onChange={(e) => setPrincipalName(e.target.value)}
+                    className="w-full p-2 pr-24 border border-gray-600 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 text-right text-sm font-extrabold"
+                  />
+                </div>
+              </div>
+              <div className="text-gray-300 text-sm font-bold shrink-0">
+                إجمالي الطلاب: <span className="text-yellow-400 font-extrabold">{filteredStudents.length}</span> طالب
+              </div>
+            </div>
+
+            {/* Students Certificates Grid */}
+            {filteredStudents.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 bg-gray-900/20 rounded-xl border border-gray-700/50">
+                <FaAward className="text-6xl mx-auto mb-3 opacity-20 text-yellow-500" />
+                <p className="text-lg">لا يوجد طلاب يطابقون البحث</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredStudents.map((student) => {
+                  // Calculate quick grades summary for display
+                  const rawGrades = student.fullGradesStructure || student.grades || {};
+                  
+                  // Helper to get total for a period
+                  const getPeriodTotalVal = (grades) => {
+                    if (!grades || Object.keys(grades).length === 0) return 0;
+                    const sumArr = (arr) => (Array.isArray(arr) ? arr.reduce((a, b) => a + (parseFloat(b) || 0), 0) : 0);
+                    const avgArr = (arr) => {
+                      if (!Array.isArray(arr) || arr.length === 0) return 0;
+                      const valid = arr.filter(v => v !== null && v !== undefined);
+                      if (valid.length === 0) return 0;
+                      return valid.reduce((a, b) => a + parseFloat(b), 0) / valid.length;
+                    };
+                    const bestArr = (arr) => (Array.isArray(arr) ? Math.max(...arr.map(v => parseFloat(v) || 0), 0) : 0);
+
+                    const tests = sumArr(grades.tests);
+                    const recitation = avgArr(grades.quranRecitation || grades.quran_recitation);
+                    const memorization = avgArr(grades.quranMemorization || grades.quran_memorization);
+                    const classInteraction = bestArr(grades.classInteraction || grades.class_interaction);
+                    const homework = sumArr(grades.homework);
+                    const performance = bestArr(grades.performanceTasks || grades.performance_tasks);
+                    const participation = sumArr(grades.participation);
+
+                    return parseFloat((tests + recitation + memorization + classInteraction + homework + performance + participation).toFixed(2));
+                  };
+
+                  const s1P1 = rawGrades.semester1?.period1 || {};
+                  const s1P2 = rawGrades.semester1?.period2 || {};
+                  const s1T = getPeriodTotalVal(s1P1);
+                  const s1T2 = getPeriodTotalVal(s1P2);
+                  let s1Total = 0;
+                  if (s1T > 0 && s1T2 === 0) s1Total = s1T;
+                  else if (s1T > 0 && s1T2 > 0) s1Total = parseFloat(((s1T + s1T2) / 2).toFixed(2));
+
+                  const s2P1 = rawGrades.semester2?.period1 || {};
+                  const s2P2 = rawGrades.semester2?.period2 || {};
+                  const s2T = getPeriodTotalVal(s2P1);
+                  const s2T2 = getPeriodTotalVal(s2P2);
+                  let s2Total = 0;
+                  if (s2T > 0 && s2T2 === 0) s2Total = s2T;
+                  else if (s2T > 0 && s2T2 > 0) s2Total = parseFloat(((s2T + s2T2) / 2).toFixed(2));
+                  
+                  const s1Pass = s1Total >= 50;
+                  const s2Pass = s2Total >= 50;
+
+                  return (
+                    <div key={student.id} className="bg-gray-900/60 p-4 rounded-xl border border-gray-700 hover:border-yellow-500/30 transition-all flex flex-col justify-between shadow-md relative overflow-hidden group">
+                      <div className="absolute top-0 left-0 w-20 h-20 bg-gradient-to-br from-yellow-500/10 to-transparent rounded-br-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <img 
+                            src={student.photo || '/images/1.webp'} 
+                            alt={student.name} 
+                            className="w-12 h-12 rounded-full object-cover border-2 border-yellow-500/50 shadow-sm" 
+                          />
+                          <div className="text-right min-w-0 flex-1">
+                            <h4 className="font-bold text-sm text-white group-hover:text-yellow-400 transition-colors leading-tight mb-0.5 truncate">{student.name}</h4>
+                            <p className="text-[10px] text-gray-400">سجل: {student.nationalId}</p>
+                          </div>
+                        </div>
+
+                        {/* Grades Summary */}
+                        <div className="space-y-1.5 border-t border-gray-800 pt-2 mb-3">
+                          <div className="flex justify-between text-xs items-center">
+                            <span className="text-gray-400">الفصل الدراسي الأول:</span>
+                            <span className={`font-black font-mono text-xs px-2 py-0.5 rounded ${s1Total > 0 ? (s1Pass ? 'text-green-400 bg-green-500/10 border border-green-500/20' : 'text-rose-400 bg-rose-500/10 border border-rose-500/20') : 'text-gray-500 bg-gray-500/10 border border-gray-500/20'}`}>
+                              {s1Total > 0 ? `${s1Total} / 100` : "تحت الرصد"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs items-center">
+                            <span className="text-gray-400">الفصل الدراسي الثاني:</span>
+                            <span className={`font-black font-mono text-xs px-2 py-0.5 rounded ${s2Total > 0 ? (s2Pass ? 'text-green-400 bg-green-500/10 border border-green-500/20' : 'text-rose-400 bg-rose-500/10 border border-rose-500/20') : 'text-gray-500 bg-gray-500/10 border border-gray-500/20'}`}>
+                              {s2Total > 0 ? `${s2Total} / 100` : "تحت الرصد"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setSelectedStudentForCertificate(student);
+                        }}
+                        className="w-full py-2 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 text-white rounded-lg font-bold shadow transition-all active:scale-[0.98] flex items-center justify-center gap-1 text-xs"
+                      >
+                        <FaAward className="text-yellow-100" /> عرض وتصدير الشهادة
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </CustomModal>
+      )}
+
+      {selectedStudentForCertificate && (
+        <CertificateModal
+          student={selectedStudentForCertificate}
+          teacherName={teacherName}
+          schoolName={schoolName}
+          principalName={principalName}
+          onClose={() => setSelectedStudentForCertificate(null)}
+        />
+      )}
+
       {selectedStudent && !showGradeSheet && !showBriefSheet && !showQrList && (
         <StudentGradesPopup 
             student={selectedStudent}
@@ -1939,6 +2117,8 @@ const handleExportQRCodes = async () => {
             semesterLabel={currentSemesterName}
             periodLabel={currentPeriod === 'period1' ? 'الأولى' : 'الثانية'}
             onOpenNotes={handleOpenNotes}
+            teacherName={teacherName}
+            schoolName={schoolName}
         />
       )}
 
@@ -2216,6 +2396,8 @@ const handleExportQRCodes = async () => {
             getInputStyle={getInputStyle}
 
             onOpenNotes={handleOpenNotes}
+            teacherName={teacherName}
+            schoolName={schoolName}
         />
       )}
 

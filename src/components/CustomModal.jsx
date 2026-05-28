@@ -1,10 +1,10 @@
 import React from 'react';
 import { FaTimes } from 'react-icons/fa';
 
-const CustomModal = ({ title, children, onClose }) => {
+const CustomModal = ({ title, children, onClose, className = "max-w-lg" }) => {
   return (
     <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4" dir="rtl">
-      <div className="bg-gray-800 rounded-xl p-6 shadow-lg max-w-lg w-full border border-gray-700 relative">
+      <div className={`bg-gray-800 rounded-xl p-6 shadow-lg w-full border border-gray-700 relative ${className}`}>
         <button
           onClick={onClose}
           className="absolute top-3 left-3 text-gray-400 hover:text-red-500 transition-colors"
