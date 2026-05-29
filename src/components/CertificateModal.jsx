@@ -15,7 +15,8 @@ import {
 import {
   calculateCategoryScore,
   getGradeNameById,
-  getSectionNameById
+  getSectionNameById,
+  determinePerformanceLevel
 } from "../utils/gradeUtils";
 
 const ensureArraySize = (array, size) => {
@@ -191,6 +192,39 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
 
   const gradeName = getGradeNameById(student?.grade_level || student?.grade);
   const sectionName = getSectionNameById(student?.section);
+
+  const appreciation = determinePerformanceLevel(yearAverage);
+
+  const getAppreciationStyles = (app) => {
+    switch (app) {
+      case "ممتاز":
+        return "border-yellow-400 text-yellow-700 bg-yellow-50/30";
+      case "جيد جداً":
+        return "border-emerald-400 text-emerald-700 bg-emerald-50/30";
+      case "جيد":
+        return "border-blue-400 text-blue-700 bg-blue-50/30";
+      case "مقبول":
+        return "border-orange-300 text-orange-600 bg-orange-50/30";
+      case "ضعيف":
+      default:
+        return "border-red-400 text-red-700 bg-red-50/30";
+    }
+  };
+
+  const getCongratulatoryMessage = (app) => {
+    switch (app) {
+      case "ممتاز":
+        return `🎉 تهانينا الحارة! حصل الطالب على تقدير (ممتاز) بجدارة واستحقاق، مع تمنياتنا له بمزيد من التفوق والإبداع المستمر في مسيرته التعليمية.`;
+      case "جيد جداً":
+        return `✨ أداء رائع ومميز! حصل الطالب على تقدير (جيد جداً)، فخورون بهذا العمل والاجتهاد، وإلى مزيد من النجاح والتألق الدائم.`;
+      case "جيد":
+        return `👍 أحسنت صنعاً! حصل الطالب على تقدير (جيد) نتيجة مثابرته وعمله الطيب، متمنين له دوام التوفيق والتقدم في مستقبله الدراسي.`;
+      case "مقبول":
+        return `💪 مبارك النجاح! حصل الطالب على تقدير (مقبول)، ونتطلع لمزيد من التركيز والجد في العام القادم لتحقيق درجات أعلى وأفضل.`;
+      default:
+        return `مبارك النجاح الباهر ومتمنين لك مستقبل مشرق ودوام التوفيق والتميز.`;
+    }
+  };
 
   const handlePrint = () => {
     window.print();
@@ -370,7 +404,7 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
               </div>
 
               {/* Student Metadata Card */}
-              <div className="bg-yellow-50/50 border border-yellow-200/60 rounded-xl p-4 mb-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div className="bg-yellow-50/50 border border-yellow-200/60 rounded-xl p-4 mb-6 grid grid-cols-4 gap-4 text-sm">
                 <div className="flex flex-col">
                   <span className="text-xs text-gray-500 font-bold mb-1 flex items-center gap-1"><FaGraduationCap className="text-yellow-600"/> اسم الطالب</span>
                   <span className="font-extrabold text-gray-900">{student?.name || "غير مسجل"}</span>
@@ -484,41 +518,47 @@ export default function CertificateModal({ student, teacherName, schoolName, pri
                   <div className="text-right flex-grow">
                     <p className="text-xs text-gray-700 font-bold leading-relaxed">
                       {finalStatus === "راسب" ? (
-                        <span className="text-red-650 font-black block bg-red-50 p-3 rounded-lg border-2 border-red-200 shadow-sm leading-relaxed">
+                        <span className="text-red-650 font-black block bg-red-50 p-3 rounded-lg border-2 border-red-200 shadow-sm leading-relaxed text-xs">
                           ⚠️ تنبيه: لم يحقق الطالب درجة الاجتياز المطلوبة (50%) في {failedSemInfo.semesters}، لذا يتقرر دخوله اختبار الدور الثاني {failedSemInfo.pronoun} ولابد من الجد والاستعداد الجيد {failedSemInfo.pronoun2}.
                         </span>
                       ) : (
-                        <span className="block bg-yellow-50/50 p-3 rounded-lg border border-yellow-200 shadow-sm">
-                          يتم احتساب النتيجة النهائية بناءً على متوسط تحصيل الفصول الدراسية وتعد درجة النجاح من 50%.
+                        <span className="text-green-800 font-extrabold block bg-green-50/80 p-3 rounded-lg border-2 border-green-200 shadow-sm leading-relaxed text-xs">
+                          {getCongratulatoryMessage(appreciation)}
                         </span>
                       )}
                     </p>
                   </div>
 
-                  {/* Two small boxes */}
+                  {/* Three small boxes */}
                   <div className="flex flex-row items-center gap-4 flex-shrink-0">
                     {/* المعدل العام */}
-                    <div className="text-center bg-white px-6 py-3 border-2 border-yellow-300 rounded-xl shadow-sm flex flex-col justify-center items-center gap-1.5 h-[76px] w-[130px]">
+                    <div className="text-center bg-white px-4 py-3 border-2 border-yellow-300 rounded-xl shadow-sm flex flex-col justify-center items-center gap-1.5 h-[76px] w-[110px]">
                       <span className="block text-[11px] text-gray-400 font-bold mb-0.5 leading-none">المعدل العام</span>
-                      <span className="text-3xl font-black text-yellow-700 font-mono leading-none mt-1">{s1Active ? `${yearAverage}` : "-"}</span>
+                      <span className="text-2xl font-black text-yellow-700 font-mono leading-none mt-1">{s1Active ? `${yearAverage}` : "-"}</span>
+                    </div>
+
+                    {/* التقدير العام */}
+                    <div className={`text-center px-4 py-3 border-2 rounded-xl shadow-sm flex flex-col justify-center items-center gap-1.5 h-[76px] w-[110px] ${getAppreciationStyles(appreciation)}`}>
+                      <span className="block text-[11px] font-bold opacity-80 leading-none">التقدير العام</span>
+                      <span className="text-base font-black leading-none mt-1">{s1Active ? appreciation : "-"}</span>
                     </div>
 
                     {/* النتيجة النهائية */}
-                    <div className={`px-6 py-3 rounded-xl border-2 font-black text-lg print-badge flex flex-col justify-center items-center gap-1.5 shadow-sm h-[76px] w-[150px] ${getStatusColor(finalStatus)}`}>
+                    <div className={`px-4 py-3 rounded-xl border-2 font-black text-base print-badge flex flex-col justify-center items-center gap-1.5 shadow-sm h-[76px] w-[130px] ${getStatusColor(finalStatus)}`}>
                       <span className="block text-[11px] font-bold opacity-80 leading-none">النتيجة النهائية</span>
-                      <span className="flex items-center gap-2 font-black leading-none mt-1">
-                        {finalStatus === "ناجح" && <FaCheckCircle className="text-green-800 shrink-0 text-xl" />}
-                        {finalStatus === "راسب" && <FaTimesCircle className="text-red-800 shrink-0 text-xl" />}
+                      <span className="flex items-center gap-1.5 font-black leading-none mt-1">
+                        {finalStatus === "ناجح" && <FaCheckCircle className="text-green-800 shrink-0 text-lg" />}
+                        {finalStatus === "راسب" && <FaTimesCircle className="text-red-800 shrink-0 text-lg" />}
                         {finalStatus}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Subtext under the boxes (perfectly aligned below the two boxes on the far left) */}
+                {/* Subtext under the boxes (perfectly aligned below the three boxes on the far left) */}
                 {finalStatus === "راسب" && (
                   <div className="flex justify-end -mt-2">
-                    <span className="text-xs text-red-700 font-extrabold w-[296px] text-center">
+                    <span className="text-xs text-red-700 font-extrabold w-[382px] text-center">
                       * يوجد دور ثاني ولابد من الاستعداد {failedSemInfo.pronoun2}
                     </span>
                   </div>

@@ -236,10 +236,12 @@ export const taskStatusUtils = (selectedStudent, homeworkCurriculum, taskType) =
 };
 
 export const determinePerformanceLevel = (averageScore) => {
-    if (averageScore >= 90) return 'ممتاز';
-    if (averageScore >= 80) return 'جيد جداً';
-    if (averageScore >= 70) return 'جيد';
-    if (averageScore >= 60) return 'مقبول';
+    const score = Number(averageScore);
+    if (isNaN(score)) return 'ضعيف';
+    if (score >= 90) return 'ممتاز';
+    if (score >= 80) return 'جيد جداً';
+    if (score >= 65) return 'جيد';
+    if (score >= 50) return 'مقبول';
     return 'ضعيف';
 };
 
